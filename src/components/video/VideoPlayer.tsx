@@ -21,6 +21,12 @@ import {
   type RenderedNode,
 } from "../../canvas/SkeletonRenderer";
 import { getPaletteColor, getInstanceColor } from "../../lib/colorPalettes";
+import { renderTrails } from "../../canvas/TrailRenderer";
+import {
+  commandContext,
+  ConvertPredictionToInstance,
+  BeginEdit,
+} from "../../commands";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -49,6 +55,7 @@ export function VideoPlayer() {
   const palette = useAppStore((s) => s.palette);
   const overlayVersion = useAppStore((s) => s.overlayVersion);
   const distinctlyColor = useAppStore((s) => s.distinctlyColor);
+  const trailLength = useAppStore((s) => s.trailLength);
 
   // Local zoom/pan state
   const [zoom, setZoom] = useState(1);
@@ -61,6 +68,12 @@ export function VideoPlayer() {
     instanceIdx: number;
     nodeIdx: number;
   } | null>(null);
+
+  // Track the last scene position during drag for delta calculations (alt-drag)
+  const lastDragPos = useRef<{ x: number; y: number } | null>(null);
+
+  // Track whether an undo snapshot has been taken for the current rotation gesture
+  const rotationSnapshotTaken = useRef(false);
 
   // Track frame canvas dimensions so overlay can sync after async frame load
   const [frameDims, setFrameDims] = useState<[number, number]>([0, 0]);
@@ -276,6 +289,20 @@ export function VideoPlayer() {
     ctx.translate(offsetX + panX, offsetY + panY);
     ctx.scale(baseScale * zoom, baseScale * zoom);
 
+    // Render motion trails before skeleton instances (behind)
+    if (trailLength > 0 && labels && video) {
+      renderTrails(
+        ctx,
+        labels,
+        frameIdx,
+        video,
+        trailLength,
+        labels.tracks,
+        palette,
+        zoom
+      );
+    }
+
     renderInstances(ctx, instances, {
       markerSize,
       nodeLabelSize,
@@ -302,6 +329,7 @@ export function VideoPlayer() {
     nodeLabelSize,
     palette,
     distinctlyColor,
+    trailLength,
     zoom,
     panX,
     panY,
@@ -311,6 +339,9 @@ export function VideoPlayer() {
     offsetX,
     offsetY,
     overlayVersion,
+    labels,
+    video,
+    frameIdx,
   ]);
 
   // Fit view to instances when 'fit' is enabled and frame changes
@@ -420,12 +451,14 @@ export function VideoPlayer() {
       const { x, y } = canvasToScene(e.clientX, e.clientY);
       const currentInstance = useAppStore.getState().instance;
 
-      // Node placement mode: place the next unplaced node
+      // Node placement mode: place the next unplaced node (with undo snapshot)
       if (currentInstance && !("score" in currentInstance)) {
         const unplacedIdx = currentInstance.points.findIndex(
           (p) => isNaN(p.xy[0]) || isNaN(p.xy[1])
         );
         if (unplacedIdx !== -1) {
+          // Take undo snapshot before placement
+          commandContext.execute(BeginEdit);
           currentInstance.points[unplacedIdx].xy = [x, y];
           currentInstance.points[unplacedIdx].visible = true;
           currentInstance.points[unplacedIdx].complete = true;
@@ -437,8 +470,12 @@ export function VideoPlayer() {
 
       const instances = renderedInstancesRef.current;
 
+      // Scale hit test thresholds by 1/zoom for consistent feel at all zoom levels
+      const nodeThreshold = (markerSize * 2) / zoom;
+      const instanceThreshold = 30 / zoom;
+
       // Try to hit a node first
-      const nodeHit = hitTestNode(instances, x, y, markerSize * 2);
+      const nodeHit = hitTestNode(instances, x, y, nodeThreshold);
       if (nodeHit) {
         const lf = useAppStore.getState().labeledFrame;
         if (lf) {
@@ -448,14 +485,17 @@ export function VideoPlayer() {
         // Start dragging if it's a user instance (not predicted)
         const inst = instances[nodeHit.instanceIdx];
         if (!inst.isPredicted) {
+          // Take undo snapshot before drag starts
+          commandContext.execute(BeginEdit);
           setDragNodeInfo(nodeHit);
           setIsDragging(true);
+          lastDragPos.current = { x, y };
         }
         return;
       }
 
       // Try to hit an instance (by centroid)
-      const instHit = hitTestInstance(instances, x, y);
+      const instHit = hitTestInstance(instances, x, y, instanceThreshold);
       if (instHit !== null) {
         const lf = useAppStore.getState().labeledFrame;
         if (lf) {
@@ -467,7 +507,7 @@ export function VideoPlayer() {
       // Click on empty space - deselect
       useAppStore.getState().setInstance(null);
     },
-    [canvasToScene, markerSize, panX, panY]
+    [canvasToScene, markerSize, panX, panY, zoom]
   );
 
   const handleMouseMove = useCallback(
@@ -491,14 +531,31 @@ export function VideoPlayer() {
       const instance = lf.instances[dragNodeInfo.instanceIdx];
       if (!instance) return;
 
-      // Update point position directly (mutable data model)
-      const point = instance.points[dragNodeInfo.nodeIdx];
-      if (point) {
-        point.xy = [x, y];
-        point.visible = true;
-        useAppStore.getState().markChanged();
-        useAppStore.getState().bumpOverlayVersion();
+      if (e.altKey) {
+        // Alt+Drag: move the entire instance by delta
+        const prev = lastDragPos.current;
+        if (prev) {
+          const dx = x - prev.x;
+          const dy = y - prev.y;
+          for (const point of instance.points) {
+            if (!isNaN(point.xy[0]) && !isNaN(point.xy[1])) {
+              point.xy = [point.xy[0] + dx, point.xy[1] + dy];
+            }
+          }
+        }
+        lastDragPos.current = { x, y };
+      } else {
+        // Normal drag: move single node
+        const point = instance.points[dragNodeInfo.nodeIdx];
+        if (point) {
+          point.xy = [x, y];
+          point.visible = true;
+        }
+        lastDragPos.current = { x, y };
       }
+
+      useAppStore.getState().markChanged();
+      useAppStore.getState().bumpOverlayVersion();
     },
     [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom]
   );
@@ -510,10 +567,11 @@ export function VideoPlayer() {
     if (isDragging) {
       setIsDragging(false);
       setDragNodeInfo(null);
+      lastDragPos.current = null;
     }
   }, [isDragging, isPanning]);
 
-  // Zoom with mouse wheel (towards pointer)
+  // Zoom with mouse wheel (towards pointer), Alt+Scroll for rotation
   // Use native event listener with { passive: false } so preventDefault() works
   useEffect(() => {
     const container = containerRef.current;
@@ -521,6 +579,45 @@ export function VideoPlayer() {
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
+
+      // Alt+Scroll: rotate selected instance
+      if (e.altKey) {
+        const currentInstance = useAppStore.getState().instance;
+        if (currentInstance && !("score" in currentInstance)) {
+          // Take undo snapshot on first rotation tick of a gesture
+          if (!rotationSnapshotTaken.current) {
+            commandContext.execute(BeginEdit);
+            rotationSnapshotTaken.current = true;
+          }
+
+          const angle = (e.deltaY > 0 ? 5 : -5) * (Math.PI / 180); // 5 degrees per tick
+
+          // Compute centroid
+          const visible = currentInstance.points.filter(
+            (p: { xy: number[] }) => !isNaN(p.xy[0]) && !isNaN(p.xy[1])
+          );
+          if (visible.length > 0) {
+            const cx = visible.reduce((s: number, p: { xy: number[] }) => s + p.xy[0], 0) / visible.length;
+            const cy = visible.reduce((s: number, p: { xy: number[] }) => s + p.xy[1], 0) / visible.length;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+
+            for (const point of currentInstance.points) {
+              if (isNaN(point.xy[0]) || isNaN(point.xy[1])) continue;
+              const dx = point.xy[0] - cx;
+              const dy = point.xy[1] - cy;
+              point.xy = [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos];
+            }
+
+            useAppStore.getState().markChanged();
+            useAppStore.getState().bumpOverlayVersion();
+          }
+        }
+        return;
+      }
+
+      // Reset rotation snapshot tracking when not using alt
+      rotationSnapshotTaken.current = false;
 
       // Normalize deltaY for different input devices
       let delta = e.deltaY;
@@ -551,12 +648,41 @@ export function VideoPlayer() {
     return () => container.removeEventListener("wheel", handleWheel);
   }, [offsetX, offsetY, constrainPan]);
 
-  // Double-click to reset zoom/pan
-  const handleDoubleClick = useCallback(() => {
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
-  }, []);
+  // Double-click: convert predicted instance, or reset zoom/pan
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const { x, y } = canvasToScene(e.clientX, e.clientY);
+      const instances = renderedInstancesRef.current;
+
+      // Scale hit test thresholds by 1/zoom
+      const nodeThreshold = (markerSize * 2) / zoom;
+      const instanceThreshold = 30 / zoom;
+
+      // Check if double-clicking on a predicted instance (by node)
+      const nodeHit = hitTestNode(instances, x, y, nodeThreshold);
+      if (nodeHit && instances[nodeHit.instanceIdx]?.isPredicted) {
+        commandContext.execute(ConvertPredictionToInstance, {
+          instanceIdx: nodeHit.instanceIdx,
+        });
+        return;
+      }
+
+      // Check if double-clicking on a predicted instance (by centroid)
+      const instHit = hitTestInstance(instances, x, y, instanceThreshold);
+      if (instHit !== null && instances[instHit]?.isPredicted) {
+        commandContext.execute(ConvertPredictionToInstance, {
+          instanceIdx: instHit,
+        });
+        return;
+      }
+
+      // No prediction hit - reset zoom/pan
+      setZoom(1);
+      setPanX(0);
+      setPanY(0);
+    },
+    [canvasToScene, markerSize, zoom]
+  );
 
   // Right-click context menu
   const handleContextMenu = useCallback(
@@ -632,6 +758,7 @@ export function VideoPlayer() {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onDoubleClick={handleDoubleClick}
           onContextMenu={handleContextMenu}
         />
 

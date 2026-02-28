@@ -7,6 +7,7 @@
 
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import { persist } from "zustand/middleware";
 import { subscribeWithSelector } from "zustand/middleware";
 import type {
   Labels,
@@ -74,6 +75,10 @@ export interface AppState {
   trainingDialogOpen: boolean;
   inferenceDialogOpen: boolean;
   goToFrameDialogOpen: boolean;
+  deletePredictionsDialogOpen: boolean;
+  exportDialogOpen: boolean;
+  shortcutsDialogOpen: boolean;
+  helpDialogOpen: boolean;
 
   // === Debug ===
   debugMode: boolean;
@@ -94,13 +99,31 @@ export interface AppState {
   setTrainingDialogOpen: (open: boolean) => void;
   setInferenceDialogOpen: (open: boolean) => void;
   setGoToFrameDialogOpen: (open: boolean) => void;
+  setDeletePredictionsDialogOpen: (open: boolean) => void;
+  setExportDialogOpen: (open: boolean) => void;
+  setShortcutsDialogOpen: (open: boolean) => void;
+  setHelpDialogOpen: (open: boolean) => void;
   toggle: (key: keyof AppState) => void;
   set: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
   bumpOverlayVersion: () => void;
 }
 
+/** Keys persisted to localStorage for user preferences. */
+const PERSISTED_KEYS: (keyof AppState)[] = [
+  "palette",
+  "edgeStyle",
+  "markerSize",
+  "nodeLabelSize",
+  "showLabels",
+  "showEdges",
+  "showNonVisibleNodes",
+  "colorPredicted",
+  "trailLength",
+];
+
 export const useAppStore = create<AppState>()(
   subscribeWithSelector(
+    persist(
     immer((set, get) => ({
       // Project state
       labels: null,
@@ -155,6 +178,10 @@ export const useAppStore = create<AppState>()(
       trainingDialogOpen: false,
       inferenceDialogOpen: false,
       goToFrameDialogOpen: false,
+      deletePredictionsDialogOpen: false,
+      exportDialogOpen: false,
+      shortcutsDialogOpen: false,
+      helpDialogOpen: false,
 
       // Debug
       debugMode: false,
@@ -269,6 +296,26 @@ export const useAppStore = create<AppState>()(
           state.goToFrameDialogOpen = open;
         }),
 
+      setDeletePredictionsDialogOpen: (open) =>
+        set((state) => {
+          state.deletePredictionsDialogOpen = open;
+        }),
+
+      setExportDialogOpen: (open) =>
+        set((state) => {
+          state.exportDialogOpen = open;
+        }),
+
+      setShortcutsDialogOpen: (open) =>
+        set((state) => {
+          state.shortcutsDialogOpen = open;
+        }),
+
+      setHelpDialogOpen: (open) =>
+        set((state) => {
+          state.helpDialogOpen = open;
+        }),
+
       toggle: (key) =>
         set((state) => {
           const val = state[key];
@@ -286,6 +333,14 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           state.overlayVersion += 1;
         }),
-    }))
+    })),
+    {
+      name: "sleap-label-preferences",
+      partialize: (state) =>
+        Object.fromEntries(
+          PERSISTED_KEYS.map((key) => [key, state[key]])
+        ) as Partial<AppState>,
+    },
+    )
   )
 );

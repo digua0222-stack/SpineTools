@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { tinykeys } from "tinykeys";
 import { DEFAULT_SHORTCUTS, STEP_SIZES } from "../lib/shortcuts";
 import { useAppStore } from "../stores/appStore";
+import { Track } from "@talmolab/sleap-io.js";
 import {
   commandContext,
   OpenProjectCommand,
@@ -22,12 +23,14 @@ import {
   GoPrevSuggestion,
   GoToLastInteracted,
   GoNextUserFrame,
+  GoNextTrackSpawnFrame,
   AddInstance,
   DeleteSelectedInstance,
   CopyInstance,
   PasteInstance,
   TransposeInstances,
   AddTrack,
+  SetInstanceTrack,
   CopyTrack,
   PasteTrack,
 } from "../commands";
@@ -129,6 +132,34 @@ export function useKeyboardShortcuts() {
       [DEFAULT_SHORTCUTS["add track"]]: (e) => {
         e.preventDefault();
         commandContext.execute(AddTrack);
+      },
+
+      // Set instance track via Ctrl+1-9 (core proofreading interaction)
+      ...Object.fromEntries(
+        [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [
+          `$mod+Digit${n}`,
+          (e: KeyboardEvent) => {
+            e.preventDefault();
+            const { labels, instance } = store();
+            if (!labels || !instance) return;
+
+            const trackIdx = n - 1; // 1-indexed for user, 0-indexed internally
+            if (trackIdx >= labels.tracks.length) {
+              // Create tracks up to the requested index
+              while (labels.tracks.length <= trackIdx) {
+                const trackNumber = labels.tracks.length + 1;
+                labels.tracks.push(new Track(`Track ${trackNumber}`));
+              }
+            }
+            commandContext.execute(SetInstanceTrack, { trackIdx });
+          },
+        ])
+      ),
+
+      // Next track spawn frame
+      [DEFAULT_SHORTCUTS["goto next track spawn"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(GoNextTrackSpawnFrame);
       },
 
       // Undo/Redo

@@ -59,6 +59,7 @@ Last updated: 2026-02-28
 | Suggestion nav | Space/Shift+Space cycles suggestions | Works |
 | Last interacted | Ctrl+A jumps to last edited frame | Works |
 | User labeled nav | Ctrl+U jumps to next user-labeled frame | Works |
+| Track spawn nav | Ctrl+E jumps to next track spawn frame | Works |
 | Home/End | Jump to first/last frame | Works |
 | Playback | Play button or play/pause controls | Works |
 
@@ -79,11 +80,8 @@ Last updated: 2026-02-28
 
 ### Known Limitations
 
-- **Go to Frame dialog**: replaces old `window.prompt()` -- now uses proper dialog
 - **Playback wraps around** at end of video (no stop-at-end option)
 - **Hardcoded 30 fps** for playback timing
-- **No Next Track Spawn Frame** command (Ctrl+E defined but not bound)
-- **No frame range selection** on seekbar (Shift+drag not implemented)
 - **`setFrameIdx` clears instance selection** -- selection lost on every frame change
 
 ### Shortcuts
@@ -105,6 +103,7 @@ Last updated: 2026-02-28
 | Ctrl+A | Last interacted frame |
 | Ctrl+U | Next user-labeled frame |
 | Ctrl+J | Go to Frame dialog |
+| Ctrl+E | Next track spawn frame |
 
 ---
 
@@ -134,6 +133,31 @@ Last updated: 2026-02-28
 2. Node follows mouse position
 3. Release to place
 4. Changes are reflected immediately in the overlay
+5. An undo snapshot is taken at drag start via `BeginEdit` command
+
+### Alt+Drag to Move Entire Instance
+
+1. Hold Alt and click-drag on a node of the selected instance
+2. All visible nodes move by the same delta
+3. Release to finish
+4. Movement is undoable (snapshot taken at drag start)
+
+### Instance Rotation (Alt+Scroll)
+
+1. Select a user instance
+2. Hold Alt and scroll the mouse wheel
+3. All nodes rotate around the instance centroid (5 degrees per tick)
+4. Scroll up for counter-clockwise, down for clockwise
+5. An undo snapshot is taken at the start of the rotation gesture
+
+### Double-Click to Convert Prediction
+
+1. Double-click on a predicted instance (node or centroid area)
+2. The prediction is converted to a user instance via `ConvertPredictionToInstance`
+3. The new user instance retains all point positions and track assignment
+4. The prediction score is removed (it's now a user instance)
+5. The new instance is automatically selected
+6. Conversion is undoable
 
 ### Node Placement Mode
 
@@ -145,11 +169,6 @@ Last updated: 2026-02-28
 
 ### Known Limitations
 
-- **Node dragging bypasses undo/redo** -- cannot undo a drag operation
-- **Node placement bypasses undo/redo** -- placed nodes cannot be undone
-- **No Alt+drag for whole instance movement**
-- **No double-click to convert predicted instance** to user instance
-- **No instance rotation** (Alt+scroll)
 - **No instance duplication** (Ctrl+click)
 - **Instance placement method is always "empty"** -- no Best, Average, Copy Prior options
 - **Hit test threshold doesn't scale with zoom** -- hard to click nodes at low zoom
@@ -164,6 +183,9 @@ Last updated: 2026-02-28
 | Ctrl+V | Paste Instance |
 | Tab / ` | Select Next Instance |
 | Escape | Clear Selection / Exit placement mode |
+| Alt+Drag | Move entire instance |
+| Alt+Scroll | Rotate instance around centroid |
+| Double-click prediction | Convert to user instance |
 
 ---
 
@@ -176,6 +198,17 @@ Last updated: 2026-02-28
 3. Dialog appears with auto-generated name (node_0, node_1, ...)
 4. Edit name, click "Add"
 5. Node appears in the Nodes table
+6. A NaN point is added to every existing instance
+7. Operation is undoable
+
+### Inline Node Rename
+
+1. Double-click a node name in the Nodes table
+2. An editable text input appears in place of the name
+3. Edit the name, press Enter to confirm or Escape to cancel
+4. The name is updated in the skeleton and all instance point arrays
+5. Duplicate name validation prevents name conflicts
+6. Uses `RenameNodeCommand` -- operation is undoable
 
 ### Removing a Node
 
@@ -183,35 +216,54 @@ Last updated: 2026-02-28
 2. Click "Delete Node" button
 3. Node is removed from skeleton
 4. Connected edges are also removed
+5. Corresponding point is removed from all instances
+6. Operation is undoable
 
-### Adding an Edge
+### Adding/Removing Edges
 
 1. Switch to Edges tab in Skeleton panel
-2. Click "New Edge" button
-3. Select source and destination nodes from dropdowns
-4. Click "Add"
-5. Edge appears in the Edges table
+2. "New Edge" / "Delete Edge" buttons work as before
+3. Both operations are now undoable via skeleton commands
 
-### Removing an Edge
+### Loading a Skeleton Template
 
-1. Select an edge row in the Edges table
-2. Click "Delete Edge" button
-3. Edge is removed
+1. Select a template from the dropdown in the Skeleton panel
+2. Available templates: Fly (32 nodes), Mouse top-down (12 nodes), Human (17 nodes), C. elegans (2 nodes), Custom (empty)
+3. The template replaces the current skeleton nodes and edges
+4. All instance point arrays are reset to NaN positions matching the new node count
+5. Operation is undoable
 
 ### Known Limitations
 
-- **Skeleton editing bypasses undo/redo** -- mutations not captured in undo stack
-- **No duplicate node name validation** -- can create two nodes with same name
-- **No duplicate edge validation** -- can create parallel edges
-- **Self-loop edges possible** -- same node for source and destination
-- **Deleting a node doesn't update existing instances** -- instance point arrays become corrupt
-- **No inline rename** -- must delete and re-add to change a node name
-- **Template selector is a stub** -- dropdown logs to console, doesn't load templates
+- **No duplicate node name validation** on add (only on rename)
+- **No duplicate edge validation**
+- **Self-loop edges possible**
 - **No skeleton import/export** from standalone files
+- **No skeleton visualization** in the panel
+
+### Shortcuts
+
+- No dedicated shortcuts for skeleton editing
 
 ---
 
 ## 5. Track Management
+
+### Assigning a Track via Ctrl+1-9
+
+1. Select an instance on the current frame
+2. Press Ctrl+1 through Ctrl+9 to assign the corresponding track
+3. If the track doesn't exist yet, it is created automatically
+4. Instance color updates to match the track's palette color
+5. If "Propagate Track Labels" is enabled, the change propagates forward
+
+### Ctrl+Hold Tracks Legend
+
+1. Hold the Ctrl key while an instance is selected
+2. A semi-transparent overlay appears in the top-right showing all tracks
+3. Each track is listed with its number (1-N), color swatch, and name
+4. Release Ctrl to hide the overlay
+5. Use the numbers shown to know which Ctrl+N shortcut to press
 
 ### Assigning a Track via Context Menu
 
@@ -222,7 +274,7 @@ Last updated: 2026-02-28
 
 ### Creating a New Track
 
-1. Ctrl+0 creates a new track
+1. Ctrl+0 creates a new track and assigns it to the selected instance
 2. OR: Right-click > Assign Track > New Track
 
 ### Transposing Tracks
@@ -236,28 +288,59 @@ Last updated: 2026-02-28
 1. Select instance, press Ctrl+Shift+C to copy track
 2. Select another instance, press Ctrl+Shift+V to paste track
 
+### Track Propagation
+
+1. Select an instance and reassign its track (e.g., via Ctrl+1-9)
+2. The `PropagateTrackLabels` command iterates forward through frames
+3. All instances with the old track are swapped to the new track
+4. Bidirectional swap: instances with the new track get the old track
+5. Propagation stops when the old track is no longer found in a frame
+6. Multi-frame undo snapshot ensures the entire propagation can be undone
+
 ### Known Limitations
 
-- **No Ctrl+1-9 shortcuts** for quick track assignment (P0 blocker)
-- **No track propagation** -- changes don't propagate to subsequent frames
 - **No track deletion** (individual or bulk)
 - **No track rename**
-- **No "Propagate Track Labels" toggle**
-- **No Next Track Spawn Frame navigation** (Ctrl+E)
-- **No Ctrl+hold tracks legend overlay**
 
 ### Shortcuts
 
 | Key | Action |
 |-----|--------|
 | Ctrl+0 | New Track |
+| Ctrl+1-9 | Assign track 1-9 to selected instance |
 | Ctrl+T | Transpose Instance Tracks |
 | Ctrl+Shift+C | Copy Instance Track |
 | Ctrl+Shift+V | Paste Instance Track |
+| Ctrl+E | Next Track Spawn Frame |
 
 ---
 
-## 6. Undo/Redo
+## 6. Trail Viewing for Proofreading
+
+### Enabling Trails
+
+1. Go to View > Trail Length in the menu bar
+2. Select a trail length: 0 (off), 10, 50, 100, 250, or 500 frames
+3. Trail setting persists across sessions via localStorage
+
+### Viewing Trails
+
+1. With trail length > 0, colored polylines appear on the canvas
+2. Each line connects centroids of the same track across previous frames
+3. Lines fade in opacity from current (solid) to oldest (near-transparent)
+4. Small dots mark centroid positions at each frame in the trail
+5. Trail color matches the track's palette color
+
+### Detecting Track Swaps
+
+1. Look for trails that cross each other -- this indicates an identity swap
+2. Navigate to the crossing point (use Ctrl+E for track spawn frames)
+3. Fix the track assignment using Ctrl+1-9
+4. Track propagation will fix subsequent frames automatically
+
+---
+
+## 7. Undo/Redo
 
 ### How It Works
 
@@ -267,19 +350,33 @@ Last updated: 2026-02-28
 4. Up to 100 undo levels
 5. Performing a new action clears the redo stack
 
+### What Is Undoable
+
+- Instance add/delete, copy/paste
+- Node dragging (via `BeginEdit` snapshot at drag start)
+- Node placement (via `BeginEdit` snapshot at placement start)
+- Instance rotation (Alt+scroll)
+- Alt+drag instance movement
+- Prediction conversion (double-click)
+- Skeleton editing (add/delete/rename nodes, add/delete edges)
+- Skeleton template loading
+- Track assignment and propagation
+- Delete prediction variants (score threshold, range, max count, labeled frames)
+- Delete all predictions
+
 ### Multi-Frame Undo
 
-- Bulk operations (e.g., Delete All Predictions) use `takeAllFramesSnapshot()`
+- Bulk operations (e.g., Delete All Predictions, Track Propagation) use `takeAllFramesSnapshot()`
 - This snapshots ALL labeled frames, not just the current one
 - Undo restores all frames to their pre-operation state
 - Commands with `skipAutoSnapshot: true` manage their own snapshots
 
-### Known Limitations
+### Skeleton Undo
 
-- **Node dragging is NOT undoable** -- direct mutation, no snapshot taken
-- **Node placement is NOT undoable** -- direct mutation
-- **Skeleton editing is NOT undoable** -- mutations bypass command system
-- **Undo labels in EditMenu may be stale** -- `commandContext` properties aren't reactive
+- Skeleton commands use a separate undo mechanism via `installSkeletonUndoInterceptor`
+- The interceptor wraps `ctx.undo()` / `ctx.redo()` to also restore skeleton state
+- A `WeakMap` associates undo snapshots with skeleton node/edge/point state
+- Both skeleton structure and instance point arrays are restored on undo
 
 ### Shortcuts
 
@@ -290,18 +387,20 @@ Last updated: 2026-02-28
 
 ---
 
-## 7. View Controls
+## 8. View Controls
 
 ### Zoom
 
 | Method | How | Status |
 |--------|-----|--------|
 | Mouse wheel | Scroll up/down to zoom in/out | Works |
-| Double-click | Reset to fit view | Works |
+| Pinch-to-zoom | Trackpad pinch gesture (uses Ctrl+scroll) | Works |
+| Double-click | Reset to fit view (when not on a prediction) | Works |
 | Fit to instances | Ctrl+= (auto-zoom to all instances) | Works |
 
 - Zoom range: 0.1x to 20x
 - Zoom centers on mouse cursor position
+- Pinch-to-zoom uses finer zoom steps for smooth trackpad experience
 
 ### Pan
 
@@ -319,18 +418,16 @@ Last updated: 2026-02-28
 | Show edges | Ctrl+Shift+Tab or View menu | Works |
 | Edge style (Line/Wedge) | View > Edge Style | Works |
 | Node marker size | View > Node Marker Size slider | Works |
+| Node label size | View > Node Label Size | Works |
 | Color predicted instances | View menu checkbox | Works |
 | Color palette | View > Color Palette picker | Works |
+| Trail length | View > Trail Length (0/10/50/100/250/500) | Works |
 
 ### Known Limitations
 
-- **No pinch-to-zoom** for trackpad/touch
 - **Pan requires middle-click** -- many laptops have no middle button
 - **No Fit View to Selection** (selected instance only)
-- **No trail rendering** despite state existing
-- **No Node Label Size menu control** despite state existing
 - **No Distinct Colors To option** (instances/nodes/edges)
-- **No zoom limits feedback** -- silently clamps
 
 ### Shortcuts
 
@@ -343,41 +440,139 @@ Last updated: 2026-02-28
 
 ---
 
-## 8. Export
+## 9. Export
 
 ### Export JSON
 
 1. File > Export JSON (or File > Save with Ctrl+S)
 2. Labels data is serialized to JSON via `labels.toDict()`
 3. Browser downloads the JSON file
+4. Toast notification confirms success
+
+### Save As JSON
+
+1. File > Save As... (Ctrl+Shift+S)
+2. A file picker dialog opens (File System Access API or Tauri dialog)
+3. Filename is auto-suggested with version increment (e.g., `project.v002.json`)
+4. Choose location and save
+5. Toast notification confirms success
 
 ### Export Analysis CSV
 
-- Menu item exists but is **disabled** (not yet implemented)
+1. File > Export Analysis CSV (or via Export dialog)
+2. CSV is generated with columns: video_filename, frame_idx, track_name, instance_type, node_name, x, y, score, visible
+3. Browser downloads the CSV file
+4. Toast notification confirms success
+
+### Export Labels Package
+
+1. File > Export Labels Package
+2. A `.pkg.json` file is generated containing the full labels data plus a video manifest
+3. Browser downloads the package file
+4. Useful for sharing project data without the original video files
 
 ### Known Limitations
 
-- **Cannot save as .slp** -- only JSON export works
-- **Export CSV is disabled**
+- **Cannot save as .slp** -- only JSON/CSV export works in browser
 - **No Export HDF5** or Export NWB
-- **No Export Labels Package** for remote training
 - **JSON export cannot be re-imported** by SLEAP desktop
-- **No file picker for save location** -- uses browser download
 
 ---
 
-## 9. Training / Inference (Placeholders)
+## 10. Seekbar Features
+
+### Frame Range Selection
+
+1. Hold Shift and click on the seekbar
+2. Drag left or right to select a frame range
+3. The selected range appears as a highlighted region on the seekbar
+4. Release to finalize the selection
+5. Click without Shift to clear the range selection
+6. The range is used by "Delete Predictions from Clip" command
+
+### Instance Count Header Graph
+
+1. A bar chart above the seekbar shows the number of instances per frame
+2. Each bar represents one frame; height corresponds to instance count
+3. Helps identify frames with many/few annotations at a glance
+4. Graph updates automatically as instances are added or removed
+
+### Seekbar Marks
+
+- Black vertical lines for labeled frames
+- Colored horizontal bars showing track occupancy
+- Gray tick marks for frame indicators
+- Blue marks for user labels
+
+---
+
+## 11. Suggestion Generation
+
+### Generating Suggestions
+
+1. Open the Suggestions panel tab
+2. Select a method from the dropdown: "Stride" (evenly spaced) or "Random"
+3. Enter the desired count (number of frames to suggest)
+4. Click "Generate" button
+5. Suggestions appear in the table, distributed across all videos
+
+### Suggestion Table Features
+
+1. Columns: #, Video, Frame, Score, Status
+2. Click any column header to sort by that column
+3. Click again to reverse sort direction
+4. Score column shows mean prediction score for each suggested frame
+5. Status shows whether a suggestion has been labeled
+6. Click a row to navigate to that frame
+
+### Navigating Suggestions
+
+1. Space key advances to the next suggestion
+2. Shift+Space goes to the previous suggestion
+3. Clicking a row in the table navigates to that frame/video
+
+---
+
+## 12. Delete Prediction Variants
+
+### Delete by Score Threshold
+
+1. Labels > Delete Predictions with Low Score...
+2. Enter a score threshold (e.g., 0.5)
+3. All predicted instances with score below the threshold are removed
+4. Toast notification shows count of deleted predictions
+5. Operation is undoable
+
+### Delete by Frame Range
+
+1. Select a frame range on the seekbar (Shift+drag)
+2. Labels > Delete Predictions from Clip...
+3. All predicted instances within the frame range are removed
+4. Operation is undoable
+
+### Delete on User-Labeled Frames
+
+1. Labels > Delete Predictions on User-Labeled Frames
+2. On frames that have both user and predicted instances, predictions are removed
+3. Useful for cleaning up overlapping predictions after labeling
+4. Operation is undoable
+
+### Delete by Max Count
+
+1. Labels > Delete Predictions beyond Max per Frame...
+2. Enter the maximum number of predictions to keep per frame
+3. Lower-scoring predictions are removed, keeping only the top N
+4. Operation is undoable
+
+---
+
+## 13. Training / Inference (Placeholders)
 
 ### Training Dialog
 
 1. Predict > Run Training... (or menu item)
 2. Dialog opens with "Coming Soon" badge
-3. Configuration options visible but non-functional:
-   - Model type (Single Animal, Top-Down, Bottom-Up)
-   - Training profile (Default, Fast, Accurate)
-   - Backbone selection (UNet, LEAP CNN, Stacked Hourglass)
-   - Epochs, batch size
-   - Per-model tabs for top-down (Centroid + Centered Instance)
+3. Configuration options visible but non-functional
 4. Info box explains alternatives: SLEAP desktop, CLI, Colab
 5. "Start Training" button is disabled
 
@@ -385,39 +580,27 @@ Last updated: 2026-02-28
 
 1. Predict > Run Inference... (or menu item)
 2. Dialog opens with "Coming Soon" badge
-3. Configuration options visible but non-functional:
-   - Model selection (no models available)
-   - Video selection (current project videos listed)
-   - Frame range (All, Labeled only, Custom range)
-   - Tracking method (Simple, Optical Flow, Identity)
-   - Max instances per frame
-4. Info box explains alternatives
-5. "Run Inference" button is disabled
-
-### Purpose
-
-These placeholder dialogs:
-- Show users what the training/inference workflow will look like
-- Provide links to alternative methods (desktop, CLI, Colab)
-- Establish the UI structure for when sleap-nn integration is ready
+3. Configuration options visible but non-functional
+4. "Run Inference" button is disabled
 
 ---
 
-## 10. Side Panels
+## 14. Side Panels
 
 ### Videos Panel
 
 - Lists all videos in the project
 - Click a video row to switch to it
 - Shows filename (truncated) and frame count
-- "Add Videos" and "Remove Video" buttons exist but are **stubs**
+- "Add Videos" and "Remove Video" buttons exist but are stubs
 
 ### Skeleton Panel
 
-- Nodes tab: lists all skeleton nodes with name
+- Nodes tab: lists all skeleton nodes, **double-click to rename inline**
 - Edges tab: lists all edges (source -> destination)
 - "New Node", "Delete Node", "New Edge", "Delete Edge" buttons work
-- Template selector dropdown is a **stub**
+- **Template dropdown** loads predefined skeletons (Fly, Mouse, Human, C. elegans, Custom)
+- All skeleton operations are **undoable**
 
 ### Instances Panel
 
@@ -429,11 +612,30 @@ These placeholder dialogs:
 
 ### Suggestions Panel
 
-- Lists suggested frames for labeling
-- Shows video, frame number, labeled status
+- **Method dropdown** (Stride / Random) with count input and "Generate" button
+- Lists suggested frames with sortable columns (#, Video, Frame, Score, Status)
+- Click column header to sort ascending/descending
+- Score shows mean prediction score for that frame
 - Click row to navigate to that suggestion
 - Previous/Next buttons cycle through suggestions
-- "Generate Suggestions" and "Clear Suggestions" buttons are **stubs**
+- "Clear Suggestions" removes all suggestions
+
+---
+
+## 15. Help and Keyboard Shortcuts
+
+### Keyboard Shortcuts Dialog
+
+1. Help > Keyboard Shortcuts...
+2. Dialog opens showing all available keyboard shortcuts
+3. Organized by category (File, Navigation, Editing, View, Tracks)
+4. Shows key binding and action description
+
+### About Dialog
+
+1. Help > About SLEAP Label Web
+2. Shows application name, version, and description
+3. Links to GitHub repository and documentation
 
 ---
 

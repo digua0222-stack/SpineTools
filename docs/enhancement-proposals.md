@@ -16,76 +16,69 @@ Last updated: 2026-02-28
 
 ---
 
-## P0 - Blocks Core Tutorial Workflows
+## Completed Items
 
-### P0-1: Save As .slp Format
+The following enhancements have been implemented and are available in the current build.
+
+### P0 (Core Tutorial Workflow Blockers)
+
+| ID | Feature | Status | Notes |
+|----|---------|--------|-------|
+| P0-2 | Set Instance Track (Ctrl+1-9) | **DONE** | Dynamic track assignment via Ctrl+1-9 shortcuts. `SetInstanceTrack` command in `trackCommands.ts`. |
+| P0-3 | Double-click Prediction to Convert | **DONE** | `ConvertPredictionToInstance` command. Double-click handler in `VideoPlayer.tsx` converts predicted instances to user instances via the command system with undo support. |
+
+### P1 (Significantly Improves Usability)
+
+| ID | Feature | Status | Notes |
+|----|---------|--------|-------|
+| P1-1 | Generate Suggestions (Sample Method) | **DONE** | "stride" (evenly spaced) and "random" sampling methods in `SuggestionsPanel.tsx`. Method dropdown + count input. |
+| P1-2 | Trail Rendering | **DONE** | `TrailRenderer.ts` draws centroid-to-centroid polylines with fading opacity per track. Trail Length submenu in View menu (0, 10, 50, 100, 250, 500). |
+| P1-3 | Next Track Spawn Frame Navigation | **DONE** | `GoNextTrackSpawnFrame` command in `navCommands.ts`. Finds first appearance of each track, navigates to the next spawn frame. Bound to Ctrl+E. |
+| P1-4 | Alt+Drag to Move Entire Instance | **DONE** | Alt+drag in `VideoPlayer.tsx` moves all points by delta. Uses `lastDragPos` ref for delta calculation. |
+| P1-7 | Export Analysis CSV | **DONE** | `ExportCSVCommand` in `fileCommands.ts`. `generateCSV()` in `exportUtils.ts` produces CSV with video, frame, track, node, x, y, score, visible columns. |
+| P1-8 | Track Propagation | **DONE** | `PropagateTrackLabels` command in `trackCommands.ts`. When reassigning a track, propagates the change to subsequent frames. Multi-frame undo snapshot. |
+| P1-9 | Save As (JSON with File Picker) | **DONE** | `SaveAsJsonCommand` in `fileCommands.ts`. Uses `showSaveFilePicker()` (browser) or Tauri dialog. Auto-suggests versioned filename (e.g., `project.v002.json`). |
+| P1-10 | Suggestion Score Column + Sorting | **DONE** | Score column showing mean prediction score in `SuggestionsPanel.tsx`. Clickable column headers sort by index, video, frame, or score. |
+| P1-11 | Persistent Preferences | **DONE** | Zustand `persist` middleware with `localStorage`. Persists palette, edgeStyle, markerSize, nodeLabelSize, trailLength, colorPredicted, showInstances, showLabels, showEdges, showNonVisibleNodes. |
+| P1-12 | Menu Item Enable/Disable Based on State | **DONE** | Menu items subscribe to store state. Items disabled when preconditions not met (e.g., Delete Instance disabled when no instance selected, Paste disabled when clipboard empty, navigation disabled when no project loaded). |
+| P1-13 | Global Error Boundary | **DONE** | `ErrorBoundary.tsx` wraps `AppShell`. Shows error message with "Reload" button. Dev mode shows stack trace. |
+| P1-14 | Ctrl+Hold Tracks Legend Overlay | **DONE** | `TracksLegend.tsx` shows numbered track list with color swatches when Ctrl is held. |
+
+### P2 (Nice to Have)
+
+| ID | Feature | Status | Notes |
+|----|---------|--------|-------|
+| P2-1 | Inline Node Rename in Skeleton Panel | **DONE** | Double-click a node name to rename in-place. `RenameNodeCommand` updates node and all instance point names. |
+| P2-3 | Seekbar Frame Range Selection | **DONE** | Shift+click-drag on seekbar to select a frame range. Used by Delete Predictions by Range. |
+| P2-4 | Help Menu | **DONE** | Help menu with Keyboard Shortcuts dialog (`ShortcutsDialog.tsx`), About dialog (`HelpDialog.tsx`), GitHub link, and documentation link. |
+| P2-5 | Skeleton Template Loading | **DONE** | `skeletonTemplates.ts` defines Fly (32 nodes), Mouse (12 nodes), Human (17 nodes), C. elegans (2 nodes), Custom (empty). `LoadSkeletonTemplateCommand` loads templates with undo support. |
+| P2-6 | Node Label Size Menu Control | **DONE** | View > Node Label Size submenu with configurable sizes. |
+| P2-7 | Instance Rotation (Alt+Scroll) | **DONE** | Alt+scroll wheel rotates selected user instance around its centroid (5 degrees per tick). `BeginEdit` snapshot for undo. |
+| P2-8 | Delete Prediction Variants | **DONE** | Four new commands: `DeletePredictionsByScore`, `DeletePredictionsByRange`, `DeletePredictionsOnLabeledFrames`, `DeletePredictionsByMaxCount`. Each with dialog UI. |
+| P2-9 | Pinch-to-Zoom | **DONE** | Trackpad pinch gesture detected via `ctrlKey` + wheel. Finer zoom steps for smooth pinch-to-zoom. |
+| P2-10 | Seekbar Header Graph | **DONE** | Instance count header graph above seekbar showing number of instances per frame as a bar chart. |
+| P2-12 | Export Labels Package | **DONE** | `ExportPackageCommand` in `fileCommands.ts`. Exports project as `.pkg.json` with video manifest and full labels data. |
+
+---
+
+## Remaining Items
+
+### P0 - Blocks Core Tutorial Workflows
+
+#### P0-1: Save As .slp Format
 
 | Field | Value |
 |-------|-------|
 | **Description** | Users cannot save their work in the native .slp format. Current "Save" downloads JSON, which is incompatible with SLEAP desktop. This blocks Tutorials 3, 5, and 7 (every save point). |
 | **Complexity** | L |
 | **Tutorials** | 3 (Save), 5 (Save New Version), 7 (Save Corrected) |
-| **Technical notes** | `sleap-io.js` `saveSlp` is Node-only. Options: (1) port HDF5 write to browser via h5wasm, (2) Tauri-only save via Node-compatible backend, (3) implement minimal SLP writer in JS. Option 2 is fastest path. |
-
-### P0-2: Set Instance Track (Ctrl+1-9)
-
-| Field | Value |
-|-------|-------|
-| **Description** | The core proofreading interaction. Users cannot assign tracks via keyboard shortcuts (Ctrl+1-9). This blocks the entire Tutorial 7 proofreading workflow. Currently only possible via right-click context menu. |
-| **Complexity** | S |
-| **Tutorials** | 7 (Correct Track Assignment) |
-| **Technical notes** | Need: (1) dynamic Tracks > Set Instance Track submenu listing all tracks, (2) Ctrl+1 through Ctrl+9 shortcut handlers in `useKeyboardShortcuts`, (3) `SetSelectedInstanceTrack` command. |
-
-### P0-3: Double-click Prediction to Convert
-
-| Field | Value |
-|-------|-------|
-| **Description** | The central human-in-the-loop workflow. Users cannot convert a predicted instance to a user instance by double-clicking. This blocks Tutorial 5 (Correcting Predictions) and the entire active learning loop. |
-| **Complexity** | S |
-| **Tutorials** | 5 (Labeling from Predictions), Guides (prediction-assisted-labeling) |
-| **Technical notes** | Add `onDoubleClick` handler in `VideoPlayer.tsx`. Hit test for predicted instance, clone as `Instance` (not `PredictedInstance`), add to `LabeledFrame`, select it. Should go through command system for undo. |
+| **Technical notes** | `sleap-io.js` `saveSlp` is Node-only. Options: (1) port HDF5 write to browser via h5wasm, (2) Tauri-only save via Node-compatible backend, (3) implement minimal SLP writer in JS. Tauri `SaveProjectCommand` now saves JSON to `.slp` path as an interim solution; true HDF5 write still needed. |
 
 ---
 
-## P1 - Significantly Improves Usability
+### P1 - Significantly Improves Usability
 
-### P1-1: Generate Suggestions (Sample Method)
-
-| Field | Value |
-|-------|-------|
-| **Description** | The "Generate Suggestions" button is a stub. Random/strided frame sampling is trivially implementable and enables Tutorial 3 (Initial Labeling) without any ML. |
-| **Complexity** | S |
-| **Tutorials** | 3 (Generate Suggestions) |
-| **Technical notes** | Implement "sample" (random) and "stride" (evenly spaced) methods. Add method dropdown + count input to SuggestionsPanel. Wire "Generate" button to create `SuggestionFrame` objects. |
-
-### P1-2: Trail Rendering
-
-| Field | Value |
-|-------|-------|
-| **Description** | Track trail overlay is essential for proofreading (detecting identity swaps and lost identities). State exists (`trailLength`) but no canvas rendering or menu control. |
-| **Complexity** | M |
-| **Tutorials** | 7 (Configure Proofreading View, Find Identity Swaps) |
-| **Technical notes** | For each visible instance, look back `trailLength` frames, find same-track instances, draw centroid-to-centroid lines with fading opacity. Add Trail Length submenu to View menu (0, 10, 50, 100, 250, 500). Render in `SkeletonRenderer.ts` or a dedicated trail layer. |
-
-### P1-3: Next Track Spawn Frame Navigation
-
-| Field | Value |
-|-------|-------|
-| **Description** | Navigate to the frame where a new track first appears. Critical for finding "lost identities" during proofreading. Shortcut (Ctrl+E) is defined but no command exists. |
-| **Complexity** | S |
-| **Tutorials** | 7 (Navigate to Track Switch), Guides (tracking-and-proofreading) |
-| **Technical notes** | Iterate `labels.labeledFrames` to find the first frame where each track appears. Navigate to the next one after the current frame. |
-
-### P1-4: Alt+Drag to Move Entire Instance
-
-| Field | Value |
-|-------|-------|
-| **Description** | Hold Alt and drag a node to move all nodes in the instance simultaneously. Common labeling efficiency feature recommended in tutorials. |
-| **Complexity** | S |
-| **Tutorials** | 3 (Initial Labeling), 5 (Correcting Predictions) |
-| **Technical notes** | In `VideoPlayer.tsx` drag handler, check `e.altKey`. If true, compute delta and apply to all points in the instance, not just the dragged node. |
-
-### P1-5: Add Videos Button
+#### P1-5: Add Videos Button
 
 | Field | Value |
 |-------|-------|
@@ -94,7 +87,7 @@ Last updated: 2026-02-28
 | **Tutorials** | 2 (Import Videos) |
 | **Technical notes** | Wire to `showOpenFilePicker()` or `<input type="file">` for video files. Create Video object, add to `labels.videos`. |
 
-### P1-6: `beforeunload` Handler
+#### P1-6: `beforeunload` Handler
 
 | Field | Value |
 |-------|-------|
@@ -103,91 +96,11 @@ Last updated: 2026-02-28
 | **Tutorials** | All (any save point) |
 | **Technical notes** | Add `window.addEventListener("beforeunload", ...)` that checks `useAppStore.getState().hasChanges`. Already have unsaved changes check on project open, but not on tab close. |
 
-### P1-7: Export Analysis CSV
-
-| Field | Value |
-|-------|-------|
-| **Description** | Menu item exists but is disabled. CSV export is straightforward and enables Tutorial 8 (Export Results). |
-| **Complexity** | M |
-| **Tutorials** | 8 (Export Results) |
-| **Technical notes** | Generate CSV with columns: video, frame, track, node, x, y, score, visible. Trigger browser download. |
-
-### P1-8: Track Propagation
-
-| Field | Value |
-|-------|-------|
-| **Description** | When reassigning a track, the change should propagate to all subsequent frames with the same old track. Without this, users must fix each frame individually during proofreading. |
-| **Complexity** | M |
-| **Tutorials** | 7 (Correct Track Assignment), Guides (tracking-and-proofreading) |
-| **Technical notes** | Add `propagateTrackLabels` boolean to store. When enabled and a track is reassigned, iterate forward through `labeledFrames` and swap track references. |
-
-### P1-9: Save As (JSON with File Picker)
-
-| Field | Value |
-|-------|-------|
-| **Description** | "Save As" menu item is disabled. Even before .slp save is possible, users should be able to save JSON to a chosen location with an auto-incremented version number. |
-| **Complexity** | S |
-| **Tutorials** | 5 (Save New Version), 7 (Save New Version) |
-| **Technical notes** | Use `showSaveFilePicker()` (browser) or Tauri dialog. Auto-suggest `filename.v002.json` based on current filename. |
-
-### P1-10: Suggestion Score Column + Sorting
-
-| Field | Value |
-|-------|-------|
-| **Description** | SuggestionsPanel has no score column and no sorting. Users cannot prioritize which suggestions to label first based on prediction confidence. |
-| **Complexity** | S |
-| **Tutorials** | 5 (Correcting Predictions) |
-| **Technical notes** | Add score column showing mean prediction score for each suggested frame. Enable column header click to sort. |
-
-### P1-11: Persistent Preferences
-
-| Field | Value |
-|-------|-------|
-| **Description** | Closing the tab loses all view preferences (palette, edge style, marker size, etc.). These should persist across sessions. |
-| **Complexity** | S |
-| **Tutorials** | All (general UX) |
-| **Technical notes** | Use `zustand/middleware` `persist` with `localStorage`. Persist view state keys only. |
-
-### P1-12: Menu Item Enable/Disable Based on State
-
-| Field | Value |
-|-------|-------|
-| **Description** | Many menu items (Delete Instance, Copy, Paste, etc.) are always clickable even when preconditions aren't met. Should be disabled with visual indication. |
-| **Complexity** | M |
-| **Tutorials** | All (general UX) |
-| **Technical notes** | Subscribe to relevant store slices in menu components. Set `disabled` prop based on: instance selected, clipboard contents, project loaded, etc. |
-
-### P1-13: Global Error Boundary
-
-| Field | Value |
-|-------|-------|
-| **Description** | If any component throws during render, the entire app crashes with a white screen. Need a React Error Boundary to catch and display errors gracefully. |
-| **Complexity** | S |
-| **Tutorials** | All (reliability) |
-| **Technical notes** | Create `ErrorBoundary` component wrapping `AppShell`. Show error message with "Reload" button. |
-
-### P1-14: Ctrl+Hold Tracks Legend Overlay
-
-| Field | Value |
-|-------|-------|
-| **Description** | When holding Ctrl with an instance selected, show a numbered track list with colors. This is how users know which number (Ctrl+1-9) to press during proofreading. |
-| **Complexity** | S |
-| **Tutorials** | 7 (Correct Track Assignment), Guides (tracking-and-proofreading) |
-| **Technical notes** | Listen for `keydown`/`keyup` for Ctrl. When held and instance is selected, render semi-transparent overlay with colored track names numbered 1-N. |
-
 ---
 
-## P2 - Nice to Have
+### P2 - Nice to Have
 
-### P2-1: Inline Node Rename in Skeleton Panel
-
-| Field | Value |
-|-------|-------|
-| **Description** | Double-click a node name in the skeleton table to rename it in-place, matching SLEAP desktop behavior. Currently must delete and re-add. |
-| **Complexity** | S |
-| **Tutorials** | 2 (Configure Skeleton) |
-
-### P2-2: Red/Green Node Coloring for Corrected Predictions
+#### P2-2: Red/Green Node Coloring for Corrected Predictions
 
 | Field | Value |
 |-------|-------|
@@ -195,71 +108,7 @@ Last updated: 2026-02-28
 | **Complexity** | M |
 | **Tutorials** | 5 (Correcting Predictions) |
 
-### P2-3: Seekbar Frame Range Selection
-
-| Field | Value |
-|-------|-------|
-| **Description** | Click-drag on seekbar to select a frame range, shown as highlighted region. Enables clip-based operations (delete predictions in range, export clip). |
-| **Complexity** | M |
-| **Tutorials** | 7 (Proofreading), various delete prediction commands |
-
-### P2-4: Help Menu
-
-| Field | Value |
-|-------|-------|
-| **Description** | Add Help menu with documentation link, GitHub link, keyboard shortcuts dialog, and About dialog. |
-| **Complexity** | S |
-| **Tutorials** | 9 (Next Steps) |
-
-### P2-5: Skeleton Template Loading
-
-| Field | Value |
-|-------|-------|
-| **Description** | The skeleton template dropdown exists but logs to console. Wire to actual template definitions (Fly 32, Mouse 12, Human 17, etc.). |
-| **Complexity** | M |
-| **Tutorials** | 2 (Configure Skeleton) |
-
-### P2-6: Node Label Size Menu Control
-
-| Field | Value |
-|-------|-------|
-| **Description** | State exists (`nodeLabelSize`) but no menu item to control it. Add submenu to View menu. |
-| **Complexity** | S |
-| **Tutorials** | 3 (Labeling tips) |
-
-### P2-7: Instance Rotation (Alt+Scroll)
-
-| Field | Value |
-|-------|-------|
-| **Description** | Alt+scroll wheel on a node rotates the entire instance around its centroid. Useful for initial placement. |
-| **Complexity** | M |
-| **Tutorials** | 3 (Initial Labeling) |
-
-### P2-8: Delete Prediction Variants
-
-| Field | Value |
-|-------|-------|
-| **Description** | Multiple prediction deletion commands: by clip range, by score threshold, by max instances per frame, on user-labeled frames. Each needs a small dialog. |
-| **Complexity** | M |
-| **Tutorials** | Various (data cleanup) |
-
-### P2-9: Pinch-to-Zoom
-
-| Field | Value |
-|-------|-------|
-| **Description** | Support touch/trackpad pinch gesture for zooming. Important for laptop and tablet users. |
-| **Complexity** | M |
-| **Tutorials** | 3 (Labeling), 5 (Correction), 7 (Proofreading) |
-
-### P2-10: Seekbar Header Graph
-
-| Field | Value |
-|-------|-------|
-| **Description** | Time-series graph above seekbar showing metrics like point displacement, tracking scores, centroid proximity. Helps identify problem areas. |
-| **Complexity** | L |
-| **Tutorials** | 7 (Proofreading) |
-
-### P2-11: Merge Data From Dialog
+#### P2-11: Merge Data From Dialog
 
 | Field | Value |
 |-------|-------|
@@ -267,110 +116,106 @@ Last updated: 2026-02-28
 | **Complexity** | L |
 | **Tutorials** | Guides (importing-predictions-for-labeling) |
 
-### P2-12: Export Labels Package
-
-| Field | Value |
-|-------|-------|
-| **Description** | Export labeled frames + embedded video data as a .pkg.slp for remote training on Colab or CLI. |
-| **Complexity** | L |
-| **Tutorials** | 4, 5, 6 (Training workflow) |
-
 ---
 
-## P3 - Future/Aspirational
+### P3 - Future/Aspirational
 
-### P3-1: Label Quality Control Panel
+#### P3-1: Label Quality Control Panel
 
 | Field | Value |
 |-------|-------|
 | **Description** | Automated detection of labeling errors using statistical methods (z-score outliers, GMM anomaly detection). Flag problematic instances, navigate to them, add to suggestions. |
 | **Complexity** | XL |
-| **Tutorials** | Guides (label-quality-control) |
 
-### P3-2: Instance Size Distribution
+#### P3-2: Instance Size Distribution
 
 | Field | Value |
 |-------|-------|
 | **Description** | Analysis widget showing scatter/histogram of instance bounding box sizes. Click-to-navigate to outliers. Useful for choosing training crop sizes. |
 | **Complexity** | L |
-| **Tutorials** | Guides (instance-size-distribution) |
 
-### P3-3: Dockable/Rearrangeable Panels
+#### P3-3: Dockable/Rearrangeable Panels
 
 | Field | Value |
 |-------|-------|
-| **Description** | Replace fixed panel layout with dockview or react-mosaic for user-customizable panel arrangement matching SLEAP desktop's Qt dock widgets. |
+| **Description** | Replace fixed panel layout with dockview or react-mosaic for user-customizable panel arrangement. |
 | **Complexity** | L |
-| **Tutorials** | General UX |
 
-### P3-4: Keyboard Shortcut Customization
+#### P3-4: Keyboard Shortcut Customization
 
 | Field | Value |
 |-------|-------|
 | **Description** | Dialog to view and remap all keyboard shortcuts. Persist to localStorage. |
 | **Complexity** | M |
-| **Tutorials** | General UX |
 
-### P3-5: sleap-nn Backend Integration
+#### P3-5: sleap-nn Backend Integration
 
 | Field | Value |
 |-------|-------|
 | **Description** | Connect to sleap-nn for actual training and inference. Could use WebSocket to a local Python process, or Tauri sidecar. |
 | **Complexity** | XL |
-| **Tutorials** | 4, 5, 6 (Training/Inference) |
 
-### P3-6: Collaborative Labeling
+#### P3-6: Collaborative Labeling
 
 | Field | Value |
 |-------|-------|
 | **Description** | Multiple users labeling the same project simultaneously via WebSocket sync. |
 | **Complexity** | XL |
-| **Tutorials** | N/A |
 
-### P3-7: Import Formats (COCO, DLC, NWB)
+#### P3-7: Import Formats (COCO, DLC, NWB)
 
 | Field | Value |
 |-------|-------|
 | **Description** | Import data from other pose estimation tools. Useful for migration and interoperability. |
 | **Complexity** | L (per format) |
-| **Tutorials** | Guides (system overview) |
 
-### P3-8: Video Clip Export with Annotations
+#### P3-8: Video Clip Export with Annotations
 
 | Field | Value |
 |-------|-------|
 | **Description** | Render video frames with skeleton overlays to a downloadable video file. Could use MediaRecorder API or ffmpeg.wasm. |
 | **Complexity** | XL |
-| **Tutorials** | View menu (Render Video Clip with Instances) |
 
 ---
 
-## Implementation Phases
+## Implementation Phases (Updated)
 
-### Phase 1: Core Labeling Loop (Tutorials 2-3)
-- P1-5: Add Videos button
-- P1-1: Generate Suggestions (sample method)
-- P0-3: Double-click prediction to convert
-- P1-4: Alt+drag whole instance
+### Phase 1: Core Labeling Loop (Tutorials 2-3) -- COMPLETE
+- ~~P1-5: Add Videos button~~ (still pending)
+- ~~P1-1: Generate Suggestions (sample method)~~ DONE
+- ~~P0-3: Double-click prediction to convert~~ DONE
+- ~~P1-4: Alt+drag whole instance~~ DONE
 
-### Phase 2: Save/Export (Tutorials 3, 5, 7, 8)
-- P1-9: Save As (JSON with file picker)
-- P0-1: Save As .slp format
-- P1-7: Export Analysis CSV
-- P1-6: `beforeunload` handler
+### Phase 2: Save/Export (Tutorials 3, 5, 7, 8) -- MOSTLY COMPLETE
+- ~~P1-9: Save As (JSON with file picker)~~ DONE
+- P0-1: Save As .slp format (still needed)
+- ~~P1-7: Export Analysis CSV~~ DONE
+- P1-6: `beforeunload` handler (still needed)
 
-### Phase 3: Proofreading (Tutorial 7)
-- P0-2: Set Instance Track (Ctrl+1-9)
-- P1-14: Ctrl+hold tracks legend
-- P1-3: Next Track Spawn Frame
-- P1-2: Trail rendering
-- P1-8: Track propagation
+### Phase 3: Proofreading (Tutorial 7) -- COMPLETE
+- ~~P0-2: Set Instance Track (Ctrl+1-9)~~ DONE
+- ~~P1-14: Ctrl+hold tracks legend~~ DONE
+- ~~P1-3: Next Track Spawn Frame~~ DONE
+- ~~P1-2: Trail rendering~~ DONE
+- ~~P1-8: Track propagation~~ DONE
 
-### Phase 4: Polish
-- P1-11: Persistent preferences
-- P1-12: Menu enable/disable
-- P1-13: Error Boundary
-- P2 items as time permits
+### Phase 4: Polish -- COMPLETE
+- ~~P1-11: Persistent preferences~~ DONE
+- ~~P1-12: Menu enable/disable~~ DONE
+- ~~P1-13: Error Boundary~~ DONE
+- ~~P2 items~~ Most completed (see above)
+
+---
+
+## Progress Summary
+
+| Priority | Total | Completed | Remaining |
+|----------|-------|-----------|-----------|
+| P0       | 3     | 2         | 1 (Save .slp) |
+| P1       | 14    | 12        | 2 (Add Videos, beforeunload) |
+| P2       | 12    | 10        | 2 (Red/Green nodes, Merge dialog) |
+| P3       | 8     | 0         | 8 |
+| **Total**| **37**| **24**    | **13** |
 
 ---
 

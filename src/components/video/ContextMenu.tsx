@@ -8,7 +8,7 @@
  * - Add new instance
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../stores/appStore";
 import {
   commandContext,
@@ -56,6 +56,29 @@ export function ContextMenu({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  // Clamp menu position to viewport bounds
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [clampedPos, setClampedPos] = useState({ left: x, top: y });
+
+  useEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = x;
+    let top = y;
+    if (left + rect.width > vw) {
+      left = vw - rect.width;
+    }
+    if (top + rect.height > vh) {
+      top = vh - rect.height;
+    }
+    if (left < 0) left = 0;
+    if (top < 0) top = 0;
+    setClampedPos({ left, top });
+  }, [x, y]);
+
   const exec = (cmd: Parameters<typeof commandContext.execute>[0], params?: Record<string, unknown>) => {
     onClose();
     commandContext.execute(cmd, params);
@@ -68,8 +91,9 @@ export function ContextMenu({
 
   return (
     <div
+      ref={menuRef}
       className="fixed z-50 min-w-[180px] bg-popover text-popover-foreground border border-border rounded-md shadow-md py-1"
-      style={{ left: x, top: y }}
+      style={{ left: clampedPos.left, top: clampedPos.top }}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Node-specific actions */}

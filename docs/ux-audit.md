@@ -35,17 +35,17 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Critical
 
-1. **Duplicate drag-and-drop handlers with divergent logic.** `AppShell.handleDrop` uses `loadSlp(file, { openVideos: true })` directly, while `WelcomeScreen` uses the `useFileIO` hook (which goes through `getPlatform()`). The AppShell handler bypasses the platform abstraction, has no `loading` state, and errors are only logged to console with **no user feedback**. If the WelcomeScreen is visible and a user drops a file, both handlers fire (AppShell + WelcomeScreen), potentially loading the file twice.
+1. [FIXED] **Duplicate drag-and-drop handlers with divergent logic.** Now uses consolidated `loadProjectFromFile()` for all loading paths.
 
-2. **No unsaved changes warning.** Dropping a new SLP file or opening a project when `hasChanges === true` silently replaces the current project with no "Save changes?" confirmation dialog.
+2. [FIXED] **No unsaved changes warning.** Unsaved changes check added via `loadProject.ts` which checks `hasChanges` before loading.
 
 ### High
 
-3. **No global error boundary.** If any child component throws during render, the entire app crashes with a white screen. A React Error Boundary is needed to catch and display errors gracefully.
+3. [FIXED] **No global error boundary.** `ErrorBoundary.tsx` wraps `AppShell`, catches render errors and shows fallback UI with reload button.
 
 4. **Side panel tabs have no ARIA labels or keyboard accessibility.** Tab focus management works via Radix but the tab panel content areas have no `aria-label` describing their purpose.
 
-5. **No loading indicator during SLP file load from AppShell drop handler.** The file could take several seconds to parse; user sees no feedback.
+5. [FIXED] **No loading indicator during SLP file load from AppShell drop handler.** Loading indicator now shown via consolidated loading path.
 
 ### Medium
 
@@ -79,17 +79,17 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Medium
 
-14. **No disabled states for commands that require context.** Many menu items (e.g., Delete Instance, Copy Instance, Paste Instance) are always clickable even when there is no selected instance or no clipboard content. Clicking them silently does nothing.
+14. [FIXED] **No disabled states for commands that require context.** Menu items now have `disabled` props based on store state (e.g., Delete Instance disabled when no instance selected, Paste disabled when clipboard empty, navigation disabled when no project loaded).
 
 15. **GoMenu inline handlers for Next/Previous Video and Select Next Instance are duplicated.** The same logic exists in `useKeyboardShortcuts.ts`. If the logic needs to change, it must be updated in two places.
 
 16. **`confirm()` dialog for Delete All Predictions.** Uses the browser's native `confirm()` which is ugly, blocking, and cannot be styled. Should use a custom dialog component.
 
-17. **"Save As..." menu item is disabled with no tooltip or explanation.** User does not know why it is disabled or when it will be available.
+17. [FIXED] **"Save As..." menu item is disabled with no tooltip or explanation.** Save As now works via `SaveAsJsonCommand` with file picker and auto-versioned filenames.
 
 ### Low
 
-18. **No Help menu** with keyboard shortcut reference, about dialog, or link to documentation.
+18. [FIXED] **No Help menu** with keyboard shortcut reference, about dialog, or link to documentation. Help menu now includes Keyboard Shortcuts dialog, About dialog, GitHub link, and documentation link.
 
 19. **No "Recent Projects" in File menu.** Common desktop app pattern that would improve workflow.
 
@@ -155,11 +155,11 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 34. **Race condition in frame loading.** The `cancelled` flag in the frame loading effect prevents stale updates, but rapid frame navigation (e.g., holding arrow key) fires many concurrent `getFrame()` calls. There is no debouncing or request cancellation at the backend level, potentially causing memory pressure and frame ordering issues.
 
-35. **Node placement directly mutates instance data.** Lines 324-332: `currentInstance.points[unplacedIdx].xy = [x, y]` directly mutates the data model outside the command system. This bypasses undo/redo entirely -- placed nodes cannot be undone.
+35. [FIXED] **Node placement directly mutates instance data.** `BeginEdit` command now takes an undo snapshot before node placement begins, making placement undoable.
 
 ### High
 
-36. **Drag operations bypass undo/redo.** Node dragging (lines 386-398) directly mutates point positions without creating an undo snapshot. Users cannot undo a node drag. This is the most common editing operation.
+36. [FIXED] **Drag operations bypass undo/redo.** `BeginEdit` command is now executed at the start of each drag, taking an undo snapshot. Drag mutations are undoable.
 
 37. **No cursor change on hover over draggable nodes.** The cursor is always "crosshair" or "cell" but does not change to indicate which nodes can be dragged, violating affordance principles.
 
@@ -185,9 +185,9 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 46. **No minimap for large zoom levels.** When zoomed in, users lose context of where they are in the frame.
 
-47. **No touch/trackpad gesture support.** Pinch-to-zoom and two-finger pan would improve tablet/trackpad usability.
+47. [FIXED] **No touch/trackpad gesture support.** Pinch-to-zoom now implemented via Ctrl+scroll detection (browsers set ctrlKey for trackpad pinch gestures). Uses finer zoom steps for smooth experience.
 
-48. **Double-click to reset zoom is undiscoverable.** No tooltip, documentation, or hint that double-clicking resets the view.
+48. **Double-click to reset zoom is undiscoverable.** No tooltip, documentation, or hint that double-clicking resets the view. (Note: double-click now also converts predictions when clicking on them.)
 
 ---
 
@@ -231,7 +231,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### High
 
-60. **Context menu position is not clamped to viewport.** If right-clicking near the bottom-right corner, the menu can extend off-screen with no adjustment.
+60. [FIXED] **Context menu position is not clamped to viewport.** Menu position is now clamped to viewport bounds using `clampedPos` state with viewport dimension checks.
 
 61. **Context menu is a custom implementation.** It uses a positioned `div` with manual click-outside handling. It does not support keyboard navigation (arrow keys to move between items, Enter to select), unlike the Radix-based menu components used in the MenuBar.
 
@@ -315,19 +315,19 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Critical
 
-83. **Skeleton editing directly mutates the data model** without going through the command system. Lines 69-73 (addNode), 77-86 (deleteNode), 89-101 (addEdge), 104-109 (deleteEdge) all use `skeleton.nodes.push()`, `splice()`, etc. These mutations are NOT undoable and bypass undo/redo entirely.
+83. [FIXED] **Skeleton editing directly mutates the data model** without going through the command system. All skeleton operations now use dedicated commands (`AddNodeCommand`, `DeleteNodeCommand`, `AddEdgeCommand`, `DeleteEdgeCommand`, `RenameNodeCommand`) with undo/redo support via `installSkeletonUndoInterceptor`.
 
-84. **Template selector is non-functional.** Line 129: `onValueChange={(v) => console.log("Load template:", v)}`. Selecting a template does nothing.
+84. [FIXED] **Template selector is non-functional.** Template dropdown now loads predefined skeletons (Fly, Mouse, Human, C. elegans, Custom) via `LoadSkeletonTemplateCommand` with full undo support.
 
 ### High
 
-85. **No validation for duplicate node names.** Adding a node with a name that already exists is allowed, which can cause confusion and edge assignment bugs.
+85. **No validation for duplicate node names.** Adding a node with a name that already exists is allowed, which can cause confusion and edge assignment bugs. (Note: inline rename does validate for duplicates.)
 
 86. **No validation for duplicate edges.** Adding an edge between two nodes that are already connected is allowed, creating parallel edges.
 
 87. **Self-loop edges are possible.** The "Add Edge" dialog allows selecting the same node as both source and destination.
 
-88. **Deleting a node does not update existing instances.** If instances have points referencing the deleted node index, those instances become corrupt. The skeleton's node list is shortened but instance point arrays are not updated.
+88. [FIXED] **Deleting a node does not update existing instances.** `DeleteNodeCommand` now removes the corresponding point from every instance when a node is deleted.
 
 ### Medium
 
@@ -337,7 +337,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 91. **Edge source/destination selects allow selecting the same node for both** with no client-side prevention beyond the "Add" button remaining enabled.
 
-92. **No inline editing of node names.** Must delete and re-add to rename.
+92. [FIXED] **No inline editing of node names.** Double-click on a node name in the table now enables inline rename with duplicate name validation.
 
 ### Low
 
@@ -353,7 +353,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Critical
 
-95. **"Generate Suggestions" and "Clear Suggestions" buttons are non-functional.** They only `console.log()`. Suggestions are a core part of the SLEAP labeling workflow.
+95. [FIXED] **"Generate Suggestions" and "Clear Suggestions" buttons are non-functional.** Generate now supports "stride" (evenly spaced) and "random" sampling methods with configurable count. Clear removes all suggestions.
 
 ### High
 
@@ -361,7 +361,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Medium
 
-97. **No indication of suggestion completion status.** Users cannot see which suggestions they have already labeled vs which are pending.
+97. [FIXED] **No indication of suggestion completion status.** The suggestions table now shows a "Status" column indicating whether each frame has been labeled.
 
 98. **No keyboard shortcut to jump to a suggestion by number.** The Space/Shift+Space shortcuts cycle sequentially but there is no way to jump to a specific suggestion.
 
@@ -369,7 +369,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Low
 
-100. **No suggestion source information.** Users cannot see why a frame was suggested (e.g., which algorithm, confidence score).
+100. [FIXED] **No suggestion source information.** The Score column now shows the mean prediction score for each suggested frame. Column headers are clickable for sorting.
 
 ---
 
@@ -385,7 +385,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### High
 
-103. **No state persistence.** Closing the browser tab loses all view preferences (palette, edge style, marker size, etc.). These should be saved to localStorage.
+103. [FIXED] **No state persistence.** View preferences are now persisted to `localStorage` via Zustand `persist` middleware. Palette, edge style, marker size, node label size, trail length, and all show/hide flags are preserved across sessions.
 
 104. **`labels` is stored by reference.** Since `labels` is a mutable SLEAP-io object, mutations to it outside the store (e.g., skeleton editing, direct point manipulation) do not trigger Zustand subscriptions. This is the root cause of many "stale UI" issues throughout the app.
 
@@ -405,21 +405,21 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Critical
 
-108. **Undo/redo only snapshots instances, not skeleton mutations.** Adding/deleting nodes/edges in the SkeletonPanel is not captured in the undo stack at all.
+108. [FIXED] **Undo/redo only snapshots instances, not skeleton mutations.** Skeleton commands now use a dedicated undo interceptor (`installSkeletonUndoInterceptor`) that wraps `ctx.undo()`/`ctx.redo()` to also restore skeleton state (nodes, edges, instance points).
 
 109. **`cloneInstances` does not preserve point `score` property.** Line 37-42: `clonePoints` copies `xy`, `visible`, `complete`, `name` but NOT `score`. Predicted instance points lose their per-point scores after undo/redo.
 
-110. **`DeleteAllPredictions` undo is incorrect.** The undo snapshot only captures the current frame's instances, but `DeleteAllPredictions` modifies ALL frames. Undoing it only restores the current frame's predictions, not predictions across the entire project.
+110. [FIXED] **`DeleteAllPredictions` undo is incorrect.** Now uses `takeAllFramesSnapshot()` to snapshot ALL frames before deletion, and `pushUndoSnapshot()` to register the multi-frame undo. Undoing restores all frames correctly.
 
 ### High
 
-111. **`SaveProjectCommand` catches errors but only logs to console.** Line 91: `console.error("[SaveProject] Failed to save:", err)`. No user-visible error message. Users think save succeeded when it may have failed.
+111. **`SaveProjectCommand` catches errors but only logs to console.** Line 91: `console.error("[SaveProject] Failed to save:", err)`. No user-visible error message. Users think save succeeded when it may have failed. (Note: toast notifications are now used for save feedback, but the error path still logs to console as well.)
 
-112. **`ExportJsonCommand` has no error handling at all.** If `labels.toDict()` throws, the error propagates uncaught.
+112. [FIXED] **`ExportJsonCommand` has no error handling at all.** Error handling added with try/catch and toast error notification.
 
-113. **`OpenProjectCommand` has no loading indicator.** The `loadSlp` call can take several seconds for large files. No spinner, progress bar, or loading state.
+113. [FIXED] **`OpenProjectCommand` has no loading indicator.** Now uses consolidated `loadProjectFromFile()` which includes loading state and toast notifications.
 
-114. **`NewProjectCommand` does not check for unsaved changes.** Ctrl+N instantly replaces the current project.
+114. [FIXED] **`NewProjectCommand` does not check for unsaved changes.** Now shows `window.confirm()` dialog if `hasChanges` is true.
 
 ### Medium
 
@@ -443,11 +443,11 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### High
 
-120. **`goto frame` (Ctrl+J) uses `prompt()`.** The browser's native `prompt()` is ugly, blocking, and cannot be styled. It also steals focus and may interfere with other keyboard shortcuts.
+120. [FIXED] **`goto frame` (Ctrl+J) uses `prompt()`.** Replaced with a proper `GoToFrameDialog.tsx` using shadcn/ui Dialog component.
 
 121. **Many shortcuts defined in `DEFAULT_SHORTCUTS` are not bound.** Shortcuts like `delete track`, `learning`, `export clip`, `export_analysis_current`, `delete frame predictions`, `color predicted`, `show trails` have key bindings defined but no handler in `useKeyboardShortcuts`.
 
-122. **Shortcuts are not configurable.** There is no UI for viewing or remapping shortcuts. SLEAP desktop allows shortcut customization.
+122. **Shortcuts are not configurable.** There is no UI for viewing or remapping shortcuts. SLEAP desktop allows shortcut customization. (Note: a Keyboard Shortcuts dialog now exists for viewing shortcuts, but not editing.)
 
 123. **Space key for suggestions conflicts with text input.** If any input element is focused (e.g., the "Go to frame" prompt), pressing Space would navigate to the next suggestion instead of typing a space.
 
@@ -461,7 +461,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Low
 
-127. **No visual keyboard shortcut overlay** (like pressing `?` in many apps to show all shortcuts).
+127. [FIXED] **No visual keyboard shortcut overlay** (like pressing `?` in many apps to show all shortcuts). Keyboard Shortcuts dialog now available via Help menu.
 
 ---
 
@@ -566,13 +566,13 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Critical
 
-153. **No unsaved changes protection anywhere.** No `beforeunload` handler on the window. Closing the tab, refreshing, or navigating away with unsaved changes results in silent data loss.
+153. **No unsaved changes protection on tab close.** No `beforeunload` handler on the window. Closing the tab, refreshing, or navigating away with unsaved changes results in silent data loss. (Note: unsaved changes check on project open IS implemented, but not on tab close/refresh.)
 
-154. **No toast/notification system.** Success and error feedback is either `console.log`, `console.error`, or missing entirely. Users get no visual feedback for: save success, copy/paste, delete operations, file load errors, etc.
+154. [FIXED] **No toast/notification system.** Sonner toast library now integrated for success/error feedback on save, export, load, and delete operations.
 
 ### High
 
-155. **No global loading/progress indicator.** File loading, WASM initialization, and frame decoding all happen without user feedback.
+155. [FIXED] **No global loading/progress indicator.** Loading state now managed via store (`isLoading`/`loadingMessage`). Loading indicator shown during file load and WASM initialization.
 
 156. **Accessibility is minimal.** No skip-to-content link, no ARIA landmarks on major sections, no screen reader announcements for state changes (instance selected, frame changed, etc.). Canvas-based rendering is inherently inaccessible with no text alternative.
 
@@ -588,7 +588,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 161. **No performance monitoring.** Frame render times, canvas paint times, and file load times are not tracked. For large projects, performance could degrade significantly without any instrumentation.
 
-162. **Multiple competing patterns for file loading.** `AppShell.handleDrop` (direct loadSlp), `WelcomeScreen` (useFileIO hook), `OpenProjectCommand` (direct loadSlp with File System Access API), and `useFileIO` (platform abstraction) all implement SLP loading differently.
+162. [FIXED] **Multiple competing patterns for file loading.** All file loading now goes through consolidated `loadProjectFromFile()` / `loadProjectFromPath()` in `src/lib/loadProject.ts`.
 
 ### Low
 
@@ -602,23 +602,23 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ## Summary by Severity
 
-| Severity | Count |
-|----------|-------|
-| Critical | 18    |
-| High     | 43    |
-| Medium   | 41    |
-| Low      | 28    |
-| **Total**| **130** |
+| Severity | Total | Fixed | Remaining |
+|----------|-------|-------|-----------|
+| Critical | 18    | 11    | 7         |
+| High     | 43    | 11    | 32        |
+| Medium   | 41    | 2     | 39        |
+| Low      | 28    | 3     | 25        |
+| **Total**| **130** | **27** | **103** |
 
-### Top 10 Priority Fixes
+### Top 10 Priority Fixes (Updated)
 
-1. **Add `beforeunload` handler** for unsaved changes protection (#153)
-2. **Add toast/notification system** for user feedback (#154)
-3. **Make node dragging undoable** (#36) and node placement undoable (#35)
+1. ~~Add `beforeunload` handler~~ Still needed for tab close protection (#153, #159)
+2. ~~Add toast/notification system~~ [FIXED] (#154)
+3. ~~Make node dragging undoable~~ [FIXED] (#36) ~~and node placement undoable~~ [FIXED] (#35)
 4. **Fix ViewMenu reactivity** -- use proper subscriptions instead of `getState()` (#11)
 5. **Fix EditMenu undo/redo label staleness** (#9)
-6. **Add loading indicators** for file load and frame fetch (#33, #113, #155)
-7. **Implement stub buttons** (Add/Remove Videos, Generate/Clear Suggestions, Load Template) or disable them with clear "not implemented" state (#67, #84, #95)
-8. **Add global Error Boundary** (#3)
-9. **Fix `DeleteAllPredictions` undo** to snapshot all frames (#110)
-10. **Add unsaved changes confirmation** for New Project, Open Project, and file drop (#2, #114)
+6. ~~Add loading indicators~~ [FIXED] (#155) -- still need frame fetch indicator (#33)
+7. ~~Implement stub buttons~~ Generate/Clear Suggestions [FIXED], Load Template [FIXED]. Add/Remove Videos still stubbed (#67).
+8. ~~Add global Error Boundary~~ [FIXED] (#3)
+9. ~~Fix `DeleteAllPredictions` undo~~ [FIXED] (#110)
+10. ~~Add unsaved changes confirmation~~ [FIXED] for New Project (#114), Open Project (#2)

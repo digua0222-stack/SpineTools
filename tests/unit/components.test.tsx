@@ -265,7 +265,7 @@ describe("Component rendering", () => {
       expect(screen.getByText("SLEAP")).toBeInTheDocument();
     });
 
-    it("renders all 7 menu triggers", async () => {
+    it("renders all menu triggers including Help", async () => {
       const { MenuBar } = await import(
         "@/components/layout/MenuBar"
       );
@@ -278,6 +278,8 @@ describe("Component rendering", () => {
       expect(screen.getByText("Labels")).toBeInTheDocument();
       expect(screen.getByText("Predict")).toBeInTheDocument();
       expect(screen.getByText("Tracks")).toBeInTheDocument();
+      // Help menu should exist
+      expect(screen.getByText("Help")).toBeInTheDocument();
     });
   });
 
@@ -298,8 +300,72 @@ describe("Component rendering", () => {
       );
       render(<SuggestionsPanel />);
       expect(
-        screen.getByText("Generate Suggestions")
+        screen.getByText("Generate")
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("ErrorBoundary", () => {
+    it("renders children when no error", async () => {
+      const { ErrorBoundary } = await import(
+        "@/components/layout/ErrorBoundary"
+      );
+      render(
+        <ErrorBoundary>
+          <div>Child content</div>
+        </ErrorBoundary>
+      );
+
+      expect(screen.getByText("Child content")).toBeInTheDocument();
+    });
+
+    it("catches errors and shows fallback UI", async () => {
+      const { ErrorBoundary } = await import(
+        "@/components/layout/ErrorBoundary"
+      );
+
+      // Component that throws on render
+      function ThrowingComponent() {
+        throw new Error("Test error");
+      }
+
+      // Suppress console.error for expected error
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      render(
+        <ErrorBoundary>
+          <ThrowingComponent />
+        </ErrorBoundary>
+      );
+
+      expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+      expect(screen.getByText("Reload")).toBeInTheDocument();
+
+      consoleSpy.mockRestore();
+    });
+
+    it("shows reload button in error state", async () => {
+      const { ErrorBoundary } = await import(
+        "@/components/layout/ErrorBoundary"
+      );
+
+      function ThrowingComponent() {
+        throw new Error("Test error");
+      }
+
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      render(
+        <ErrorBoundary>
+          <ThrowingComponent />
+        </ErrorBoundary>
+      );
+
+      const reloadButton = screen.getByText("Reload");
+      expect(reloadButton).toBeInTheDocument();
+      expect(reloadButton.closest("button")).toBeTruthy();
+
+      consoleSpy.mockRestore();
     });
   });
 });

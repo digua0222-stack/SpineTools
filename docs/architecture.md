@@ -657,3 +657,186 @@ installed into `src/components/ui/` and include:
 - `Table`, `Card`, `ScrollArea`, `Tooltip`
 
 This establishes a consistent design system for all future dialogs and forms.
+
+### Skeleton Command System (Separate Undo Interceptor)
+
+Skeleton editing operations (add/delete/rename nodes, add/delete edges, load
+template) require a specialized undo mechanism because the standard
+`CommandContext` undo system only snapshots instance data per frame, not
+skeleton structure.
+
+**Architecture:**
+
+```
+src/commands/skeletonCommands.ts
+├── SkeletonSnapshot interface    — captures nodes, edges, all instance points
+├── takeSkeletonSnapshot()        — deep-clone current skeleton + instance state
+├── restoreSkeletonSnapshot()     — restore from snapshot, rebuild cache
+├── storeSkeletonUndo()           — associate snapshot with undo entry
+├── skeletonUndoMap (WeakMap)     — maps undo snapshots → skeleton state
+└── installSkeletonUndoInterceptor() — wraps ctx.undo/redo for skeleton restore
+```
+
+**How it works:**
+
+1. Each skeleton command sets `skipAutoSnapshot: true` to bypass the standard
+   frame-level snapshot.
+2. Before mutation, it calls `takeSkeletonSnapshot()` to capture the full
+   skeleton state (nodes, edges) plus all instance point arrays.
+3. The snapshot is stored in a module-level `WeakMap<object, SkeletonSnapshot>`
+   keyed by the undo stack entry.
+4. `installSkeletonUndoInterceptor()` monkey-patches `ctx.undo()` and
+   `ctx.redo()`. Before delegating to the original method, it peeks at the
+   top of the undo/redo stack. If the entry has an associated skeleton
+   snapshot, it restores skeleton state after the standard restore runs.
+5. On undo, the current skeleton state is saved for redo; on redo, the
+   reverse applies.
+
+**Commands using this system:**
+- `AddNodeCommand` — adds node + NaN point to all instances
+- `DeleteNodeCommand` — removes node, edges, and corresponding instance points
+- `RenameNodeCommand` — renames node and all instance point names
+- `AddEdgeCommand`, `DeleteEdgeCommand` — modify edge list
+- `LoadSkeletonTemplateCommand` — replaces entire skeleton from template
+
+### Trail Rendering Architecture
+
+Trail rendering is implemented as a separate rendering pass in
+`src/canvas/TrailRenderer.ts`, called from `VideoPlayer.tsx` after the
+standard skeleton rendering.
+
+**Pipeline:**
+
+```
+VideoPlayer overlay render
+│
+├── renderInstances()        ← Standard skeleton renderer
+│
+└── renderTrails()           ← Trail renderer (if trailLength > 0)
+    │
+    ├── Get all labeled frames for current video
+    ├── For each tracked instance on current frame:
+    │   ├── Look back `trailLength` frames
+    │   ├── Find same-track instances, compute centroids
+    │   └── Collect trail points with age (distance from current)
+    │
+    └── Draw:
+        ├── Polyline segments with fading opacity (age-based alpha)
+        └── Small dots at each centroid position
+```
+
+**Key design decisions:**
+- Trail rendering operates in image-space coordinates (same transform as
+  skeleton rendering), so trails scale correctly with zoom/pan.
+- Line width scales inversely with zoom (`2 / zoom`) for consistent appearance.
+- Opacity fades linearly: `1 - age / (trailLength + 1)`, so the current frame
+  is fully opaque and the oldest frame is nearly transparent.
+- Uses `frameMap` (Map<number, LabeledFrame>) for O(1) frame lookback.
+- Only draws for instances that have a track assignment.
+
+### Export Utilities
+
+`src/lib/exportUtils.ts` provides reusable export functions:
+
+**`generateCSV(labels)`** — Converts labels to CSV with columns:
+`video_filename, frame_idx, track_name, instance_type, node_name, x, y, score, visible`.
+Handles CSV escaping (quotes, commas, newlines). NaN coordinates become empty strings.
+
+**`downloadFile(content, filename, mimeType)`** — Creates a Blob URL, triggers
+download via a hidden `<a>` element, and revokes the URL. Works in all browsers.
+
+**`generatePackageJSON(labels)`** — Creates a self-contained JSON package with:
+- Format identifier and version
+- Export timestamp
+- Video manifest (filenames, shapes, fps, embedded status)
+- Full labels data from `labels.toDict()`
+
+**`suggestSaveFilename(currentFilename, extension)`** — Auto-increments version
+numbers in filenames. Matches `.v002` pattern, increments to `.v003`, etc.
+If no version exists, appends `.v002`.
+
+### Persistent Preferences (Zustand Persist Middleware)
+
+View preferences are persisted to `localStorage` using Zustand's `persist`
+middleware:
+
+```typescript
+// In appStore.ts
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({ /* ... state and actions ... */ }),
+    {
+      name: "sleap-label-web-prefs",
+      partialize: (state) => ({
+        palette: state.palette,
+        edgeStyle: state.edgeStyle,
+        markerSize: state.markerSize,
+        nodeLabelSize: state.nodeLabelSize,
+        trailLength: state.trailLength,
+        colorPredicted: state.colorPredicted,
+        showInstances: state.showInstances,
+        showLabels: state.showLabels,
+        showEdges: state.showEdges,
+        showNonVisibleNodes: state.showNonVisibleNodes,
+      }),
+    }
+  )
+);
+```
+
+**Key design decisions:**
+- `partialize` ensures only view preferences are persisted, not project data
+  or transient state (selection, loading, dialogs).
+- The persist key `"sleap-label-web-prefs"` is stable across versions.
+- Preferences are restored automatically on app load.
+
+### Error Boundary Pattern
+
+`src/components/layout/ErrorBoundary.tsx` is a React class component that
+catches render errors in the component tree:
+
+```
+App
+└── ErrorBoundary
+    └── AppShell
+        ├── MenuBar
+        ├── VideoPlayer
+        ├── PanelLayout
+        └── StatusBar
+```
+
+**Behavior:**
+- In production: shows "Something went wrong" message with a "Reload" button.
+- In development (`import.meta.env.DEV`): also shows the error message and
+  component stack trace for debugging.
+- Uses `getDerivedStateFromError` for synchronous error capture and
+  `componentDidCatch` for logging.
+
+### Skeleton Templates Data Structure
+
+`src/lib/skeletonTemplates.ts` defines predefined body plans:
+
+```typescript
+interface SkeletonTemplate {
+  name: string;           // Display name (e.g., "Fly (32 nodes)")
+  description: string;    // Short description
+  nodes: string[];        // Ordered list of node names
+  edges: [number, number][]; // Pairs of node indices for edges
+}
+```
+
+**Available templates:**
+| ID | Name | Nodes | Edges |
+|----|------|-------|-------|
+| `fly` | Fly (32 nodes) | 32 | 28 |
+| `mouse_topdown` | Mouse top-down (12 nodes) | 12 | 11 |
+| `human` | Human (17 nodes) | 17 | 16 |
+| `celegans` | C. elegans (2 nodes) | 2 | 1 |
+| `custom` | Custom (empty) | 0 | 0 |
+
+Templates are loaded via `LoadSkeletonTemplateCommand`, which:
+1. Creates new `Node` objects from template names
+2. Creates `Edge` objects from template index pairs
+3. Replaces skeleton nodes and edges
+4. Resets all instance point arrays to NaN positions matching new node count
+5. Takes a skeleton snapshot for undo support

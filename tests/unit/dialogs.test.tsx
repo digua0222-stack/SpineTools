@@ -2,7 +2,7 @@
  * Tests for dialog components.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useAppStore } from "@/stores/appStore";
 
@@ -12,6 +12,26 @@ vi.mock("@/lib/platform", () => ({
   isMac: false,
   modKey: "Ctrl",
 }));
+
+// Mock sonner toast for commands
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
+// Mock ResizeObserver for Radix Select/Slider components
+beforeAll(() => {
+  if (!globalThis.ResizeObserver) {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  }
+});
 
 /** Reset the store between tests. */
 function resetStore() {
@@ -285,6 +305,196 @@ describe("Dialog components", () => {
       expect(
         screen.getByText("sleap-nn integration planned")
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("ShortcutsDialog", () => {
+    it("renders when open", async () => {
+      const { ShortcutsDialog } = await import(
+        "@/components/dialogs/ShortcutsDialog"
+      );
+      render(<ShortcutsDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("Keyboard Shortcuts")).toBeInTheDocument();
+    });
+
+    it("does not render when closed", async () => {
+      const { ShortcutsDialog } = await import(
+        "@/components/dialogs/ShortcutsDialog"
+      );
+      render(<ShortcutsDialog open={false} onOpenChange={() => {}} />);
+
+      expect(screen.queryByText("Keyboard Shortcuts")).not.toBeInTheDocument();
+    });
+
+    it("renders shortcut categories", async () => {
+      const { ShortcutsDialog } = await import(
+        "@/components/dialogs/ShortcutsDialog"
+      );
+      render(<ShortcutsDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("File")).toBeInTheDocument();
+      expect(screen.getByText("Navigation")).toBeInTheDocument();
+      expect(screen.getByText("Editing")).toBeInTheDocument();
+      expect(screen.getByText("View")).toBeInTheDocument();
+      expect(screen.getByText("Tracks")).toBeInTheDocument();
+    });
+  });
+
+  describe("HelpDialog", () => {
+    it("renders when open", async () => {
+      const { HelpDialog } = await import(
+        "@/components/dialogs/HelpDialog"
+      );
+      render(<HelpDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("About SLEAP Label")).toBeInTheDocument();
+    });
+
+    it("does not render when closed", async () => {
+      const { HelpDialog } = await import(
+        "@/components/dialogs/HelpDialog"
+      );
+      render(<HelpDialog open={false} onOpenChange={() => {}} />);
+
+      expect(screen.queryByText("About SLEAP Label")).not.toBeInTheDocument();
+    });
+
+    it("shows version", async () => {
+      const { HelpDialog } = await import(
+        "@/components/dialogs/HelpDialog"
+      );
+      render(<HelpDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText(/Version/)).toBeInTheDocument();
+    });
+
+    it("shows SLEAP Label Web title", async () => {
+      const { HelpDialog } = await import(
+        "@/components/dialogs/HelpDialog"
+      );
+      render(<HelpDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("SLEAP Label Web")).toBeInTheDocument();
+    });
+
+    it("has links to sleap.ai and GitHub", async () => {
+      const { HelpDialog } = await import(
+        "@/components/dialogs/HelpDialog"
+      );
+      render(<HelpDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("sleap.ai")).toBeInTheDocument();
+      expect(screen.getByText("GitHub")).toBeInTheDocument();
+    });
+
+    it("has link to Talmo Lab", async () => {
+      const { HelpDialog } = await import(
+        "@/components/dialogs/HelpDialog"
+      );
+      render(<HelpDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("Talmo Lab")).toBeInTheDocument();
+    });
+  });
+
+  describe("DeletePredictionsDialog", () => {
+    it("renders when open", async () => {
+      const { DeletePredictionsDialog } = await import(
+        "@/components/dialogs/DeletePredictionsDialog"
+      );
+      render(<DeletePredictionsDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("Delete Predictions")).toBeInTheDocument();
+    });
+
+    it("does not render when closed", async () => {
+      const { DeletePredictionsDialog } = await import(
+        "@/components/dialogs/DeletePredictionsDialog"
+      );
+      render(<DeletePredictionsDialog open={false} onOpenChange={() => {}} />);
+
+      expect(screen.queryByText("Delete Predictions")).not.toBeInTheDocument();
+    });
+
+    it("has Delete and Cancel buttons", async () => {
+      const { DeletePredictionsDialog } = await import(
+        "@/components/dialogs/DeletePredictionsDialog"
+      );
+      render(<DeletePredictionsDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("Delete")).toBeInTheDocument();
+      expect(screen.getByText("Cancel")).toBeInTheDocument();
+    });
+
+    it("shows deletion method selector", async () => {
+      const { DeletePredictionsDialog } = await import(
+        "@/components/dialogs/DeletePredictionsDialog"
+      );
+      render(<DeletePredictionsDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("Deletion method")).toBeInTheDocument();
+    });
+  });
+
+  describe("ExportDialog", () => {
+    it("renders when labels exist", async () => {
+      useAppStore.setState({
+        labels: {
+          videos: [],
+          skeletons: [],
+          labeledFrames: [],
+          tracks: [],
+          suggestions: [],
+          provenance: {},
+          find: () => [],
+          append: () => {},
+        } as unknown as import("@/types").Labels,
+        projectLoaded: true,
+      });
+
+      const { ExportDialog } = await import(
+        "@/components/dialogs/ExportDialog"
+      );
+      render(<ExportDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("Export")).toBeInTheDocument();
+    });
+
+    it("shows export options", async () => {
+      useAppStore.setState({
+        labels: {
+          videos: [],
+          skeletons: [],
+          labeledFrames: [],
+          tracks: [],
+          suggestions: [],
+          provenance: {},
+          find: () => [],
+          append: () => {},
+        } as unknown as import("@/types").Labels,
+        projectLoaded: true,
+      });
+
+      const { ExportDialog } = await import(
+        "@/components/dialogs/ExportDialog"
+      );
+      render(<ExportDialog open={true} onOpenChange={() => {}} />);
+
+      expect(screen.getByText("Analysis CSV")).toBeInTheDocument();
+      expect(screen.getByText("Save As JSON")).toBeInTheDocument();
+      expect(screen.getByText("Labels Package")).toBeInTheDocument();
+    });
+
+    it("returns null when no labels", async () => {
+      // No labels loaded
+      const { ExportDialog } = await import(
+        "@/components/dialogs/ExportDialog"
+      );
+      const { container } = render(<ExportDialog open={true} onOpenChange={() => {}} />);
+
+      // Should not render anything meaningful
+      expect(screen.queryByText("Export")).not.toBeInTheDocument();
     });
   });
 });

@@ -119,3 +119,68 @@ export const PasteTrack: Command = {
     ctx.state.markChanged();
   },
 };
+
+/**
+ * Propagate track labels forward from the current frame.
+ *
+ * Starting from the current frame, iterates forward through labeled frames
+ * in the same video. For each frame, swaps instances from oldTrack to newTrack.
+ * Stops when reaching a frame where oldTrack doesn't appear.
+ *
+ * This enables "fix once, propagate forward" during proofreading.
+ *
+ * Params:
+ *   oldTrack: Track - the track to replace
+ *   newTrack: Track - the track to assign
+ */
+export const PropagateTrackLabels: Command = {
+  name: "PropagateTrackLabels",
+  topics: [UpdateTopic.Tracks, UpdateTopic.Instance],
+  skipAutoSnapshot: true,
+  execute(ctx: CommandContext, params?: Record<string, unknown>) {
+    const { labels, video, frameIdx } = ctx.state;
+    if (!labels || !video) return;
+
+    const oldTrack = params?.oldTrack as Track | undefined;
+    const newTrack = params?.newTrack as Track | undefined;
+    if (!oldTrack || !newTrack) return;
+
+    // Take a multi-frame snapshot before modifying
+    const snapshot = ctx.takeAllFramesSnapshot("PropagateTrackLabels");
+    ctx.pushUndoSnapshot(snapshot);
+
+    // Get all labeled frames for this video, sorted by frame index
+    const videoFrames = labels
+      .find({ video })
+      .sort((a, b) => a.frameIdx - b.frameIdx);
+
+    // Start from frames after the current one
+    for (const lf of videoFrames) {
+      if (lf.frameIdx <= frameIdx) continue;
+
+      // Check if oldTrack appears in this frame
+      const matchingInstances = lf.instances.filter(
+        (inst) => inst.track === oldTrack
+      );
+
+      if (matchingInstances.length === 0) {
+        // oldTrack not found — stop propagation
+        break;
+      }
+
+      // Also swap newTrack -> oldTrack if present (bidirectional swap)
+      const reverseInstances = lf.instances.filter(
+        (inst) => inst.track === newTrack
+      );
+
+      for (const inst of matchingInstances) {
+        inst.track = newTrack;
+      }
+      for (const inst of reverseInstances) {
+        inst.track = oldTrack;
+      }
+    }
+
+    ctx.state.markChanged();
+  },
+};

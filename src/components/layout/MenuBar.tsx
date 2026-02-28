@@ -1,7 +1,7 @@
 /**
  * Application menu bar.
  *
- * Renders a desktop-style menu bar with File, Edit, Go, View, Labels, Tracks menus.
+ * Renders a desktop-style menu bar with File, Edit, Go, View, Labels, Predict, Tracks, Help menus.
  * All actions are wired to the command system via CommandContext.
  */
 
@@ -14,12 +14,16 @@ import {
   SaveProjectCommand,
   SaveAsProjectCommand,
   ExportJsonCommand,
+  ExportCSVCommand,
+
+  ExportPackageCommand,
   GoNextLabeledFrame,
   GoPrevLabeledFrame,
   GoNextSuggestion,
   GoPrevSuggestion,
   GoToLastInteracted,
   GoNextUserFrame,
+  GoNextTrackSpawnFrame,
   AddInstance,
   DeleteSelectedInstance,
   CopyInstance,
@@ -30,6 +34,7 @@ import {
   TransposeInstances,
   CopyTrack,
   PasteTrack,
+  PropagateTrackLabels,
 } from "../../commands";
 import { PALETTES } from "../../lib/colorPalettes";
 import { toast } from "sonner";
@@ -63,11 +68,14 @@ export function MenuBar() {
       <LabelsMenu />
       <PredictMenu />
       <TracksMenu />
+      <HelpMenu />
     </Menubar>
   );
 }
 
 function FileMenu() {
+  const projectLoaded = useAppStore((s) => s.projectLoaded);
+
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
     commandContext.execute(cmd);
   };
@@ -83,17 +91,37 @@ function FileMenu() {
           Open Project... <MenubarShortcut>{modKey}+O</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(SaveProjectCommand)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(SaveProjectCommand)}
+        >
           Save <MenubarShortcut>{modKey}+S</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(SaveAsProjectCommand)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(SaveAsProjectCommand)}
+        >
           Save As... <MenubarShortcut>{modKey}+Shift+S</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(ExportJsonCommand)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(ExportJsonCommand)}
+        >
           Export JSON...
         </MenubarItem>
-        <MenubarItem disabled>Export Analysis CSV...</MenubarItem>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(ExportCSVCommand)}
+        >
+          Export Analysis CSV...
+        </MenubarItem>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(ExportPackageCommand)}
+        >
+          Export Labels Package...
+        </MenubarItem>
         <MenubarSeparator />
         <MenubarItem onClick={() => window.close()}>
           Quit <MenubarShortcut>{modKey}+Q</MenubarShortcut>
@@ -107,6 +135,10 @@ function EditMenu() {
   // Subscribe to reactive state so undo/redo labels update
   useAppStore((s) => s.labeledFrame);
   useAppStore((s) => s.hasChanges);
+
+  const projectLoaded = useAppStore((s) => s.projectLoaded);
+  const instance = useAppStore((s) => s.instance);
+  const clipboardInstance = useAppStore((s) => s.clipboardInstance);
 
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
     commandContext.execute(cmd);
@@ -139,6 +171,7 @@ function EditMenu() {
         </MenubarItem>
         <MenubarSeparator />
         <MenubarItem
+          disabled={!instance}
           onClick={() => {
             exec(CopyInstance);
             toast.info("Instance copied");
@@ -147,6 +180,7 @@ function EditMenu() {
           Copy Instance <MenubarShortcut>{modKey}+C</MenubarShortcut>
         </MenubarItem>
         <MenubarItem
+          disabled={!clipboardInstance}
           onClick={() => {
             exec(PasteInstance);
             toast.info("Instance pasted");
@@ -155,10 +189,14 @@ function EditMenu() {
           Paste Instance <MenubarShortcut>{modKey}+V</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(AddInstance)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(AddInstance)}
+        >
           Add Instance <MenubarShortcut>{modKey}+I</MenubarShortcut>
         </MenubarItem>
         <MenubarItem
+          disabled={!instance}
           onClick={() => {
             exec(DeleteSelectedInstance);
             toast.info("Instance deleted");
@@ -167,7 +205,10 @@ function EditMenu() {
           Delete Instance <MenubarShortcut>{modKey}+Backspace</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(DeleteFramePredictions)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(DeleteFramePredictions)}
+        >
           Delete Predictions on Current Frame
         </MenubarItem>
       </MenubarContent>
@@ -176,6 +217,8 @@ function EditMenu() {
 }
 
 function GoMenu() {
+  const projectLoaded = useAppStore((s) => s.projectLoaded);
+
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
     commandContext.execute(cmd);
   };
@@ -185,33 +228,38 @@ function GoMenu() {
       <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Go</MenubarTrigger>
       <MenubarContent>
         <MenubarItem
+          disabled={!projectLoaded}
           onClick={() => useAppStore.getState().setGoToFrameDialogOpen(true)}
         >
           Go to Frame... <MenubarShortcut>{modKey}+J</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(GoNextLabeledFrame)}>
+        <MenubarItem disabled={!projectLoaded} onClick={() => exec(GoNextLabeledFrame)}>
           Next Labeled Frame <MenubarShortcut>Alt+{"\u2192"}</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(GoPrevLabeledFrame)}>
+        <MenubarItem disabled={!projectLoaded} onClick={() => exec(GoPrevLabeledFrame)}>
           Previous Labeled Frame <MenubarShortcut>Alt+{"\u2190"}</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(GoNextSuggestion)}>
+        <MenubarItem disabled={!projectLoaded} onClick={() => exec(GoNextSuggestion)}>
           Next Suggestion <MenubarShortcut>Space</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(GoPrevSuggestion)}>
+        <MenubarItem disabled={!projectLoaded} onClick={() => exec(GoPrevSuggestion)}>
           Previous Suggestion <MenubarShortcut>Shift+Space</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(GoToLastInteracted)}>
+        <MenubarItem disabled={!projectLoaded} onClick={() => exec(GoToLastInteracted)}>
           Last Interacted Frame <MenubarShortcut>{modKey}+A</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(GoNextUserFrame)}>
+        <MenubarItem disabled={!projectLoaded} onClick={() => exec(GoNextUserFrame)}>
           Next User Labeled Frame <MenubarShortcut>{modKey}+U</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem disabled={!projectLoaded} onClick={() => exec(GoNextTrackSpawnFrame)}>
+          Next Track Spawn Frame <MenubarShortcut>{modKey}+E</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
         <MenubarItem
+          disabled={!projectLoaded}
           onClick={() => {
             const { labels, video } = useAppStore.getState();
             if (!labels || !video) return;
@@ -223,6 +271,7 @@ function GoMenu() {
           Next Video <MenubarShortcut>Alt+Shift+{"\u2192"}</MenubarShortcut>
         </MenubarItem>
         <MenubarItem
+          disabled={!projectLoaded}
           onClick={() => {
             const { labels, video } = useAppStore.getState();
             if (!labels || !video) return;
@@ -236,6 +285,7 @@ function GoMenu() {
         </MenubarItem>
         <MenubarSeparator />
         <MenubarItem
+          disabled={!projectLoaded}
           onClick={() => {
             const { labeledFrame, instance } = useAppStore.getState();
             if (!labeledFrame) return;
@@ -254,6 +304,7 @@ function GoMenu() {
           Select Next Instance <MenubarShortcut>`</MenubarShortcut>
         </MenubarItem>
         <MenubarItem
+          disabled={!projectLoaded}
           onClick={() => useAppStore.getState().setInstance(null)}
         >
           Clear Selection <MenubarShortcut>Esc</MenubarShortcut>
@@ -272,7 +323,9 @@ function ViewMenu() {
   const fit = useAppStore((s) => s.fit);
   const edgeStyle = useAppStore((s) => s.edgeStyle);
   const markerSize = useAppStore((s) => s.markerSize);
+  const nodeLabelSize = useAppStore((s) => s.nodeLabelSize);
   const palette = useAppStore((s) => s.palette);
+  const trailLength = useAppStore((s) => s.trailLength);
   const distinctlyColor = useAppStore((s) => s.distinctlyColor);
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
   const uiScale = useAppStore((s) => s.uiScale);
@@ -382,6 +435,38 @@ function ViewMenu() {
         </div>
         <MenubarSeparator />
         <MenubarSub>
+          <MenubarSubTrigger className="text-sm">Node Label Size</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarRadioGroup
+              value={String(nodeLabelSize)}
+              onValueChange={(val) => setVal("nodeLabelSize", Number(val))}
+            >
+              <MenubarRadioItem value="8">Small (8)</MenubarRadioItem>
+              <MenubarRadioItem value="10">Medium (10)</MenubarRadioItem>
+              <MenubarRadioItem value="12">Large (12)</MenubarRadioItem>
+              <MenubarRadioItem value="14">Extra Large (14)</MenubarRadioItem>
+            </MenubarRadioGroup>
+          </MenubarSubContent>
+        </MenubarSub>
+        <MenubarSeparator />
+        <MenubarSub>
+          <MenubarSubTrigger className="text-sm">Trail Length</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarRadioGroup
+              value={String(trailLength)}
+              onValueChange={(val) => setVal("trailLength", Number(val))}
+            >
+              <MenubarRadioItem value="0">Off</MenubarRadioItem>
+              <MenubarRadioItem value="10">Short (10)</MenubarRadioItem>
+              <MenubarRadioItem value="50">Medium (50)</MenubarRadioItem>
+              <MenubarRadioItem value="100">Long (100)</MenubarRadioItem>
+              <MenubarRadioItem value="250">Very Long (250)</MenubarRadioItem>
+              <MenubarRadioItem value="500">Maximum (500)</MenubarRadioItem>
+            </MenubarRadioGroup>
+          </MenubarSubContent>
+        </MenubarSub>
+        <MenubarSeparator />
+        <MenubarSub>
           <MenubarSubTrigger className="text-sm">Color Palette</MenubarSubTrigger>
           <MenubarSubContent>
             <MenubarRadioGroup
@@ -402,7 +487,7 @@ function ViewMenu() {
           <MenubarSubContent>
             <MenubarRadioGroup
               value={distinctlyColor}
-              onValueChange={(val) => setVal("distinctlyColor", val)}
+              onValueChange={(val) => setVal("distinctlyColor", val as "track" | "instance" | "node" | "edge")}
             >
               <MenubarRadioItem value="track">Tracks</MenubarRadioItem>
               <MenubarRadioItem value="instance">Instances</MenubarRadioItem>
@@ -418,6 +503,8 @@ function ViewMenu() {
 
 function LabelsMenu() {
   const labels = useAppStore((s) => s.labels);
+  const projectLoaded = useAppStore((s) => s.projectLoaded);
+  const instance = useAppStore((s) => s.instance);
   const totalLabeled = labels?.labeledFrames.length ?? 0;
   const totalInstances =
     labels?.labeledFrames.reduce((sum, lf) => sum + lf.instances.length, 0) ?? 0;
@@ -430,17 +517,35 @@ function LabelsMenu() {
     <MenubarMenu>
       <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Labels</MenubarTrigger>
       <MenubarContent>
-        <MenubarItem onClick={() => exec(AddInstance)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(AddInstance)}
+        >
           Add Instance <MenubarShortcut>{modKey}+I</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(DeleteSelectedInstance)}>
+        <MenubarItem
+          disabled={!instance}
+          onClick={() => exec(DeleteSelectedInstance)}
+        >
           Delete Instance <MenubarShortcut>{modKey}+Backspace</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(DeleteFramePredictions)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(DeleteFramePredictions)}
+        >
           Delete Predictions on Current Frame
         </MenubarItem>
         <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() =>
+            useAppStore.getState().setDeletePredictionsDialogOpen(true)
+          }
+        >
+          Delete Predictions...
+        </MenubarItem>
+        <MenubarItem
+          disabled={!projectLoaded}
           onClick={() => {
             if (confirm("Delete all predicted instances across all frames?")) {
               exec(DeleteAllPredictions);
@@ -503,6 +608,9 @@ function PredictMenu() {
 }
 
 function TracksMenu() {
+  const projectLoaded = useAppStore((s) => s.projectLoaded);
+  const instance = useAppStore((s) => s.instance);
+
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
     commandContext.execute(cmd);
   };
@@ -511,19 +619,92 @@ function TracksMenu() {
     <MenubarMenu>
       <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Tracks</MenubarTrigger>
       <MenubarContent>
-        <MenubarItem onClick={() => exec(TransposeInstances)}>
+        <MenubarItem
+          disabled={!instance}
+          onClick={() => exec(TransposeInstances)}
+        >
           Transpose Instance Tracks <MenubarShortcut>{modKey}+T</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(AddTrack)}>
+        <MenubarItem
+          disabled={!instance}
+          onClick={() => exec(AddTrack)}
+        >
           New Track <MenubarShortcut>{modKey}+0</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(CopyTrack)}>
+        <MenubarItem
+          disabled={!instance}
+          onClick={() => exec(CopyTrack)}
+        >
           Copy Instance Track <MenubarShortcut>{modKey}+Shift+C</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(PasteTrack)}>
+        <MenubarItem
+          disabled={!projectLoaded}
+          onClick={() => exec(PasteTrack)}
+        >
           Paste Instance Track <MenubarShortcut>{modKey}+Shift+V</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          disabled={!instance || !instance.track}
+          onClick={() => {
+            const { instance: inst, labels } = useAppStore.getState();
+            if (!inst?.track || !labels) return;
+            // Use the current track as both old and new (user should have
+            // just swapped tracks on this frame via TransposeInstances first)
+            // For now, propagate from the current track forward
+            const tracks = labels.tracks;
+            if (tracks.length < 2) return;
+            const trackIdx = tracks.indexOf(inst.track);
+            const otherTrack = tracks[(trackIdx + 1) % tracks.length];
+            exec(PropagateTrackLabels);
+            // Since PropagateTrackLabels needs params, execute with them
+            commandContext.execute(PropagateTrackLabels, {
+              oldTrack: inst.track,
+              newTrack: otherTrack,
+            });
+          }}
+        >
+          Propagate Track Labels
+        </MenubarItem>
+      </MenubarContent>
+    </MenubarMenu>
+  );
+}
+
+function HelpMenu() {
+  return (
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Help</MenubarTrigger>
+      <MenubarContent>
+        <MenubarItem
+          onClick={() =>
+            useAppStore.getState().setShortcutsDialogOpen(true)
+          }
+        >
+          Keyboard Shortcuts...
+        </MenubarItem>
+        <MenubarItem
+          onClick={() => window.open("https://sleap.ai/", "_blank")}
+        >
+          Documentation
+        </MenubarItem>
+        <MenubarItem
+          onClick={() =>
+            window.open(
+              "https://github.com/talmolab/sleap/issues",
+              "_blank"
+            )
+          }
+        >
+          Report Issue
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          onClick={() => useAppStore.getState().setHelpDialogOpen(true)}
+        >
+          About SLEAP Label
         </MenubarItem>
       </MenubarContent>
     </MenubarMenu>

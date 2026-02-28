@@ -15,6 +15,10 @@ import {
   DeleteFramePredictions,
   DeleteAllPredictions,
   SetPointLocation,
+  ConvertPredictionToInstance,
+  BeginEdit,
+  MoveInstance,
+  RotateInstance,
 } from "@/commands/editCommands";
 import {
   GoNextLabeledFrame,
@@ -24,6 +28,7 @@ import {
   GoToFrame,
   GoToLastInteracted,
   GoNextUserFrame,
+  GoNextTrackSpawnFrame,
 } from "@/commands/navCommands";
 import {
   AddTrack,
@@ -31,6 +36,7 @@ import {
   TransposeInstances,
   CopyTrack,
   PasteTrack,
+  PropagateTrackLabels,
 } from "@/commands/trackCommands";
 import {
   Labels,
@@ -960,6 +966,356 @@ describe("Track commands", () => {
       const origTrack = inst.track;
       await ctx.execute(PasteTrack);
       expect(inst.track).toBe(origTrack);
+    });
+  });
+
+  describe("PropagateTrackLabels", () => {
+    it("propagates track assignment forward from current frame", async () => {
+      const project = setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 2,
+        withTracks: true,
+      });
+      const [track1, track2] = project.tracks;
+      // Frame 0: inst0=track1, inst1=track2
+      // Frame 10: inst0=track1, inst1=track2
+      // Frame 20: inst0=track1, inst1=track2
+
+      // Current frame is 0 — propagate swap forward
+      useAppStore.getState().setFrameIdx(0);
+
+      await ctx.execute(PropagateTrackLabels, {
+        oldTrack: track1,
+        newTrack: track2,
+      });
+
+      // Frame 10 and 20 should have tracks swapped
+      // (bidirectional: track1->track2, track2->track1)
+      const lf1 = project.labeledFrames[1]; // frameIdx=10
+      expect(lf1.instances[0].track).toBe(track2);
+      expect(lf1.instances[1].track).toBe(track1);
+
+      const lf2 = project.labeledFrames[2]; // frameIdx=20
+      expect(lf2.instances[0].track).toBe(track2);
+      expect(lf2.instances[1].track).toBe(track1);
+    });
+
+    it("does not change the current frame", async () => {
+      const project = setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 2,
+        withTracks: true,
+      });
+      const [track1, track2] = project.tracks;
+      const lf0 = project.labeledFrames[0];
+
+      useAppStore.getState().setFrameIdx(0);
+
+      const inst0TrackBefore = lf0.instances[0].track;
+      const inst1TrackBefore = lf0.instances[1].track;
+
+      await ctx.execute(PropagateTrackLabels, {
+        oldTrack: track1,
+        newTrack: track2,
+      });
+
+      // Frame 0 should NOT be changed
+      expect(lf0.instances[0].track).toBe(inst0TrackBefore);
+      expect(lf0.instances[1].track).toBe(inst1TrackBefore);
+    });
+
+    it("does nothing without params", async () => {
+      setupProjectInStore({
+        numFrames: 2,
+        numInstancesPerFrame: 1,
+        withTracks: true,
+      });
+
+      expect(() => ctx.execute(PropagateTrackLabels)).not.toThrow();
+    });
+  });
+});
+
+describe("Edit commands (new)", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  describe("ConvertPredictionToInstance", () => {
+    it("converts a predicted instance to a user instance", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 0,
+        withPredictions: true,
+      });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+
+      // The predicted instance is at index 0 (no user instances)
+      expect("score" in lf.instances[0]).toBe(true);
+
+      await ctx.execute(ConvertPredictionToInstance, { instanceIdx: 0 });
+
+      // Should be replaced with a user instance
+      expect("score" in lf.instances[0]).toBe(false);
+    });
+
+    it("preserves point data from prediction", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 0,
+        withPredictions: true,
+      });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+
+      const predPoints = lf.instances[0].points.map((p) => [...p.xy]);
+
+      await ctx.execute(ConvertPredictionToInstance, { instanceIdx: 0 });
+
+      const userInst = lf.instances[0];
+      for (let i = 0; i < predPoints.length; i++) {
+        expect(userInst.points[i].xy[0]).toBe(predPoints[i][0]);
+        expect(userInst.points[i].xy[1]).toBe(predPoints[i][1]);
+      }
+    });
+
+    it("selects the new user instance", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 0,
+        withPredictions: true,
+      });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+
+      await ctx.execute(ConvertPredictionToInstance, { instanceIdx: 0 });
+
+      const selected = useAppStore.getState().instance;
+      expect(selected).not.toBeNull();
+      expect(selected).toBe(lf.instances[0]);
+    });
+
+    it("does nothing for non-predicted instance", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+        withPredictions: false,
+      });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+
+      const before = lf.instances[0];
+      await ctx.execute(ConvertPredictionToInstance, { instanceIdx: 0 });
+
+      // Should still be the same instance (no conversion)
+      expect(lf.instances[0]).toBe(before);
+    });
+
+    it("does nothing without instanceIdx", async () => {
+      setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 0, withPredictions: true });
+      expect(() => ctx.execute(ConvertPredictionToInstance)).not.toThrow();
+    });
+  });
+
+  describe("MoveInstance", () => {
+    it("translates all visible points by dx/dy", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+      });
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      const origPoints = inst.points.map((p) => [...p.xy]);
+
+      await ctx.execute(MoveInstance, { dx: 5, dy: -3 });
+
+      for (let i = 0; i < inst.points.length; i++) {
+        if (!isNaN(origPoints[i][0])) {
+          expect(inst.points[i].xy[0]).toBe(origPoints[i][0] + 5);
+          expect(inst.points[i].xy[1]).toBe(origPoints[i][1] - 3);
+        }
+      }
+    });
+
+    it("skips NaN points", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+      });
+      const inst = project.labeledFrames[0].instances[0];
+      // Make one point NaN
+      inst.points[0].xy = [NaN, NaN];
+      useAppStore.getState().setInstance(inst);
+
+      await ctx.execute(MoveInstance, { dx: 10, dy: 10 });
+
+      // NaN point should stay NaN
+      expect(isNaN(inst.points[0].xy[0])).toBe(true);
+      expect(isNaN(inst.points[0].xy[1])).toBe(true);
+
+      // Other points should be moved
+      expect(inst.points[1].xy[0]).not.toBeNaN();
+    });
+
+    it("does nothing without params", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      const origXY = [...inst.points[0].xy];
+      await ctx.execute(MoveInstance);
+      expect(inst.points[0].xy).toEqual(origXY);
+    });
+
+    it("does nothing without selected instance", async () => {
+      setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      expect(() => ctx.execute(MoveInstance, { dx: 5, dy: 5 })).not.toThrow();
+    });
+  });
+
+  describe("RotateInstance", () => {
+    it("rotates points around centroid", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+        numNodes: 2,
+      });
+      const inst = project.labeledFrames[0].instances[0];
+      // Set known coordinates
+      inst.points[0].xy = [0, 0];
+      inst.points[1].xy = [10, 0];
+      useAppStore.getState().setInstance(inst);
+
+      // Rotate by pi/2 (90 degrees)
+      await ctx.execute(RotateInstance, { angle: Math.PI / 2 });
+
+      // After 90 degree rotation around centroid (5, 0):
+      // Point (0, 0) -> (5, -5)
+      // Point (10, 0) -> (5, 5)
+      expect(inst.points[0].xy[0]).toBeCloseTo(5, 5);
+      expect(inst.points[0].xy[1]).toBeCloseTo(-5, 5);
+      expect(inst.points[1].xy[0]).toBeCloseTo(5, 5);
+      expect(inst.points[1].xy[1]).toBeCloseTo(5, 5);
+    });
+
+    it("does nothing for predicted instances", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 0,
+        withPredictions: true,
+      });
+      const pred = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(pred);
+
+      const origXY = pred.points.map((p) => [...p.xy]);
+      await ctx.execute(RotateInstance, { angle: Math.PI / 4 });
+
+      for (let i = 0; i < pred.points.length; i++) {
+        expect(pred.points[i].xy[0]).toBe(origXY[i][0]);
+        expect(pred.points[i].xy[1]).toBe(origXY[i][1]);
+      }
+    });
+
+    it("does nothing without angle param", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      const origXY = [...inst.points[0].xy];
+      await ctx.execute(RotateInstance);
+      expect(inst.points[0].xy).toEqual(origXY);
+    });
+  });
+
+  describe("BeginEdit", () => {
+    it("is a no-op that creates an undo snapshot", async () => {
+      setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      useAppStore.getState().setFrameIdx(0);
+
+      expect(ctx.canUndo).toBe(false);
+
+      await ctx.execute(BeginEdit);
+
+      expect(ctx.canUndo).toBe(true);
+      expect(ctx.undoCommandName).toBe("BeginEdit");
+    });
+  });
+});
+
+describe("Navigation commands (new)", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  describe("GoNextTrackSpawnFrame", () => {
+    it("navigates to next track spawn frame", async () => {
+      const project = setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 1,
+        withTracks: true,
+      });
+      // Track 1 appears on all frames (0, 10, 20)
+      // Spawn frame for Track 1 is 0
+      useAppStore.getState().setFrameIdx(0);
+
+      // First track spawns at 0, second track also at 0
+      // No spawn frame after 0 that isn't at 0
+      // Let's make a scenario where tracks spawn at different frames
+      // Track 2 only on frame 10
+      const track3 = new Track("Track 3");
+      project.labels.tracks.push(track3);
+      const lf2 = project.labeledFrames[2]; // frameIdx 20
+      lf2.instances[0].track = track3;
+
+      useAppStore.getState().setFrameIdx(0);
+      await ctx.execute(GoNextTrackSpawnFrame);
+
+      // Track 1 spawns at 0, Track 2 spawns at 0, Track 3 spawns at 20
+      // From frame 0, next spawn after 0 is 20
+      expect(useAppStore.getState().frameIdx).toBe(20);
+    });
+
+    it("wraps around to first spawn frame", async () => {
+      const project = setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 1,
+        withTracks: true,
+      });
+      // All tracks spawn at frame 0
+      useAppStore.getState().setFrameIdx(50);
+
+      await ctx.execute(GoNextTrackSpawnFrame);
+
+      // Should wrap to first spawn frame (0)
+      expect(useAppStore.getState().frameIdx).toBe(0);
+    });
+
+    it("does nothing without tracks", async () => {
+      setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 1,
+        withTracks: false,
+      });
+      useAppStore.getState().setFrameIdx(5);
+
+      await ctx.execute(GoNextTrackSpawnFrame);
+      expect(useAppStore.getState().frameIdx).toBe(5);
+    });
+
+    it("does nothing without labels", async () => {
+      // No project loaded
+      useAppStore.setState({ frameIdx: 5 });
+
+      await ctx.execute(GoNextTrackSpawnFrame);
+      expect(useAppStore.getState().frameIdx).toBe(5);
     });
   });
 });
