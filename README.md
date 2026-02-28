@@ -39,6 +39,27 @@ sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev \
   libglib2.0-dev libayatana-appindicator3-dev
 ```
 
+### sleap-io.js Dependency
+
+This project depends on `@talmolab/sleap-io.js` for SLP file loading and the data model. It can be used from either a local checkout or from npm.
+
+**Local development (default):** Links to a sibling checkout for development against unpublished changes:
+
+```bash
+# Expects ../sleap-io.js to exist (git clone it alongside this repo)
+npm pkg set dependencies.@talmolab/sleap-io.js="file:../sleap-io.js"
+npm install
+```
+
+**npm (CI / standalone):** Uses the published package from npm:
+
+```bash
+npm pkg set dependencies.@talmolab/sleap-io.js="^0.1.9"
+npm install
+```
+
+The Vite config auto-detects which mode is active by checking where `h5wasm` is installed — no manual config changes needed beyond `package.json`.
+
 ## Features
 
 - SLP file loading via drag-and-drop or file dialog
