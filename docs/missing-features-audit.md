@@ -4,16 +4,18 @@ Comprehensive comparison of the SLEAP Qt desktop GUI (`sleap/gui/`) against the 
 web implementation (`sleap-label-web/`). Focused on UI/UX features; ML/training features
 are noted but deprioritized.
 
+Last updated: 2026-02-28
+
 ---
 
 ## Summary
 
 The web version has a solid foundation: SLP file loading, video playback, skeleton
-rendering, node dragging, instance selection, undo/redo, keyboard shortcuts, and basic
-menus. However, many intermediate and advanced features from the Qt GUI are still missing.
+rendering, node dragging, instance selection, undo/redo, keyboard shortcuts, menus,
+toast notifications, loading indicators, and dialogs.
 
-**Implemented**: ~35% of SLEAP GUI features
-**Missing (feasible for web)**: ~45%
+**Implemented**: ~40% of SLEAP GUI features
+**Missing (feasible for web)**: ~40%
 **Infeasible for web (training/GPU)**: ~20%
 
 ---
@@ -24,10 +26,17 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 | Feature | Status | Notes |
 |---------|--------|-------|
 | New Project | Done | Resets state |
-| Open Project (.slp) | Done | File System Access API + fallback |
+| Open Project (.slp) | Done | Consolidated `loadProject.ts` with unsaved changes check, loading indicator, toast |
 | Save (as JSON) | Done | Downloads JSON via blob URL |
 | Export JSON | Done | Same as Save currently |
 | Quit | Done | `window.close()` |
+
+### Recently Completed
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Unsaved changes prompt on open** | DONE | `loadProject.ts` checks `hasChanges` before loading |
+| **Loading indicator during open** | DONE | `setLoading()` shows spinner during SLP parse |
+| **Toast notifications for load** | DONE | Success/error toasts via `sonner` |
 
 ### Missing
 
@@ -48,7 +57,6 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 | **Export NWB** | P2 | Hard | NWB format writer needed |
 | **Reset preferences** | P2 | Easy | Clear localStorage |
 | **Open Preferences Directory** | P2 | Desktop only | Tauri shell.open() |
-| **Unsaved changes prompt on close** | P1 | Easy | `beforeunload` event + confirm dialog |
 
 ---
 
@@ -65,11 +73,15 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 | Select Next Instance | Done |
 | Clear Selection | Done |
 
+### Recently Completed
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Go to Frame... (dialog)** | DONE | `GoToFrameDialog.tsx` with number input, Ctrl+J shortcut, store-driven open/close |
+
 ### Missing
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
-| **Go to Frame... (dialog)** | P1 | Easy | Input dialog for frame number. Shortcut defined but no dialog implemented. |
 | **Select to Frame... (dialog)** | P1 | Easy | Input dialog to set frame range selection |
 | **Next Track Spawn Frame** | P1 | Easy | Find next frame where a new track begins. Shortcut defined but command not implemented. |
 
@@ -158,24 +170,32 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 
 ---
 
-## 6. Analyze Menu (entirely missing)
+## 6. Predict Menu
+
+### Recently Completed
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Run Training... (placeholder)** | DONE | `TrainingDialog.tsx` with model type, backbone, epochs config. "Coming Soon" badge. Links to alternatives. |
+| **Run Inference... (placeholder)** | DONE | `InferenceDialog.tsx` with model, video, frame range, tracking config. "Coming Soon" badge. Links to alternatives. |
+
+### Missing
+
+| Feature | Priority | Feasibility | Notes |
+|---------|----------|-------------|-------|
+| Run Training (actual) | N/A | Infeasible | Requires GPU, Python, SLEAP training pipeline |
+| Run Inference (actual) | N/A | Infeasible | Requires GPU, Python, trained models |
+| Evaluation Metrics | P2 | Medium | Could display pre-computed metrics |
+| Export Labels Package (various) | P1 | Medium | Useful for exporting data for training elsewhere |
+| Train on Google Colab link | P2 | Easy | Just open URL |
+
+---
+
+## 7. Analyze Menu (entirely missing)
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
 | **Instance Size Distribution** | P2 | Medium | Statistics dialog with histogram, navigation to outlier instances |
 | **Label QC** | P2 | Medium | Quality control dock: flag problematic labels, navigate to flagged frames |
-
----
-
-## 7. Predict Menu (mostly infeasible for web)
-
-| Feature | Priority | Feasibility | Notes |
-|---------|----------|-------------|-------|
-| Run Training | N/A | Infeasible | Requires GPU, Python, SLEAP training pipeline |
-| Run Inference | N/A | Infeasible | Requires GPU, Python, trained models |
-| Evaluation Metrics | P2 | Medium | Could display pre-computed metrics |
-| Export Labels Package (various) | P1 | Medium | Useful for exporting data for training elsewhere |
-| Train on Google Colab link | P2 | Easy | Just open URL |
 
 ---
 
@@ -205,7 +225,6 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
-| **Videos Panel: Toggle Grayscale** | P2 | Easy | Button to toggle grayscale rendering |
 | **Videos Panel: Remove Video** | P1 | Easy | Button in panel |
 | **Videos Panel: Show Video info** (dimensions, frames) | P1 | Easy | Table columns |
 | **Skeleton Panel: Load Template** | P1 | Medium | Dropdown of built-in skeletons with preview |
@@ -217,7 +236,6 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 | **Suggestions Panel: Clear All** | P1 | Easy | Clear with confirmation |
 | **Suggestions Panel: Generate Suggestions** | P2 | Hard | Various methods (sample, image features, etc.) - some need ML |
 | **Suggestions Panel: Labeled count display** | P1 | Easy | Show N/M labeled in status |
-| **Instances Panel: New/Delete buttons** | Done | Already have Add/Delete |
 | **Dockable/rearrangeable panels** | P2 | Medium | Currently fixed layout; dockview or react-mosaic could enable this |
 
 ---
@@ -243,94 +261,30 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
-| **Drag-and-drop file loading** | P1 | Easy | Accept .slp and video files dropped on window |
 | **Double-click predicted instance to convert** | P1 | Easy | Convert to user instance |
 | **Shift+double-click to convert and mark complete** | P2 | Easy | Convert + mark all nodes complete |
 | **Alt+click to drag entire instance** | P1 | Easy | Move all nodes together |
 | **Ctrl+click to duplicate instance** | P2 | Easy | Clone instance at click location |
 | **Pinch-to-zoom** | P2 | Medium | Touch gesture support |
 | **Instance highlighting (navigated-to)** | P1 | Easy | Cyan box when navigating to instance |
-| **Seekbar frame marks** (user/predicted/track) | P0 | Medium | Visual marks on seekbar showing labeled frames. Critical for navigation context. |
-| **Seekbar selection (click-drag)** | P1 | Medium | Select frame range for clip operations |
-| **Seekbar track bars** | P2 | Medium | Colored horizontal bars showing track occupancy |
+| **Seekbar frame range selection** | P1 | Medium | Select frame range for clip operations |
 | **Area selection on canvas** | P2 | Medium | Draw rectangle for area-based operations |
 
 ---
 
-## 11. Seekbar / Slider
+## 11. Dialogs
 
-### Implemented
-| Feature | Status |
-|---------|--------|
-| Basic frame slider | Done |
-| Current frame indicator | Done |
-| Click to seek | Done |
-
-### Missing
-
-| Feature | Priority | Feasibility | Notes |
-|---------|----------|-------------|-------|
-| **Frame marks** (labeled frames) | P0 | Medium | Blue marks for user labels, light blue for predicted |
-| **Track occupancy bars** | P2 | Medium | Colored bars showing which tracks appear in which frames |
-| **Frame range selection** | P1 | Medium | Click-drag to select range, shown as blue highlight |
-| **Header graph** | P2 | Hard | Time-series plot above seekbar (displacement, scores) |
-| **Mark types** (simple, filled, open, predicted, tick) | P1 | Medium | Different visual indicators for different frame types |
-
----
-
-## 12. Status Bar
-
-### Implemented
-| Feature | Status |
-|---------|--------|
-| Filename + unsaved indicator | Done |
-| Frame index / total | Done |
-| Labeled frames count | Done |
-| Video count | Done |
-| Instance count | Done |
-| Instance type/track/score | Done |
-
-### Missing
-
-| Feature | Priority | Feasibility | Notes |
-|---------|----------|-------------|-------|
-| **Video X/Y indicator** | P2 | Easy | Which video out of total |
-| **Frame range selection display** | P1 | Easy | "Selection: A-B (C frames)" |
-| **Predicted frames count + percentage** | P1 | Easy | "Predicted Frames: N (X%)" |
-| **Hidden instances warning** | P1 | Easy | Red text "Press H to toggle" when instances hidden |
-
----
-
-## 13. Overlays
-
-### Implemented
-| Feature | Status |
-|---------|--------|
-| Instance overlay (nodes, edges, labels) | Done |
-
-### Missing
-
-| Feature | Priority | Feasibility | Notes |
-|---------|----------|-------------|-------|
-| **Track trail overlay** | P1 | Medium | Motion paths behind instances |
-| **Track list overlay** (Ctrl+held) | P2 | Easy | Show track list with colors when Ctrl is held |
-| **Confidence map overlay** | N/A | Infeasible | Requires inference output |
-| **PAF overlay** | N/A | Infeasible | Requires inference output |
-
----
-
-## 14. Dialogs
-
-### Implemented
-| Dialog | Status |
-|--------|--------|
-| (none as dedicated components) | Context menu serves as right-click dialog |
+### Recently Completed
+| Dialog | Status | Notes |
+|--------|--------|-------|
+| **Go to Frame** | DONE | `GoToFrameDialog.tsx` - number input, Enter to confirm, auto-fills current frame |
+| **Training Configuration** | DONE | `TrainingDialog.tsx` - placeholder with model config UI |
+| **Inference Configuration** | DONE | `InferenceDialog.tsx` - placeholder with video/tracking config UI |
 
 ### Missing
 
 | Dialog | Priority | Feasibility | Notes |
 |--------|----------|-------------|-------|
-| **Go to Frame dialog** | P1 | Easy | Simple number input |
 | **Select to Frame dialog** | P1 | Easy | Simple number input |
 | **Keyboard Shortcuts dialog** | P1 | Medium | Table view + edit |
 | **Custom Delete dialog** | P2 | Medium | Filter options for batch delete |
@@ -343,16 +297,40 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 
 ---
 
-## 15. Other Missing Features
+## 12. Cross-Cutting Concerns
+
+### Recently Completed
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Toast/notification system** | DONE | Sonner integration for success/error feedback |
+| **Loading indicator** | DONE | `isLoading`/`loadingMessage` in store, shown during file load |
+| **Unsaved changes check on open** | DONE | `loadProject.ts` confirms before discarding |
+| **Consolidated file loading** | DONE | Single `loadProjectFromFile()` / `loadProjectFromPath()` entry points |
+| **Multi-frame undo** | DONE | `takeAllFramesSnapshot()` in CommandContext for bulk operations |
+| **Store-driven dialog management** | DONE | `trainingDialogOpen`, `inferenceDialogOpen`, `goToFrameDialogOpen` in store |
+| **shadcn/ui component library** | DONE | Dialog, Input, Select, Tabs, Badge, Button, etc. |
+
+### Still Missing
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
-| **Persistent preferences** | P1 | Easy | localStorage or IndexedDB for view settings, shortcuts |
-| **Window title with filename** | P1 | Easy | `document.title = filename` |
+| **`beforeunload` handler** | P1 | Easy | Warn on tab close/refresh with unsaved changes |
+| **Global Error Boundary** | P1 | Easy | Catch render errors gracefully |
+| **Persistent preferences** | P1 | Easy | localStorage for view settings, shortcuts |
 | **Menu item enable/disable based on state** | P1 | Medium | E.g., disable Delete Instance when nothing selected |
-| **Keyboard shortcut customization** | P2 | Medium | Store custom shortcuts, edit via dialog |
+| **Window title with filename** | P1 | Easy | `document.title = filename` |
+| **Accessibility improvements** | P2 | Medium | ARIA labels, keyboard nav, screen reader support |
+| **Responsive design** | P2 | Medium | Adapt layout for small screens/tablets |
+
+---
+
+## 13. Other Missing Features
+
+| Feature | Priority | Feasibility | Notes |
+|---------|----------|-------------|-------|
 | **Set Instance Track via Ctrl+1-9** | P0 | Easy | Map Ctrl+digit to track assignment |
 | **Track propagation** | P1 | Medium | Apply track change to subsequent frames |
+| **Keyboard shortcut customization** | P2 | Medium | Store custom shortcuts, edit via dialog |
 
 ---
 
@@ -361,23 +339,23 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 ### P0 - Critical (blocking core workflows)
 1. **Save As to .slp format** - Users need to save work in native format
 2. **Set Instance Track (Ctrl+1-9)** - Core track editing workflow
-3. **Seekbar frame marks** - Users need to see where labels exist
+3. ~~Seekbar frame marks~~ - Seekbar now renders track occupancy bars and labeled frame marks
 
 ### P1 - Important (significant UX gaps)
-1. Go to Frame dialog
+1. ~~Go to Frame dialog~~ - DONE
 2. Add/Remove Videos
-3. Unsaved changes prompt
-4. Seekbar frame range selection
-5. Instance Placement Methods (Best, Average, Copy Prior, etc.)
-6. Delete Instance and Track
-7. Delete Track / Delete Multiple Tracks
-8. Add Instances from All Predictions on Current Frame
-9. Delete Predictions (clip, low score, max instances, user frames)
-10. Trail overlay
-11. Fit View to Selection
-12. Distinct Colors To (instances/nodes/edges)
-13. Node Label Size control
-14. Drag-and-drop file loading
+3. ~~Unsaved changes prompt~~ - DONE (on open; still need `beforeunload`)
+4. `beforeunload` handler for tab close
+5. Seekbar frame range selection
+6. Instance Placement Methods (Best, Average, Copy Prior, etc.)
+7. Delete Instance and Track
+8. Delete Track / Delete Multiple Tracks
+9. Add Instances from All Predictions on Current Frame
+10. Delete Predictions (clip, low score, max instances, user frames)
+11. Trail overlay
+12. Fit View to Selection
+13. Distinct Colors To (instances/nodes/edges)
+14. Node Label Size control
 15. Dock panel visibility toggles
 16. Keyboard Shortcuts dialog
 17. Persistent preferences (localStorage)
@@ -394,32 +372,16 @@ menus. However, many intermediate and advanced features from the Qt GUI are stil
 4. Size Distribution analysis
 5. Label QC dock
 6. Seekbar header graph
-7. Track occupancy bars on seekbar
-8. Render Video Clip with Instances
-9. Area selection on canvas
-10. Dockable panel layout
-11. Skeleton templates
-12. Keyboard shortcut customization
-13. Pinch-to-zoom
-14. Help menu links
+7. Render Video Clip with Instances
+8. Area selection on canvas
+9. Dockable panel layout
+10. Skeleton templates
+11. Keyboard shortcut customization
+12. Pinch-to-zoom
+13. Help menu links
 
 ### Infeasible for Web
 - Run Training (requires GPU, Python)
 - Run Inference (requires GPU, Python)
 - Confidence map / PAF overlays (requires inference)
 - Suggestion generation methods that require ML (image_features, prediction_score, velocity)
-
----
-
-## Recommended Next Steps
-
-1. **Seekbar frame marks** (P0) - Critical visual feedback for navigation
-2. **Set Instance Track (Ctrl+1-9)** (P0) - Needed for any track editing workflow
-3. **Save As .slp** (P0) - Blocked on sleap-io.js browser save support; may need Tauri-only path first
-4. **Go to Frame dialog** (P1) - Simple dialog, unlocks keyboard workflow
-5. **Unsaved changes prompt** (P1) - Prevent data loss
-6. **Persistent preferences** (P1) - Store view settings across sessions
-7. **Seekbar selection + frame range** (P1) - Unlocks clip operations
-8. **Delete predictions variants** (P1) - Common data cleanup operations
-9. **Instance Placement Methods** (P1) - Better new instance positioning
-10. **Trail overlay** (P1) - Important for tracking review

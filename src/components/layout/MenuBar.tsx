@@ -31,6 +31,7 @@ import {
   PasteTrack,
 } from "../../commands";
 import { PALETTES } from "../../lib/colorPalettes";
+import { toast } from "sonner";
 import {
   Menubar,
   MenubarMenu,
@@ -59,6 +60,7 @@ export function MenuBar() {
       <GoMenu />
       <ViewMenu />
       <LabelsMenu />
+      <PredictMenu />
       <TracksMenu />
     </Menubar>
   );
@@ -101,14 +103,20 @@ function FileMenu() {
 }
 
 function EditMenu() {
+  // Subscribe to reactive state so undo/redo labels update
+  useAppStore((s) => s.labeledFrame);
+  useAppStore((s) => s.hasChanges);
+
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
     commandContext.execute(cmd);
   };
 
-  const undoLabel = commandContext.canUndo
+  const canUndo = commandContext.canUndo;
+  const canRedo = commandContext.canRedo;
+  const undoLabel = canUndo
     ? `Undo ${commandContext.undoCommandName}`
     : "Undo";
-  const redoLabel = commandContext.canRedo
+  const redoLabel = canRedo
     ? `Redo ${commandContext.redoCommandName}`
     : "Redo";
 
@@ -117,29 +125,44 @@ function EditMenu() {
       <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Edit</MenubarTrigger>
       <MenubarContent>
         <MenubarItem
-          disabled={!commandContext.canUndo}
+          disabled={!canUndo}
           onClick={() => commandContext.undo()}
         >
           {undoLabel} <MenubarShortcut>{modKey}+Z</MenubarShortcut>
         </MenubarItem>
         <MenubarItem
-          disabled={!commandContext.canRedo}
+          disabled={!canRedo}
           onClick={() => commandContext.redo()}
         >
           {redoLabel} <MenubarShortcut>{modKey}+Shift+Z</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem onClick={() => exec(CopyInstance)}>
+        <MenubarItem
+          onClick={() => {
+            exec(CopyInstance);
+            toast.info("Instance copied");
+          }}
+        >
           Copy Instance <MenubarShortcut>{modKey}+C</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(PasteInstance)}>
+        <MenubarItem
+          onClick={() => {
+            exec(PasteInstance);
+            toast.info("Instance pasted");
+          }}
+        >
           Paste Instance <MenubarShortcut>{modKey}+V</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
         <MenubarItem onClick={() => exec(AddInstance)}>
           Add Instance <MenubarShortcut>{modKey}+I</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(DeleteSelectedInstance)}>
+        <MenubarItem
+          onClick={() => {
+            exec(DeleteSelectedInstance);
+            toast.info("Instance deleted");
+          }}
+        >
           Delete Instance <MenubarShortcut>{modKey}+Backspace</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
@@ -160,6 +183,12 @@ function GoMenu() {
     <MenubarMenu>
       <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Go</MenubarTrigger>
       <MenubarContent>
+        <MenubarItem
+          onClick={() => useAppStore.getState().setGoToFrameDialogOpen(true)}
+        >
+          Go to Frame... <MenubarShortcut>{modKey}+J</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
         <MenubarItem onClick={() => exec(GoNextLabeledFrame)}>
           Next Labeled Frame <MenubarShortcut>Alt+{"\u2192"}</MenubarShortcut>
         </MenubarItem>
@@ -241,6 +270,8 @@ function ViewMenu() {
   const colorPredicted = useAppStore((s) => s.colorPredicted);
   const fit = useAppStore((s) => s.fit);
   const edgeStyle = useAppStore((s) => s.edgeStyle);
+  const markerSize = useAppStore((s) => s.markerSize);
+  const palette = useAppStore((s) => s.palette);
   const toggle = useAppStore((s) => s.toggle);
   const setVal = useAppStore((s) => s.set);
 
@@ -306,12 +337,12 @@ function ViewMenu() {
             type="range"
             min={1}
             max={12}
-            value={useAppStore.getState().markerSize}
+            value={markerSize}
             onChange={(e) => setVal("markerSize", Number(e.target.value))}
             className="flex-1 h-1 accent-primary"
           />
           <span className="text-xs text-muted-foreground w-4 text-right">
-            {useAppStore.getState().markerSize}
+            {markerSize}
           </span>
         </div>
         <MenubarSeparator />
@@ -319,7 +350,7 @@ function ViewMenu() {
           <MenubarSubTrigger className="text-sm">Color Palette</MenubarSubTrigger>
           <MenubarSubContent>
             <MenubarRadioGroup
-              value={useAppStore.getState().palette}
+              value={palette}
               onValueChange={(val) => setVal("palette", val)}
             >
               {Object.keys(PALETTES).map((name) => (
@@ -363,6 +394,7 @@ function LabelsMenu() {
           onClick={() => {
             if (confirm("Delete all predicted instances across all frames?")) {
               exec(DeleteAllPredictions);
+              toast.info("All predictions deleted");
             }
           }}
         >
@@ -372,6 +404,49 @@ function LabelsMenu() {
         <MenubarLabel className="text-xs text-muted-foreground font-normal">
           {totalLabeled} labeled frames, {totalInstances} instances
         </MenubarLabel>
+      </MenubarContent>
+    </MenubarMenu>
+  );
+}
+
+function PredictMenu() {
+  const setTrainingDialogOpen = useAppStore((s) => s.setTrainingDialogOpen);
+  const setInferenceDialogOpen = useAppStore((s) => s.setInferenceDialogOpen);
+
+  return (
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Predict</MenubarTrigger>
+      <MenubarContent>
+        <MenubarItem onClick={() => setTrainingDialogOpen(true)}>
+          Training...
+        </MenubarItem>
+        <MenubarItem onClick={() => setInferenceDialogOpen(true)}>
+          Inference / Run Prediction...
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          onClick={() =>
+            alert(
+              "Export Training Package is not yet implemented.\n\nThis will bundle labels and video frames for training with sleap-nn."
+            )
+          }
+        >
+          Export Training Package...
+        </MenubarItem>
+        <MenubarItem
+          onClick={() =>
+            alert(
+              "Import Predictions is not yet implemented.\n\nUse File > Open Project to load an SLP file containing predictions."
+            )
+          }
+        >
+          Import Predictions...
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem disabled>
+          Visualize Model Outputs...
+          <MenubarShortcut className="text-xs opacity-60">Coming Soon</MenubarShortcut>
+        </MenubarItem>
       </MenubarContent>
     </MenubarMenu>
   );

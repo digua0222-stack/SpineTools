@@ -17,6 +17,9 @@ export interface Command {
   /** Which data topics this command modifies, used to signal UI updates. */
   topics: UpdateTopic[];
 
+  /** If true, the command manages its own undo snapshot instead of using the default single-frame snapshot. */
+  skipAutoSnapshot?: boolean;
+
   /** Execute the command. Receives the CommandContext for store access. */
   execute(ctx: CommandContext, params?: Record<string, unknown>): Promise<void> | void;
 }

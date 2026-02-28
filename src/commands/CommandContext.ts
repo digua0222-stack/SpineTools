@@ -6,9 +6,9 @@
  * to update. Includes frame-level undo/redo via instance snapshots.
  */
 
-import { Instance } from "@talmolab/sleap-io.js";
+import { Instance, LabeledFrame } from "@talmolab/sleap-io.js";
 import { useAppStore, type AppState } from "../stores/appStore";
-import type { UpdateTopic, Track } from "../types";
+import type { UpdateTopic, Track, Video } from "../types";
 import type { Command } from "./types";
 
 /** Record of an executed command for change tracking. */
@@ -18,17 +18,28 @@ export interface ChangeRecord {
   timestamp: number;
 }
 
-/** Snapshot of frame state for undo/redo. */
-interface FrameSnapshot {
-  commandName: string;
-  videoRef: unknown; // Video reference
+/** Snapshot of a single frame's state for undo/redo. */
+interface SingleFrameData {
+  videoRef: Video;
   frameIdx: number;
-  /** Cloned instances before the command ran (null = no LabeledFrame existed). */
-  instances: Instance[] | null;
+  instances: Instance[];
+}
+
+/** Snapshot of frame state for undo/redo. */
+interface UndoSnapshot {
+  commandName: string;
+  /** Single frame data (for regular commands). */
+  frame: SingleFrameData | null;
+  /** Multi-frame data (for bulk operations like DeleteAllPredictions). */
+  allFrames: SingleFrameData[] | null;
   /** Tracks array snapshot (by reference, order matters). */
   tracks: Track[];
-  /** Index of selected instance in the instances array, or -1. */
+  /** Index of selected instance in the current frame's instances array. */
   selectedIdx: number;
+  /** The video that was active when the snapshot was taken. */
+  activeVideo: Video | null;
+  /** The frame index that was active. */
+  activeFrameIdx: number;
 }
 
 /** Deep-clone an instance's points. */
@@ -69,25 +80,29 @@ export class CommandContext {
   private changeStack: ChangeRecord[] = [];
 
   /** Undo stack: snapshots of state before each mutating command. */
-  private undoStack: FrameSnapshot[] = [];
+  private undoStack: UndoSnapshot[] = [];
 
   /** Redo stack: snapshots for redoing undone commands. */
-  private redoStack: FrameSnapshot[] = [];
+  private redoStack: UndoSnapshot[] = [];
 
   /** Listeners notified when topics are signaled. */
   private listeners: Set<UpdateListener> = new Set();
 
   /** Take a snapshot of the current frame state. */
-  private takeSnapshot(commandName: string): FrameSnapshot {
+  private takeSnapshot(commandName: string): UndoSnapshot {
     const { labels, video, frameIdx, instance } = this.state;
-    let instances: Instance[] | null = null;
+    let frame: SingleFrameData | null = null;
     let selectedIdx = -1;
 
     if (labels && video) {
       const frames = labels.find({ video, frameIdx });
       if (frames.length > 0) {
         const lf = frames[0];
-        instances = cloneInstances(lf.instances);
+        frame = {
+          videoRef: video,
+          frameIdx,
+          instances: cloneInstances(lf.instances),
+        };
         if (instance) {
           selectedIdx = lf.instances.indexOf(instance);
         }
@@ -96,49 +111,154 @@ export class CommandContext {
 
     return {
       commandName,
-      videoRef: video,
-      frameIdx,
-      instances,
+      frame,
+      allFrames: null,
       tracks: labels ? [...labels.tracks] : [],
       selectedIdx,
+      activeVideo: video,
+      activeFrameIdx: frameIdx,
     };
   }
 
-  /** Restore state from a snapshot. Returns a snapshot of the state being replaced. */
-  private restoreSnapshot(snapshot: FrameSnapshot): FrameSnapshot {
-    const before = this.takeSnapshot(snapshot.commandName);
-    const { labels } = this.state;
-    if (!labels) return before;
+  /** Take a snapshot of ALL labeled frames (for bulk operations). */
+  takeAllFramesSnapshot(commandName: string): UndoSnapshot {
+    const { labels, video, frameIdx, instance } = this.state;
+    const allFrames: SingleFrameData[] = [];
+    let selectedIdx = -1;
 
-    const video = snapshot.videoRef as AppState["video"];
-    if (!video) return before;
+    if (labels) {
+      for (const lf of labels.labeledFrames) {
+        allFrames.push({
+          videoRef: lf.video,
+          frameIdx: lf.frameIdx,
+          instances: cloneInstances(lf.instances),
+        });
+      }
+      if (video && instance) {
+        const frames = labels.find({ video, frameIdx });
+        if (frames.length > 0) {
+          selectedIdx = frames[0].instances.indexOf(instance);
+        }
+      }
+    }
+
+    return {
+      commandName,
+      frame: null,
+      allFrames,
+      tracks: labels ? [...labels.tracks] : [],
+      selectedIdx,
+      activeVideo: video,
+      activeFrameIdx: frameIdx,
+    };
+  }
+
+  /** Push a custom snapshot onto the undo stack. */
+  pushUndoSnapshot(snapshot: UndoSnapshot): void {
+    this.undoStack.push(snapshot);
+    if (this.undoStack.length > MAX_UNDO_STACK) {
+      this.undoStack.shift();
+    }
+    this.redoStack.length = 0;
+  }
+
+  /** Restore state from a snapshot. Returns a snapshot of the state being replaced. */
+  private restoreSnapshot(snapshot: UndoSnapshot): UndoSnapshot {
+    const { labels } = this.state;
+    if (!labels) return this.takeSnapshot(snapshot.commandName);
+
+    // If this is a multi-frame snapshot, take a multi-frame before-snapshot
+    const before = snapshot.allFrames
+      ? this.takeAllFramesSnapshot(snapshot.commandName)
+      : this.takeSnapshot(snapshot.commandName);
 
     // Restore tracks
     labels.tracks = [...snapshot.tracks];
 
-    // Find the labeled frame
-    const frames = labels.find({ video, frameIdx: snapshot.frameIdx });
+    if (snapshot.allFrames) {
+      // Multi-frame restore: rebuild all labeled frames
+      // First, remove all existing labeled frames
+      labels.labeledFrames.length = 0;
 
-    if (snapshot.instances === null) {
-      // No LabeledFrame should exist - remove if present
+      // Restore each frame
+      for (const frameData of snapshot.allFrames) {
+        const lf = new LabeledFrame({
+          video: frameData.videoRef,
+          frameIdx: frameData.frameIdx,
+        });
+        lf.instances = cloneInstances(frameData.instances);
+        labels.labeledFrames.push(lf);
+      }
+
+      // Restore view to the active frame
+      if (snapshot.activeVideo) {
+        const currentFrames = labels.find({
+          video: snapshot.activeVideo,
+          frameIdx: snapshot.activeFrameIdx,
+        });
+        const currentLf = currentFrames.length > 0 ? currentFrames[0] : null;
+        this.state.setLabeledFrame(currentLf);
+
+        if (
+          currentLf &&
+          snapshot.selectedIdx >= 0 &&
+          snapshot.selectedIdx < currentLf.instances.length
+        ) {
+          this.state.setInstance(currentLf.instances[snapshot.selectedIdx]);
+        } else {
+          this.state.setInstance(null);
+        }
+      }
+    } else if (snapshot.frame) {
+      const video = snapshot.frame.videoRef;
+
+      // Find the labeled frame
+      const frames = labels.find({
+        video,
+        frameIdx: snapshot.frame.frameIdx,
+      });
+
       if (frames.length > 0) {
-        const idx = labels.labeledFrames.indexOf(frames[0]);
-        if (idx !== -1) labels.labeledFrames.splice(idx, 1);
+        // Restore instances on existing frame
+        const lf = frames[0];
+        lf.instances = cloneInstances(snapshot.frame.instances);
+        this.state.setLabeledFrame(lf);
+
+        // Restore selection
+        if (
+          snapshot.selectedIdx >= 0 &&
+          snapshot.selectedIdx < lf.instances.length
+        ) {
+          this.state.setInstance(lf.instances[snapshot.selectedIdx]);
+        } else {
+          this.state.setInstance(null);
+        }
+      } else {
+        // Frame was deleted, re-create it
+        const lf = new LabeledFrame({
+          video,
+          frameIdx: snapshot.frame.frameIdx,
+        });
+        lf.instances = cloneInstances(snapshot.frame.instances);
+        labels.labeledFrames.push(lf);
+        this.state.setLabeledFrame(lf);
+        this.state.setInstance(null);
+      }
+    } else {
+      // Null frame snapshot = no LabeledFrame should exist
+      const video = snapshot.activeVideo;
+      if (video) {
+        const frames = labels.find({
+          video,
+          frameIdx: snapshot.activeFrameIdx,
+        });
+        if (frames.length > 0) {
+          const idx = labels.labeledFrames.indexOf(frames[0]);
+          if (idx !== -1) labels.labeledFrames.splice(idx, 1);
+        }
       }
       this.state.setLabeledFrame(null);
       this.state.setInstance(null);
-    } else if (frames.length > 0) {
-      // Restore instances on existing frame
-      const lf = frames[0];
-      lf.instances = cloneInstances(snapshot.instances);
-      this.state.setLabeledFrame(lf);
-
-      // Restore selection
-      if (snapshot.selectedIdx >= 0 && snapshot.selectedIdx < lf.instances.length) {
-        this.state.setInstance(lf.instances[snapshot.selectedIdx]);
-      } else {
-        this.state.setInstance(null);
-      }
     }
 
     this.state.markChanged();
@@ -156,7 +276,8 @@ export class CommandContext {
     params?: Record<string, unknown>
   ): Promise<void> {
     // Snapshot before mutating commands for undo
-    if (this.isMutating(command)) {
+    // (commands with skipAutoSnapshot handle their own snapshots)
+    if (this.isMutating(command) && !command.skipAutoSnapshot) {
       const snapshot = this.takeSnapshot(command.name);
       this.undoStack.push(snapshot);
       if (this.undoStack.length > MAX_UNDO_STACK) {

@@ -183,9 +183,13 @@ export const DeleteFramePredictions: Command = {
 export const DeleteAllPredictions: Command = {
   name: "DeleteAllPredictions",
   topics: [UpdateTopic.Labels, UpdateTopic.Frame, UpdateTopic.Instance],
+  skipAutoSnapshot: true,
   execute(ctx: CommandContext) {
     const { labels, instance } = ctx.state;
     if (!labels) return;
+
+    // Take a multi-frame snapshot BEFORE deletion for proper undo
+    const snapshot = ctx.takeAllFramesSnapshot("DeleteAllPredictions");
 
     let removed = 0;
     for (const lf of labels.labeledFrames) {
@@ -200,6 +204,9 @@ export const DeleteAllPredictions: Command = {
     );
 
     if (removed === 0) return;
+
+    // Push the multi-frame snapshot for undo
+    ctx.pushUndoSnapshot(snapshot);
 
     // If selected instance was predicted, deselect
     if (instance && "score" in instance) {

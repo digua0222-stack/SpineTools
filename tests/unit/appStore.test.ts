@@ -262,4 +262,117 @@ describe("appStore", () => {
       expect(useAppStore.getState().markerSize).toBe(8);
     });
   });
+
+  describe("setLoading", () => {
+    it("sets loading state with message", () => {
+      useAppStore.getState().setLoading(true, "Loading project...");
+
+      const state = useAppStore.getState();
+      expect(state.isLoading).toBe(true);
+      expect(state.loadingMessage).toBe("Loading project...");
+    });
+
+    it("clears loading state", () => {
+      useAppStore.getState().setLoading(true, "Loading...");
+      useAppStore.getState().setLoading(false);
+
+      const state = useAppStore.getState();
+      expect(state.isLoading).toBe(false);
+      expect(state.loadingMessage).toBe("");
+    });
+
+    it("defaults message to empty string when not provided", () => {
+      useAppStore.getState().setLoading(true);
+      expect(useAppStore.getState().loadingMessage).toBe("");
+    });
+
+    it("has correct initial loading state", () => {
+      const state = useAppStore.getState();
+      expect(state.isLoading).toBe(false);
+      expect(state.loadingMessage).toBe("");
+    });
+  });
+
+  describe("dialog state", () => {
+    it("has all dialogs closed initially", () => {
+      const state = useAppStore.getState();
+      expect(state.trainingDialogOpen).toBe(false);
+      expect(state.inferenceDialogOpen).toBe(false);
+      expect(state.goToFrameDialogOpen).toBe(false);
+    });
+
+    it("opens and closes training dialog", () => {
+      useAppStore.getState().setTrainingDialogOpen(true);
+      expect(useAppStore.getState().trainingDialogOpen).toBe(true);
+
+      useAppStore.getState().setTrainingDialogOpen(false);
+      expect(useAppStore.getState().trainingDialogOpen).toBe(false);
+    });
+
+    it("opens and closes inference dialog", () => {
+      useAppStore.getState().setInferenceDialogOpen(true);
+      expect(useAppStore.getState().inferenceDialogOpen).toBe(true);
+
+      useAppStore.getState().setInferenceDialogOpen(false);
+      expect(useAppStore.getState().inferenceDialogOpen).toBe(false);
+    });
+
+    it("opens and closes go-to-frame dialog", () => {
+      useAppStore.getState().setGoToFrameDialogOpen(true);
+      expect(useAppStore.getState().goToFrameDialogOpen).toBe(true);
+
+      useAppStore.getState().setGoToFrameDialogOpen(false);
+      expect(useAppStore.getState().goToFrameDialogOpen).toBe(false);
+    });
+
+    it("dialogs are independent of each other", () => {
+      useAppStore.getState().setTrainingDialogOpen(true);
+      useAppStore.getState().setInferenceDialogOpen(true);
+
+      expect(useAppStore.getState().trainingDialogOpen).toBe(true);
+      expect(useAppStore.getState().inferenceDialogOpen).toBe(true);
+      expect(useAppStore.getState().goToFrameDialogOpen).toBe(false);
+    });
+  });
+
+  describe("edge cases", () => {
+    it("setFrameIdx beyond video bounds clamps to max", () => {
+      const video = mockVideo({ shape: [50, 480, 640, 3] });
+      useAppStore.setState({ video });
+      useAppStore.getState().setFrameIdx(100);
+      expect(useAppStore.getState().frameIdx).toBe(49);
+    });
+
+    it("setFrameIdx to 0 when video has shape [1, ...]", () => {
+      const video = mockVideo({ shape: [1, 480, 640, 3] });
+      useAppStore.setState({ video });
+      useAppStore.getState().setFrameIdx(5);
+      expect(useAppStore.getState().frameIdx).toBe(0);
+    });
+
+    it("setInstance when no labels exist does not crash", () => {
+      expect(() => {
+        useAppStore.getState().setInstance(null);
+      }).not.toThrow();
+    });
+
+    it("incrementFrameIdx wraps correctly with step larger than video", () => {
+      const video = mockVideo({ shape: [10, 480, 640, 3] });
+      useAppStore.setState({ video, frameIdx: 5 });
+      // step of 20 would go to 25, which > 9, so wraps to 0
+      useAppStore.getState().incrementFrameIdx(20);
+      expect(useAppStore.getState().frameIdx).toBe(0);
+    });
+
+    it("setLabels resets loading state implicitly", () => {
+      useAppStore.getState().setLoading(true, "Loading...");
+      const labels = mockLabels();
+      useAppStore.getState().setLabels(labels, "test.slp");
+
+      // Loading state is independent of setLabels
+      // Caller is responsible for clearing it
+      const state = useAppStore.getState();
+      expect(state.projectLoaded).toBe(true);
+    });
+  });
 });

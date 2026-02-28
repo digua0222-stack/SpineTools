@@ -6,6 +6,7 @@
  */
 
 import { useAppStore } from "../../stores/appStore";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -62,6 +63,36 @@ function SuggestionRow({
   );
 }
 
+/** Generate evenly-spaced frame suggestions for all videos. */
+function generateSuggestions(count: number) {
+  const { labels } = useAppStore.getState();
+  if (!labels) return;
+
+  const suggestions: SuggestionFrame[] = [];
+
+  for (const video of labels.videos) {
+    const totalFrames = video.shape?.[0] ?? 0;
+    if (totalFrames === 0) continue;
+
+    const perVideo = Math.max(1, Math.round(count / labels.videos.length));
+    const step = Math.max(1, Math.floor(totalFrames / perVideo));
+
+    for (let i = 0; i < perVideo && i * step < totalFrames; i++) {
+      suggestions.push({
+        video,
+        frameIdx: i * step,
+      } as SuggestionFrame);
+    }
+  }
+
+  labels.suggestions = suggestions;
+  // Force re-render via a state touch
+  useAppStore.getState().markChanged();
+  toast.success(`Generated ${suggestions.length} suggestions`, {
+    description: `Evenly spaced across ${labels.videos.length} video(s)`,
+  });
+}
+
 export function SuggestionsPanel() {
   const labels = useAppStore((s) => s.labels);
   const currentVideo = useAppStore((s) => s.video);
@@ -92,7 +123,7 @@ export function SuggestionsPanel() {
       <ScrollArea className="flex-1">
         {suggestions.length === 0 ? (
           <p className="text-xs text-muted-foreground p-2">
-            No suggestions generated.
+            No suggestions generated. Click "Generate Suggestions" to create evenly-spaced frame suggestions.
           </p>
         ) : (
           <Table>
@@ -132,14 +163,19 @@ export function SuggestionsPanel() {
         <Button
           variant="ghost"
           size="xs"
-          onClick={() => console.log("Generate Suggestions")}
+          onClick={() => generateSuggestions(20)}
         >
           Generate Suggestions
         </Button>
         <Button
           variant="ghost"
           size="xs"
-          onClick={() => console.log("Clear Suggestions")}
+          onClick={() => {
+            if (!labels) return;
+            labels.suggestions = [];
+            useAppStore.getState().markChanged();
+            toast.info("Suggestions cleared");
+          }}
         >
           Clear Suggestions
         </Button>

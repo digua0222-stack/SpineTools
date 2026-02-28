@@ -68,6 +68,65 @@ describe("SLP file loading", () => {
       );
       expect(hasInstances).toBe(true);
     });
+
+    it("has specific skeleton node count", async () => {
+      const labels = await loadFixture("centered_pair.slp");
+      const skeleton = labels.skeletons[0];
+      // centered_pair has a multi-node skeleton
+      expect(skeleton.nodes.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("has specific skeleton edge count", async () => {
+      const labels = await loadFixture("centered_pair.slp");
+      const skeleton = labels.skeletons[0];
+      expect(skeleton.edges.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("skeleton nodes have names", async () => {
+      const labels = await loadFixture("centered_pair.slp");
+      const skeleton = labels.skeletons[0];
+      for (const node of skeleton.nodes) {
+        expect(node.name).toBeDefined();
+        expect(typeof node.name).toBe("string");
+        expect(node.name.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("instances have points matching skeleton node count", async () => {
+      const labels = await loadFixture("centered_pair.slp");
+      const skeleton = labels.skeletons[0];
+      const lf = labels.labeledFrames.find(
+        (f) => f.instances.length > 0
+      );
+      expect(lf).toBeDefined();
+      if (lf) {
+        for (const inst of lf.instances) {
+          expect(inst.points.length).toBe(skeleton.nodes.length);
+        }
+      }
+    });
+
+    it("instances have point coordinates as numbers", async () => {
+      const labels = await loadFixture("centered_pair.slp");
+      const lf = labels.labeledFrames.find(
+        (f) => f.instances.length > 0
+      );
+      expect(lf).toBeDefined();
+      if (lf) {
+        const inst = lf.instances[0];
+        for (const pt of inst.points) {
+          expect(pt.xy).toBeDefined();
+          expect(pt.xy.length).toBe(2);
+          expect(typeof pt.xy[0]).toBe("number");
+          expect(typeof pt.xy[1]).toBe("number");
+        }
+      }
+    });
+
+    it("has exactly 1 video", async () => {
+      const labels = await loadFixture("centered_pair.slp");
+      expect(labels.videos.length).toBe(1);
+    });
   });
 
   describe("minimal_instance.slp", () => {
@@ -90,6 +149,36 @@ describe("SLP file loading", () => {
       );
       expect(hasInstances).toBe(true);
     });
+
+    it("skeleton has at least one node", async () => {
+      const labels = await loadFixture("minimal_instance.slp");
+      expect(labels.skeletons[0].nodes.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("instances have valid point data", async () => {
+      const labels = await loadFixture("minimal_instance.slp");
+      const lf = labels.labeledFrames.find(
+        (f) => f.instances.length > 0
+      );
+      expect(lf).toBeDefined();
+      if (lf) {
+        for (const inst of lf.instances) {
+          expect(inst.points.length).toBe(labels.skeletons[0].nodes.length);
+          for (const pt of inst.points) {
+            expect(pt.xy).toBeDefined();
+            expect(pt.xy.length).toBe(2);
+          }
+        }
+      }
+    });
+
+    it("has frame indices as non-negative numbers", async () => {
+      const labels = await loadFixture("minimal_instance.slp");
+      for (const lf of labels.labeledFrames) {
+        expect(lf.frameIdx).toBeGreaterThanOrEqual(0);
+        expect(Number.isInteger(lf.frameIdx)).toBe(true);
+      }
+    });
   });
 
   describe("small_robot_minimal.slp", () => {
@@ -107,6 +196,68 @@ describe("SLP file loading", () => {
     it("has labeled frames", async () => {
       const labels = await loadFixture("small_robot_minimal.slp");
       expect(labels.labeledFrames.length).toBeGreaterThan(0);
+    });
+
+    it("skeleton nodes have names", async () => {
+      const labels = await loadFixture("small_robot_minimal.slp");
+      const skeleton = labels.skeletons[0];
+      for (const node of skeleton.nodes) {
+        expect(node.name).toBeDefined();
+        expect(typeof node.name).toBe("string");
+      }
+    });
+
+    it("videos have filenames", async () => {
+      const labels = await loadFixture("small_robot_minimal.slp");
+      for (const video of labels.videos) {
+        expect(video.filename).toBeDefined();
+        expect(typeof video.filename).toBe("string");
+      }
+    });
+
+    it("labeled frames reference the video", async () => {
+      const labels = await loadFixture("small_robot_minimal.slp");
+      for (const lf of labels.labeledFrames) {
+        expect(lf.video).toBeDefined();
+        expect(labels.videos).toContain(lf.video);
+      }
+    });
+
+    it("instances have skeleton references", async () => {
+      const labels = await loadFixture("small_robot_minimal.slp");
+      const lf = labels.labeledFrames.find(
+        (f) => f.instances.length > 0
+      );
+      if (lf) {
+        for (const inst of lf.instances) {
+          expect(inst.skeleton).toBeDefined();
+        }
+      }
+    });
+  });
+
+  describe("cross-fixture consistency", () => {
+    it("all fixtures load without errors", async () => {
+      const fixtures = ["centered_pair.slp", "minimal_instance.slp", "small_robot_minimal.slp"];
+      for (const fixture of fixtures) {
+        const labels = await loadFixture(fixture);
+        expect(labels).toBeDefined();
+        expect(labels.videos.length).toBeGreaterThan(0);
+        expect(labels.skeletons.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("all fixtures have consistent instance-skeleton point counts", async () => {
+      const fixtures = ["centered_pair.slp", "minimal_instance.slp", "small_robot_minimal.slp"];
+      for (const fixture of fixtures) {
+        const labels = await loadFixture(fixture);
+        const skeleton = labels.skeletons[0];
+        for (const lf of labels.labeledFrames) {
+          for (const inst of lf.instances) {
+            expect(inst.points.length).toBe(skeleton.nodes.length);
+          }
+        }
+      }
     });
   });
 });

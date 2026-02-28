@@ -14,6 +14,12 @@ import { useAppStore } from "../../stores/appStore";
 import { getPaletteColor, rgbToCSS } from "../../lib/colorPalettes";
 import { Button } from "@/components/ui/button";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -163,7 +169,7 @@ export function Seekbar() {
         } else {
           ctx.fillStyle = "#666";
         }
-        ctx.fillRect(x - 0.5, h - 12, 1, 8);
+        ctx.fillRect(x - 1, h - 14, 2, 10);
       }
     }
 
@@ -234,47 +240,68 @@ export function Seekbar() {
       </div>
 
       {/* Transport controls */}
-      <div className="flex gap-0.5 shrink-0 items-center">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Previous large step (Ctrl+Shift+Left)"
-          onClick={() => useAppStore.getState().incrementFrameIdx(-100)}
-        >
-          <SkipBack />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Previous frame (Left)"
-          onClick={() => useAppStore.getState().incrementFrameIdx(-1)}
-        >
-          <ChevronLeft />
-        </Button>
-        <Button
-          variant={isPlaying ? "default" : "ghost"}
-          size="icon-xs"
-          title={isPlaying ? "Pause" : "Play"}
-          onClick={() => setIsPlaying(!isPlaying)}
-        >
-          {isPlaying ? <Pause /> : <Play />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Next frame (Right)"
-          onClick={() => useAppStore.getState().incrementFrameIdx(1)}
-        >
-          <ChevronRight />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Next large step (Ctrl+Shift+Right)"
-          onClick={() => useAppStore.getState().incrementFrameIdx(100)}
-        >
-          <SkipForward />
-        </Button>
+      <TooltipProvider delayDuration={300}>
+        <div className="flex gap-0.5 shrink-0 items-center">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => useAppStore.getState().incrementFrameIdx(-100)}
+            >
+              <SkipBack />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top"><p>Previous large step (Ctrl+Shift+Left)</p></TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => useAppStore.getState().incrementFrameIdx(-1)}
+            >
+              <ChevronLeft />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top"><p>Previous frame (Left)</p></TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={isPlaying ? "default" : "ghost"}
+              size="icon-xs"
+              onClick={() => setIsPlaying(!isPlaying)}
+            >
+              {isPlaying ? <Pause /> : <Play />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top"><p>{isPlaying ? "Pause" : "Play"}</p></TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => useAppStore.getState().incrementFrameIdx(1)}
+            >
+              <ChevronRight />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top"><p>Next frame (Right)</p></TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => useAppStore.getState().incrementFrameIdx(100)}
+            >
+              <SkipForward />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top"><p>Next large step (Ctrl+Shift+Right)</p></TooltipContent>
+        </Tooltip>
         {/* Speed selector */}
         <Popover>
           <PopoverTrigger asChild>
@@ -304,6 +331,7 @@ export function Seekbar() {
           </PopoverContent>
         </Popover>
       </div>
+      </TooltipProvider>
     </div>
   );
 }

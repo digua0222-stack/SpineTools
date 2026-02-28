@@ -6,6 +6,8 @@
  */
 
 import { useAppStore } from "../../stores/appStore";
+import { getPlatform } from "../../platform";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -80,6 +82,29 @@ function VideoRow({
   );
 }
 
+async function handleAddVideos() {
+  try {
+    const platform = await getPlatform();
+    const result = await platform.showOpenDialog({
+      filters: [
+        { name: "Video Files", extensions: ["mp4", "avi", "mov", "mkv", "h5", "hdf5"] },
+      ],
+    });
+
+    if (!result) return; // User cancelled
+
+    // For now, show an informational toast since adding standalone videos
+    // to an existing project requires more plumbing in sleap-io.js
+    toast.info("Video file selected", {
+      description: "Adding standalone videos to a project is not yet fully supported. Open a .slp file that includes your videos.",
+    });
+  } catch (err) {
+    toast.error("Failed to open file picker", {
+      description: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 export function VideosPanel() {
   const labels = useAppStore((s) => s.labels);
   const currentVideo = useAppStore((s) => s.video);
@@ -132,14 +157,14 @@ export function VideosPanel() {
         <Button
           variant="ghost"
           size="xs"
-          onClick={() => console.log("Add Videos")}
+          onClick={handleAddVideos}
         >
           Add Videos
         </Button>
         <Button
           variant="ghost"
           size="xs"
-          onClick={() => console.log("Remove Video")}
+          onClick={() => toast.info("Remove Video is not yet implemented")}
         >
           Remove Video
         </Button>

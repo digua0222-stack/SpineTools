@@ -196,13 +196,7 @@ export function useKeyboardShortcuts() {
       // Go to frame (Ctrl+J)
       [DEFAULT_SHORTCUTS["goto frame"]]: (e) => {
         e.preventDefault();
-        const input = prompt("Go to frame:", String(store().frameIdx));
-        if (input !== null) {
-          const frame = parseInt(input, 10);
-          if (!isNaN(frame)) {
-            store().setFrameIdx(frame);
-          }
-        }
+        store().setGoToFrameDialogOpen(true);
       },
 
       // Video navigation

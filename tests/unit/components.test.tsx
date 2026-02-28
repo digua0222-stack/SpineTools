@@ -23,6 +23,15 @@ vi.mock("@/lib/platform", () => ({
   modKey: "Ctrl",
 }));
 
+// Mock sonner toast for MenuBar
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
+
 /** Reset the store between tests. */
 function resetStore() {
   useAppStore.setState(useAppStore.getInitialState());
@@ -48,6 +57,116 @@ describe("Component rendering", () => {
       );
       render(<StatusBar />);
       expect(screen.getByText("No project loaded")).toBeInTheDocument();
+    });
+
+    it("shows filename when project is loaded", async () => {
+      useAppStore.setState({
+        filename: "test_project.slp",
+        labels: {
+          videos: [],
+          skeletons: [],
+          labeledFrames: [],
+          tracks: [],
+          suggestions: [],
+          provenance: {},
+          find: () => [],
+          append: () => {},
+        } as unknown as import("@/types").Labels,
+        projectLoaded: true,
+        video: {
+          filename: "test.mp4",
+          shape: [100, 480, 640, 3],
+        } as unknown as import("@/types").Video,
+      });
+
+      const { StatusBar } = await import(
+        "@/components/layout/StatusBar"
+      );
+      render(<StatusBar />);
+      expect(screen.getByText(/test_project\.slp/)).toBeInTheDocument();
+    });
+
+    it("shows asterisk when project has unsaved changes", async () => {
+      useAppStore.setState({
+        filename: "project.slp",
+        hasChanges: true,
+        labels: {
+          videos: [],
+          skeletons: [],
+          labeledFrames: [],
+          tracks: [],
+          suggestions: [],
+          provenance: {},
+          find: () => [],
+          append: () => {},
+        } as unknown as import("@/types").Labels,
+        projectLoaded: true,
+        video: {
+          filename: "test.mp4",
+          shape: [100, 480, 640, 3],
+        } as unknown as import("@/types").Video,
+      });
+
+      const { StatusBar } = await import(
+        "@/components/layout/StatusBar"
+      );
+      render(<StatusBar />);
+      expect(screen.getByText(/project\.slp \*/)).toBeInTheDocument();
+    });
+
+    it("shows frame information with video", async () => {
+      useAppStore.setState({
+        filename: "test.slp",
+        frameIdx: 42,
+        labels: {
+          videos: [{ filename: "test.mp4", shape: [100, 480, 640, 3] }],
+          skeletons: [],
+          labeledFrames: [],
+          tracks: [],
+          suggestions: [],
+          provenance: {},
+          find: () => [],
+          append: () => {},
+        } as unknown as import("@/types").Labels,
+        projectLoaded: true,
+        video: {
+          filename: "test.mp4",
+          shape: [100, 480, 640, 3],
+        } as unknown as import("@/types").Video,
+      });
+
+      const { StatusBar } = await import(
+        "@/components/layout/StatusBar"
+      );
+      render(<StatusBar />);
+      expect(screen.getByText(/Frame 42/)).toBeInTheDocument();
+    });
+
+    it("shows labeled frame count", async () => {
+      useAppStore.setState({
+        filename: "test.slp",
+        labels: {
+          videos: [{ filename: "test.mp4", shape: [100, 480, 640, 3] }],
+          skeletons: [],
+          labeledFrames: [{ instances: [] }, { instances: [] }],
+          tracks: [],
+          suggestions: [],
+          provenance: {},
+          find: () => [],
+          append: () => {},
+        } as unknown as import("@/types").Labels,
+        projectLoaded: true,
+        video: {
+          filename: "test.mp4",
+          shape: [100, 480, 640, 3],
+        } as unknown as import("@/types").Video,
+      });
+
+      const { StatusBar } = await import(
+        "@/components/layout/StatusBar"
+      );
+      render(<StatusBar />);
+      expect(screen.getByText("2 labeled")).toBeInTheDocument();
     });
   });
 
@@ -77,6 +196,32 @@ describe("Component rendering", () => {
         screen.getByText(/drag and drop a .slp file/i)
       ).toBeInTheDocument();
     });
+
+    it("shows SLEAP Label title", async () => {
+      const { WelcomeScreen } = await import(
+        "@/components/layout/WelcomeScreen"
+      );
+      render(<WelcomeScreen />);
+      expect(screen.getByText("SLEAP Label")).toBeInTheDocument();
+    });
+
+    it("shows keyboard shortcut hint", async () => {
+      const { WelcomeScreen } = await import(
+        "@/components/layout/WelcomeScreen"
+      );
+      render(<WelcomeScreen />);
+      expect(screen.getByText(/Ctrl\+O/)).toBeInTheDocument();
+    });
+
+    it("shows logo image", async () => {
+      const { WelcomeScreen } = await import(
+        "@/components/layout/WelcomeScreen"
+      );
+      render(<WelcomeScreen />);
+      const img = screen.getByAltText("SLEAP");
+      expect(img).toBeInTheDocument();
+      expect(img.getAttribute("src")).toBe("/icon.png");
+    });
   });
 
   describe("VideosPanel", () => {
@@ -99,6 +244,61 @@ describe("Component rendering", () => {
       render(<InstancesPanel />);
       expect(
         screen.getByText("No instances on this frame.")
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("MenuBar", () => {
+    it("renders without crashing", async () => {
+      const { MenuBar } = await import(
+        "@/components/layout/MenuBar"
+      );
+      const { container } = render(<MenuBar />);
+      expect(container).toBeTruthy();
+    });
+
+    it("shows SLEAP branding", async () => {
+      const { MenuBar } = await import(
+        "@/components/layout/MenuBar"
+      );
+      render(<MenuBar />);
+      expect(screen.getByText("SLEAP")).toBeInTheDocument();
+    });
+
+    it("renders all 7 menu triggers", async () => {
+      const { MenuBar } = await import(
+        "@/components/layout/MenuBar"
+      );
+      render(<MenuBar />);
+
+      expect(screen.getByText("File")).toBeInTheDocument();
+      expect(screen.getByText("Edit")).toBeInTheDocument();
+      expect(screen.getByText("Go")).toBeInTheDocument();
+      expect(screen.getByText("View")).toBeInTheDocument();
+      expect(screen.getByText("Labels")).toBeInTheDocument();
+      expect(screen.getByText("Predict")).toBeInTheDocument();
+      expect(screen.getByText("Tracks")).toBeInTheDocument();
+    });
+  });
+
+  describe("SuggestionsPanel", () => {
+    it("renders empty state", async () => {
+      const { SuggestionsPanel } = await import(
+        "@/components/panels/SuggestionsPanel"
+      );
+      render(<SuggestionsPanel />);
+      expect(
+        screen.getByText(/No suggestions generated/i)
+      ).toBeInTheDocument();
+    });
+
+    it("has Generate Suggestions button", async () => {
+      const { SuggestionsPanel } = await import(
+        "@/components/panels/SuggestionsPanel"
+      );
+      render(<SuggestionsPanel />);
+      expect(
+        screen.getByText("Generate Suggestions")
       ).toBeInTheDocument();
     });
   });

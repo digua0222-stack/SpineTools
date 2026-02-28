@@ -4,16 +4,26 @@
  * Ports SLEAP's NewProject, OpenProject, SaveProject commands.
  */
 
-import { Labels, loadSlp } from "@talmolab/sleap-io.js";
+import { Labels } from "@talmolab/sleap-io.js";
 import { UpdateTopic } from "../types";
 import type { Command } from "./types";
 import type { CommandContext } from "./CommandContext";
+import { loadProjectFromFile } from "../lib/loadProject";
+import { toast } from "sonner";
 
 /** Reset state to an empty project. */
 export const NewProjectCommand: Command = {
   name: "NewProject",
   topics: [UpdateTopic.Project, UpdateTopic.Labels],
   execute(ctx: CommandContext) {
+    // Check for unsaved changes before creating a new project
+    if (ctx.state.hasChanges) {
+      const confirmed = window.confirm(
+        "You have unsaved changes. Creating a new project will discard them. Continue?"
+      );
+      if (!confirmed) return;
+    }
+
     const labels = new Labels();
     ctx.state.setLabels(labels, undefined);
   },
@@ -22,7 +32,8 @@ export const NewProjectCommand: Command = {
 /** Open a file dialog, load an SLP file, and set state. */
 export const OpenProjectCommand: Command = {
   name: "OpenProject",
-  topics: [UpdateTopic.Project, UpdateTopic.Labels],
+  topics: [],
+  skipAutoSnapshot: true,
   async execute(ctx: CommandContext) {
     // Use the File System Access API if available, otherwise fall back to input element
     let file: File | undefined;
@@ -58,8 +69,12 @@ export const OpenProjectCommand: Command = {
 
     if (!file) return;
 
-    const labels = await loadSlp(file, { openVideos: true });
-    ctx.state.setLabels(labels, file.name);
+    // Use the consolidated project loader
+    await loadProjectFromFile(file);
+
+    // OpenProject sets labels directly via loadProjectFromFile,
+    // so we don't need to signal topics (setLabels handles it)
+    void ctx;
   },
 };
 
@@ -87,7 +102,12 @@ export const SaveProjectCommand: Command = {
       URL.revokeObjectURL(url);
 
       ctx.state.clearChanges();
+      toast.success("Project saved", {
+        description: `${baseName}.json`,
+      });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("Failed to save project", { description: msg });
       console.error("[SaveProject] Failed to save:", err);
     }
   },
@@ -101,18 +121,28 @@ export const ExportJsonCommand: Command = {
     const { labels, filename } = ctx.state;
     if (!labels) return;
 
-    const dict = labels.toDict();
-    const json = JSON.stringify(dict, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
+    try {
+      const dict = labels.toDict();
+      const json = JSON.stringify(dict, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
 
-    const baseName = filename
-      ? filename.replace(/\.slp$/, "")
-      : "labels";
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${baseName}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const baseName = filename
+        ? filename.replace(/\.slp$/, "")
+        : "labels";
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${baseName}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast.success("JSON exported", {
+        description: `${baseName}.json`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error("Failed to export JSON", { description: msg });
+      console.error("[ExportJson] Failed to export:", err);
+    }
   },
 };

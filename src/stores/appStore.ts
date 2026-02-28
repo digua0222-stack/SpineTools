@@ -60,6 +60,15 @@ export interface AppState {
   frameRange: [number, number] | null;
   hasFrameRange: boolean;
 
+  // === Loading state ===
+  isLoading: boolean;
+  loadingMessage: string;
+
+  // === Dialog state ===
+  trainingDialogOpen: boolean;
+  inferenceDialogOpen: boolean;
+  goToFrameDialogOpen: boolean;
+
   // === Debug ===
   debugMode: boolean;
 
@@ -72,6 +81,10 @@ export interface AppState {
   setLabeledFrame: (frame: LabeledFrame | null) => void;
   markChanged: () => void;
   clearChanges: () => void;
+  setLoading: (loading: boolean, message?: string) => void;
+  setTrainingDialogOpen: (open: boolean) => void;
+  setInferenceDialogOpen: (open: boolean) => void;
+  setGoToFrameDialogOpen: (open: boolean) => void;
   toggle: (key: keyof AppState) => void;
   set: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
 }
@@ -117,6 +130,15 @@ export const useAppStore = create<AppState>()(
       // Frame range
       frameRange: null,
       hasFrameRange: false,
+
+      // Loading state
+      isLoading: false,
+      loadingMessage: "",
+
+      // Dialog state
+      trainingDialogOpen: false,
+      inferenceDialogOpen: false,
+      goToFrameDialogOpen: false,
 
       // Debug
       debugMode: false,
@@ -197,6 +219,27 @@ export const useAppStore = create<AppState>()(
       clearChanges: () =>
         set((state) => {
           state.hasChanges = false;
+        }),
+
+      setLoading: (loading, message) =>
+        set((state) => {
+          state.isLoading = loading;
+          state.loadingMessage = message ?? "";
+        }),
+
+      setTrainingDialogOpen: (open) =>
+        set((state) => {
+          state.trainingDialogOpen = open;
+        }),
+
+      setInferenceDialogOpen: (open) =>
+        set((state) => {
+          state.inferenceDialogOpen = open;
+        }),
+
+      setGoToFrameDialogOpen: (open) =>
+        set((state) => {
+          state.goToFrameDialogOpen = open;
         }),
 
       toggle: (key) =>

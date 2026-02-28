@@ -481,3 +481,179 @@ CommandContext.execute(SetPointLocation, { node, x, y })
 - Video clip export with rendered instances
 - Static web hosting mode
 - Collaborative labeling
+
+---
+
+## Recent Architectural Additions
+
+### Multi-Frame Undo in CommandContext
+
+The command system now supports two types of undo snapshots:
+
+**Single-frame snapshots** (default): For commands that only affect the current
+frame (AddInstance, DeleteInstance, etc.), the system takes a snapshot of the
+current frame's instances before executing the command.
+
+**Multi-frame snapshots**: For bulk operations that modify multiple frames
+(DeleteAllPredictions), the system snapshots ALL labeled frames. Commands opt
+into this by setting `skipAutoSnapshot: true` and calling
+`commandContext.takeAllFramesSnapshot()` and `commandContext.pushUndoSnapshot()`
+directly before executing.
+
+```typescript
+// CommandContext.ts
+
+interface SingleFrameData {
+  videoRef: Video;
+  frameIdx: number;
+  instances: Instance[];
+}
+
+interface UndoSnapshot {
+  commandName: string;
+  frame: SingleFrameData | null;        // Single frame (most commands)
+  allFrames: SingleFrameData[] | null;  // Multi-frame (bulk operations)
+  tracks: Track[];                       // Track state at snapshot time
+  selectedIdx: number;
+  activeVideo: Video | null;
+  activeFrameIdx: number;
+}
+```
+
+The `restoreSnapshot()` method detects which type of snapshot it is and
+restores accordingly: single-frame replaces instances on one `LabeledFrame`;
+multi-frame rebuilds the entire `labeledFrames` array.
+
+### Toast Notification Pattern
+
+User feedback is provided via the `sonner` toast library. The pattern:
+
+```typescript
+import { toast } from "sonner";
+
+// Success notification
+toast.success("Loaded project.slp", {
+  description: "3 videos, 150 labeled frames",
+});
+
+// Error notification
+toast.error("Failed to load project", {
+  description: err.message,
+});
+```
+
+The `<Toaster />` component is rendered at the app root. Toasts auto-dismiss
+after a timeout. This replaces the previous pattern of `console.log` /
+`console.error` for user-facing feedback.
+
+### Consolidated File Loading
+
+All file loading paths now go through `src/lib/loadProject.ts`:
+
+```
+loadProjectFromFile(file: File) -> Promise<boolean>
+loadProjectFromPath(path: string, readFile: ...) -> Promise<boolean>
+```
+
+These functions handle the complete loading lifecycle:
+1. Check for unsaved changes (confirm dialog if `hasChanges`)
+2. Set loading state (`setLoading(true, message)`)
+3. Parse the SLP file via `loadSlp()`
+4. Set labels + filename in store
+5. Show success/error toast
+6. Clear loading state
+
+Previously, file loading was duplicated across `AppShell.handleDrop`,
+`WelcomeScreen`, `OpenProjectCommand`, and `useFileIO` hook -- each with
+different error handling and UX patterns. The consolidated helper ensures
+consistent behavior everywhere.
+
+### Training/Inference Placeholder Architecture
+
+Training and inference cannot run in the browser (they require GPU, Python,
+and sleap-nn). The web app provides **placeholder dialogs** that:
+
+1. Show the full configuration UI (model type, backbone, epochs, etc.)
+2. Display a "Coming Soon" badge
+3. Link to alternatives (SLEAP desktop, CLI, Colab)
+4. Have a disabled "Start" button
+
+The dialogs are store-driven:
+
+```typescript
+// In appStore.ts
+trainingDialogOpen: boolean;
+inferenceDialogOpen: boolean;
+setTrainingDialogOpen: (open: boolean) => void;
+setInferenceDialogOpen: (open: boolean) => void;
+```
+
+Menu items in `PredictMenu` call `setTrainingDialogOpen(true)` etc.
+The dialog components (`TrainingDialog.tsx`, `InferenceDialog.tsx`) read
+the open state from the store and render conditionally.
+
+This pattern establishes the UI structure so that when sleap-nn integration
+is implemented (via Tauri sidecar or WebSocket), the dialogs only need their
+submit handlers wired up.
+
+### Dialog Management Pattern (Store-Driven)
+
+Dialogs are managed via boolean state in the Zustand store:
+
+```typescript
+// Store state
+goToFrameDialogOpen: boolean;
+trainingDialogOpen: boolean;
+inferenceDialogOpen: boolean;
+
+// Store actions
+setGoToFrameDialogOpen: (open: boolean) => void;
+setTrainingDialogOpen: (open: boolean) => void;
+setInferenceDialogOpen: (open: boolean) => void;
+```
+
+Dialog components subscribe to their open state and render using the
+Radix-based `<Dialog>` component from shadcn/ui:
+
+```typescript
+export function GoToFrameDialog() {
+  const open = useAppStore((s) => s.goToFrameDialogOpen);
+  const setOpen = useAppStore((s) => s.setGoToFrameDialogOpen);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent>...</DialogContent>
+    </Dialog>
+  );
+}
+```
+
+This pattern allows any part of the app (menu items, keyboard shortcuts,
+context menus) to open dialogs by calling a single store action, without
+needing to thread props through the component tree.
+
+### Loading State Pattern
+
+The app store includes loading state for blocking operations:
+
+```typescript
+isLoading: boolean;
+loadingMessage: string;
+setLoading: (loading: boolean, message?: string) => void;
+```
+
+When `isLoading` is true, a loading overlay or spinner is shown. The
+`loadProjectFromFile()` helper sets this automatically around file parsing.
+
+### shadcn/ui Component Library
+
+The project uses shadcn/ui for dialog, form, and control primitives. These
+are Radix-based, accessible, and styled with Tailwind CSS. Components are
+installed into `src/components/ui/` and include:
+
+- `Dialog` / `DialogContent` / `DialogHeader` / `DialogFooter`
+- `Select` / `SelectContent` / `SelectItem`
+- `Input`, `Button`, `Badge`, `Label`, `Separator`
+- `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent`
+- `Table`, `Card`, `ScrollArea`, `Tooltip`
+
+This establishes a consistent design system for all future dialogs and forms.

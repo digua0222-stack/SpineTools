@@ -2,11 +2,44 @@
  * Tests for the command system.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { CommandContext } from "@/commands/CommandContext";
 import { useAppStore } from "@/stores/appStore";
 import { UpdateTopic } from "@/types";
 import type { Command } from "@/commands/types";
+import {
+  AddInstance,
+  DeleteSelectedInstance,
+  CopyInstance,
+  PasteInstance,
+  DeleteFramePredictions,
+  DeleteAllPredictions,
+  SetPointLocation,
+} from "@/commands/editCommands";
+import {
+  GoNextLabeledFrame,
+  GoPrevLabeledFrame,
+  GoNextSuggestion,
+  GoPrevSuggestion,
+  GoToFrame,
+  GoToLastInteracted,
+  GoNextUserFrame,
+} from "@/commands/navCommands";
+import {
+  AddTrack,
+  SetInstanceTrack,
+  TransposeInstances,
+  CopyTrack,
+  PasteTrack,
+} from "@/commands/trackCommands";
+import {
+  Labels,
+  Instance,
+  LabeledFrame,
+  Skeleton,
+  Track,
+  Video,
+} from "@talmolab/sleap-io.js";
 
 /** Reset the store between tests. */
 function resetStore() {
@@ -24,6 +57,102 @@ function testCommand(
     topics,
     execute: executeFn,
   };
+}
+
+/**
+ * Create a minimal project with a skeleton, video, and labeled frames.
+ * Returns the labels object plus references to created objects.
+ */
+function createTestProject(opts?: {
+  numNodes?: number;
+  numFrames?: number;
+  numInstancesPerFrame?: number;
+  withPredictions?: boolean;
+  withTracks?: boolean;
+  withSuggestions?: boolean;
+}) {
+  const numNodes = opts?.numNodes ?? 3;
+  const numFrames = opts?.numFrames ?? 3;
+  const numInstancesPerFrame = opts?.numInstancesPerFrame ?? 1;
+
+  const nodeNames = Array.from({ length: numNodes }, (_, i) => `node_${i}`);
+  const skeleton = new Skeleton({ nodes: nodeNames, name: "test" });
+  if (numNodes >= 2) {
+    skeleton.addEdge(skeleton.nodes[0], skeleton.nodes[1]);
+  }
+
+  // Use a mock video object since Video.shape is a getter from backend
+  const video = {
+    filename: "test.mp4",
+    shape: [100, 480, 640, 3] as [number, number, number, number],
+    backend: null,
+    sourceVideo: null,
+    backendMetadata: {},
+  } as unknown as Video;
+
+  const labels = new Labels({
+    videos: [video],
+    skeletons: [skeleton],
+  });
+
+  const tracks: Track[] = [];
+  if (opts?.withTracks) {
+    const t1 = new Track("Track 1");
+    const t2 = new Track("Track 2");
+    labels.tracks.push(t1, t2);
+    tracks.push(t1, t2);
+  }
+
+  const labeledFrames: LabeledFrame[] = [];
+  for (let f = 0; f < numFrames; f++) {
+    const lf = new LabeledFrame({ video, frameIdx: f * 10 });
+    for (let i = 0; i < numInstancesPerFrame; i++) {
+      const inst = Instance.empty({ skeleton });
+      // Set some point coordinates so they aren't all NaN
+      for (let n = 0; n < numNodes; n++) {
+        inst.points[n].xy = [10 * n + f, 20 * n + i];
+        inst.points[n].visible = true;
+        inst.points[n].complete = true;
+      }
+      if (opts?.withTracks && tracks.length > 0) {
+        inst.track = tracks[i % tracks.length];
+      }
+      lf.instances.push(inst);
+    }
+
+    // Add predictions if requested
+    if (opts?.withPredictions) {
+      const pred = Instance.empty({ skeleton });
+      for (let n = 0; n < numNodes; n++) {
+        pred.points[n].xy = [100 + n, 200 + n];
+        pred.points[n].visible = true;
+      }
+      (pred as unknown as Record<string, unknown>).score = 0.95;
+      lf.instances.push(pred);
+    }
+
+    labels.labeledFrames.push(lf);
+    labeledFrames.push(lf);
+  }
+
+  if (opts?.withSuggestions) {
+    for (let i = 0; i < 3; i++) {
+      labels.suggestions.push({
+        video,
+        frameIdx: i * 15 + 5,
+      } as unknown as import("@/types").SuggestionFrame);
+    }
+  }
+
+  return { labels, skeleton, video, tracks, labeledFrames };
+}
+
+/** Set up the store with a test project and return the project refs. */
+function setupProjectInStore(opts?: Parameters<typeof createTestProject>[0]) {
+  const project = createTestProject(opts);
+  useAppStore.getState().setLabels(project.labels, "test.slp");
+  // setLabels selects first video/skeleton automatically
+  return project;
 }
 
 describe("CommandContext", () => {
@@ -154,6 +283,683 @@ describe("CommandContext", () => {
       ctx.undo();
 
       expect(ctx.redoCommandName).toBe("ImportantAction");
+    });
+  });
+
+  describe("multi-frame undo", () => {
+    it("takeAllFramesSnapshot captures all labeled frames", () => {
+      const project = setupProjectInStore({ numFrames: 3, withPredictions: true });
+      const snapshot = ctx.takeAllFramesSnapshot("TestBulk");
+
+      expect(snapshot.commandName).toBe("TestBulk");
+      expect(snapshot.allFrames).not.toBeNull();
+      expect(snapshot.allFrames!.length).toBe(3);
+      // Each frame should have its instances cloned
+      for (let i = 0; i < 3; i++) {
+        expect(snapshot.allFrames![i].instances.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("pushUndoSnapshot adds to undo stack and clears redo", async () => {
+      setupProjectInStore();
+
+      // First add something to redo stack
+      const cmd = testCommand("Cmd1", [UpdateTopic.Frame], () => {});
+      await ctx.execute(cmd);
+      ctx.undo();
+      expect(ctx.canRedo).toBe(true);
+
+      // Now push custom snapshot
+      const snapshot = ctx.takeAllFramesSnapshot("BulkOp");
+      ctx.pushUndoSnapshot(snapshot);
+
+      expect(ctx.canUndo).toBe(true);
+      expect(ctx.canRedo).toBe(false); // redo cleared
+      expect(ctx.undoCommandName).toBe("BulkOp");
+    });
+
+    it("skipAutoSnapshot prevents automatic single-frame snapshot", async () => {
+      setupProjectInStore({ numFrames: 2 });
+
+      const skipCmd: Command = {
+        name: "SkipSnapshotCmd",
+        topics: [UpdateTopic.Frame],
+        skipAutoSnapshot: true,
+        execute(_ctx) {
+          // Command manages its own snapshot
+          const snapshot = _ctx.takeAllFramesSnapshot("SkipSnapshotCmd");
+          _ctx.pushUndoSnapshot(snapshot);
+        },
+      };
+
+      await ctx.execute(skipCmd);
+      expect(ctx.canUndo).toBe(true);
+      expect(ctx.undoCommandName).toBe("SkipSnapshotCmd");
+    });
+  });
+});
+
+describe("Edit commands", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  describe("AddInstance", () => {
+    it("adds an instance to the current frame", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 0 });
+      useAppStore.getState().setFrameIdx(0);
+
+      await ctx.execute(AddInstance);
+
+      const lf = project.labels.find({ video: project.video, frameIdx: 0 });
+      expect(lf.length).toBe(1);
+      expect(lf[0].instances.length).toBe(1);
+    });
+
+    it("creates a labeled frame when none exists", async () => {
+      const project = setupProjectInStore({ numFrames: 0 });
+      // Navigate to a frame with no labeled frame
+      useAppStore.getState().setFrameIdx(50);
+
+      await ctx.execute(AddInstance);
+
+      const lf = project.labels.find({ video: project.video, frameIdx: 50 });
+      expect(lf.length).toBe(1);
+      expect(lf[0].instances.length).toBe(1);
+    });
+
+    it("selects the newly added instance", async () => {
+      setupProjectInStore({ numFrames: 0 });
+      useAppStore.getState().setFrameIdx(5);
+
+      await ctx.execute(AddInstance);
+
+      expect(useAppStore.getState().instance).not.toBeNull();
+    });
+
+    it("does nothing without labels", async () => {
+      // No project loaded
+      expect(() => ctx.execute(AddInstance)).not.toThrow();
+    });
+  });
+
+  describe("DeleteSelectedInstance", () => {
+    it("removes the selected instance", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 2 });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf);
+      useAppStore.getState().setInstance(lf.instances[0]);
+
+      await ctx.execute(DeleteSelectedInstance);
+
+      expect(lf.instances.length).toBe(1);
+      expect(useAppStore.getState().instance).toBeNull();
+    });
+
+    it("does nothing when no instance selected", async () => {
+      setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 2 });
+      // instance is null by default
+      await ctx.execute(DeleteSelectedInstance);
+      // Should not throw
+    });
+  });
+
+  describe("CopyInstance / PasteInstance", () => {
+    it("copies and pastes an instance to clipboard", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf);
+      useAppStore.getState().setInstance(lf.instances[0]);
+
+      await ctx.execute(CopyInstance);
+
+      expect(useAppStore.getState().clipboardInstance).not.toBeNull();
+    });
+
+    it("pastes creates a new instance on the current frame", async () => {
+      const project = setupProjectInStore({ numFrames: 2, numInstancesPerFrame: 1 });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf);
+      useAppStore.getState().setInstance(lf.instances[0]);
+
+      await ctx.execute(CopyInstance);
+
+      // Navigate to second frame and paste
+      const lf2 = project.labeledFrames[1];
+      useAppStore.getState().setFrameIdx(lf2.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf2);
+
+      const beforeCount = lf2.instances.length;
+      await ctx.execute(PasteInstance);
+
+      expect(lf2.instances.length).toBe(beforeCount + 1);
+    });
+  });
+
+  describe("SetPointLocation", () => {
+    it("updates point coordinates", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      const lf = project.labeledFrames[0];
+      const inst = lf.instances[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setInstance(inst);
+
+      await ctx.execute(SetPointLocation, { nodeIdx: 0, x: 99, y: 88 });
+
+      expect(inst.points[0].xy[0]).toBe(99);
+      expect(inst.points[0].xy[1]).toBe(88);
+      expect(inst.points[0].visible).toBe(true);
+    });
+
+    it("does nothing for invalid nodeIdx", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      const lf = project.labeledFrames[0];
+      const inst = lf.instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      const origXY = [...inst.points[0].xy];
+      await ctx.execute(SetPointLocation, { nodeIdx: -1, x: 99, y: 88 });
+      expect(inst.points[0].xy).toEqual(origXY);
+
+      await ctx.execute(SetPointLocation, { nodeIdx: 100, x: 99, y: 88 });
+      expect(inst.points[0].xy).toEqual(origXY);
+    });
+
+    it("does nothing without params", async () => {
+      setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      expect(() => ctx.execute(SetPointLocation)).not.toThrow();
+    });
+  });
+
+  describe("DeleteFramePredictions", () => {
+    it("removes predicted instances from current frame", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+        withPredictions: true,
+      });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf);
+
+      const totalBefore = lf.instances.length;
+      const userBefore = lf.instances.filter((i) => !("score" in i)).length;
+
+      await ctx.execute(DeleteFramePredictions);
+
+      expect(lf.instances.length).toBe(userBefore);
+      expect(lf.instances.length).toBeLessThan(totalBefore);
+    });
+
+    it("keeps user instances intact", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 2,
+        withPredictions: true,
+      });
+      const lf = project.labeledFrames[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf);
+
+      await ctx.execute(DeleteFramePredictions);
+
+      // All remaining instances should be user instances
+      for (const inst of lf.instances) {
+        expect("score" in inst).toBe(false);
+      }
+      expect(lf.instances.length).toBe(2);
+    });
+  });
+
+  describe("DeleteAllPredictions", () => {
+    it("clears all predictions across all frames", async () => {
+      vi.stubGlobal("confirm", () => true);
+      const project = setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 1,
+        withPredictions: true,
+      });
+
+      // Each frame has 1 user + 1 predicted = 2 instances
+      for (const lf of project.labels.labeledFrames) {
+        expect(lf.instances.length).toBe(2);
+      }
+
+      await ctx.execute(DeleteAllPredictions);
+
+      // All predictions should be gone
+      for (const lf of project.labels.labeledFrames) {
+        for (const inst of lf.instances) {
+          expect("score" in inst).toBe(false);
+        }
+      }
+      vi.unstubAllGlobals();
+    });
+
+    it("does not push undo if nothing was removed", async () => {
+      const project = setupProjectInStore({
+        numFrames: 2,
+        numInstancesPerFrame: 1,
+        withPredictions: false,
+      });
+
+      await ctx.execute(DeleteAllPredictions);
+      expect(ctx.canUndo).toBe(false);
+    });
+
+    it("undo restores all frames after DeleteAllPredictions", async () => {
+      vi.stubGlobal("confirm", () => true);
+      const project = setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 1,
+        withPredictions: true,
+      });
+
+      // Count instances before
+      const countsBefore = project.labels.labeledFrames.map(
+        (lf) => lf.instances.length
+      );
+
+      await ctx.execute(DeleteAllPredictions);
+
+      // Verify predictions removed
+      for (const lf of project.labels.labeledFrames) {
+        expect(lf.instances.some((i) => "score" in i)).toBe(false);
+      }
+
+      // Undo
+      const undone = ctx.undo();
+      expect(undone).toBe(true);
+
+      // All frames should be restored with their predictions
+      const countsAfter = project.labels.labeledFrames.map(
+        (lf) => lf.instances.length
+      );
+      expect(countsAfter).toEqual(countsBefore);
+
+      // Verify predictions are back
+      for (const lf of project.labels.labeledFrames) {
+        expect(lf.instances.some((i) => "score" in i)).toBe(true);
+      }
+      vi.unstubAllGlobals();
+    });
+
+    it("removes empty labeled frames", async () => {
+      // Create a project where some frames have ONLY predictions
+      const project = setupProjectInStore({
+        numFrames: 2,
+        numInstancesPerFrame: 0,
+        withPredictions: true,
+      });
+
+      // All frames have only predictions
+      const beforeLength = project.labels.labeledFrames.length;
+      expect(beforeLength).toBe(2);
+
+      await ctx.execute(DeleteAllPredictions);
+
+      // Frames with no remaining instances should be removed
+      expect(project.labels.labeledFrames.length).toBe(0);
+    });
+  });
+});
+
+describe("Navigation commands", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  describe("GoToFrame", () => {
+    it("navigates to specified frame", async () => {
+      setupProjectInStore();
+
+      await ctx.execute(GoToFrame, { frameIdx: 42 });
+      expect(useAppStore.getState().frameIdx).toBe(42);
+    });
+
+    it("does nothing with invalid params", async () => {
+      setupProjectInStore();
+      useAppStore.getState().setFrameIdx(10);
+
+      await ctx.execute(GoToFrame, { frameIdx: "not a number" });
+      expect(useAppStore.getState().frameIdx).toBe(10);
+    });
+
+    it("does nothing with no params", async () => {
+      setupProjectInStore();
+      useAppStore.getState().setFrameIdx(10);
+
+      await ctx.execute(GoToFrame);
+      expect(useAppStore.getState().frameIdx).toBe(10);
+    });
+
+    it("clamps to video bounds", async () => {
+      setupProjectInStore();
+      // video has 100 frames (shape[0] = 100), max index = 99
+      await ctx.execute(GoToFrame, { frameIdx: 200 });
+      expect(useAppStore.getState().frameIdx).toBe(99);
+    });
+  });
+
+  describe("GoNextLabeledFrame", () => {
+    it("navigates to next labeled frame", async () => {
+      const project = setupProjectInStore({ numFrames: 3 });
+      // Frames at indices 0, 10, 20
+      useAppStore.getState().setFrameIdx(0);
+
+      await ctx.execute(GoNextLabeledFrame);
+      expect(useAppStore.getState().frameIdx).toBe(10);
+    });
+
+    it("wraps around to first labeled frame", async () => {
+      setupProjectInStore({ numFrames: 3 });
+      // Frames at indices 0, 10, 20
+      useAppStore.getState().setFrameIdx(20);
+
+      await ctx.execute(GoNextLabeledFrame);
+      expect(useAppStore.getState().frameIdx).toBe(0);
+    });
+
+    it("does nothing without labels", async () => {
+      // No project loaded
+      await ctx.execute(GoNextLabeledFrame);
+      expect(useAppStore.getState().frameIdx).toBe(0);
+    });
+  });
+
+  describe("GoPrevLabeledFrame", () => {
+    it("navigates to previous labeled frame", async () => {
+      setupProjectInStore({ numFrames: 3 });
+      // Frames at indices 0, 10, 20
+      useAppStore.getState().setFrameIdx(20);
+
+      await ctx.execute(GoPrevLabeledFrame);
+      expect(useAppStore.getState().frameIdx).toBe(10);
+    });
+
+    it("wraps around to last labeled frame", async () => {
+      setupProjectInStore({ numFrames: 3 });
+      useAppStore.getState().setFrameIdx(0);
+
+      await ctx.execute(GoPrevLabeledFrame);
+      expect(useAppStore.getState().frameIdx).toBe(20);
+    });
+  });
+
+  describe("GoNextSuggestion", () => {
+    it("navigates to next suggestion frame", async () => {
+      setupProjectInStore({ withSuggestions: true });
+      // Suggestions at indices 5, 20, 35
+      useAppStore.getState().setFrameIdx(0);
+
+      await ctx.execute(GoNextSuggestion);
+      expect(useAppStore.getState().frameIdx).toBe(5);
+    });
+
+    it("wraps to first suggestion", async () => {
+      setupProjectInStore({ withSuggestions: true });
+      useAppStore.getState().setFrameIdx(40);
+
+      await ctx.execute(GoNextSuggestion);
+      expect(useAppStore.getState().frameIdx).toBe(5);
+    });
+
+    it("does nothing with no suggestions", async () => {
+      setupProjectInStore({ withSuggestions: false });
+      useAppStore.getState().setFrameIdx(5);
+
+      await ctx.execute(GoNextSuggestion);
+      expect(useAppStore.getState().frameIdx).toBe(5);
+    });
+  });
+
+  describe("GoPrevSuggestion", () => {
+    it("navigates to previous suggestion frame", async () => {
+      setupProjectInStore({ withSuggestions: true });
+      // Suggestions at indices 5, 20, 35
+      useAppStore.getState().setFrameIdx(35);
+
+      await ctx.execute(GoPrevSuggestion);
+      expect(useAppStore.getState().frameIdx).toBe(20);
+    });
+
+    it("wraps to last suggestion", async () => {
+      setupProjectInStore({ withSuggestions: true });
+      useAppStore.getState().setFrameIdx(2);
+
+      await ctx.execute(GoPrevSuggestion);
+      expect(useAppStore.getState().frameIdx).toBe(35);
+    });
+  });
+
+  describe("GoToLastInteracted", () => {
+    it("navigates to last interacted frame", async () => {
+      setupProjectInStore();
+      useAppStore.getState().setFrameIdx(42);
+      useAppStore.getState().markChanged();
+
+      // Now navigate away
+      useAppStore.getState().setFrameIdx(0);
+
+      await ctx.execute(GoToLastInteracted);
+      expect(useAppStore.getState().frameIdx).toBe(42);
+    });
+
+    it("does nothing when no interacted frame", async () => {
+      setupProjectInStore();
+      useAppStore.getState().setFrameIdx(5);
+
+      await ctx.execute(GoToLastInteracted);
+      // lastInteractedFrame is null, so frameIdx stays
+      expect(useAppStore.getState().frameIdx).toBe(5);
+    });
+  });
+
+  describe("GoNextUserFrame", () => {
+    it("navigates to next frame with user instances", async () => {
+      const project = setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 1,
+        withPredictions: true,
+      });
+      // All frames have user instances at indices 0, 10, 20
+      useAppStore.getState().setFrameIdx(0);
+
+      await ctx.execute(GoNextUserFrame);
+      expect(useAppStore.getState().frameIdx).toBe(10);
+    });
+
+    it("wraps to first user frame", async () => {
+      setupProjectInStore({
+        numFrames: 3,
+        numInstancesPerFrame: 1,
+      });
+      useAppStore.getState().setFrameIdx(20);
+
+      await ctx.execute(GoNextUserFrame);
+      expect(useAppStore.getState().frameIdx).toBe(0);
+    });
+  });
+});
+
+describe("Track commands", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  describe("AddTrack", () => {
+    it("creates a new track and assigns to selected instance", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      await ctx.execute(AddTrack);
+
+      expect(project.labels.tracks.length).toBe(1);
+      expect(inst.track).toBe(project.labels.tracks[0]);
+      expect(inst.track!.name).toBe("Track 1");
+    });
+
+    it("increments track number", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 2,
+        withTracks: true,
+      });
+      // Already has Track 1 and Track 2
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      await ctx.execute(AddTrack);
+
+      expect(project.labels.tracks.length).toBe(3);
+      expect(project.labels.tracks[2].name).toBe("Track 3");
+    });
+
+    it("does nothing without selected instance", async () => {
+      const project = setupProjectInStore({ numFrames: 1, numInstancesPerFrame: 1 });
+      // No instance selected
+
+      await ctx.execute(AddTrack);
+      expect(project.labels.tracks.length).toBe(0);
+    });
+  });
+
+  describe("SetInstanceTrack", () => {
+    it("assigns an existing track to selected instance", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 2,
+        withTracks: true,
+      });
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      await ctx.execute(SetInstanceTrack, { trackIdx: 1 });
+
+      expect(inst.track).toBe(project.tracks[1]);
+    });
+
+    it("does nothing for out-of-bounds trackIdx", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+        withTracks: true,
+      });
+      const inst = project.labeledFrames[0].instances[0];
+      const origTrack = inst.track;
+      useAppStore.getState().setInstance(inst);
+
+      await ctx.execute(SetInstanceTrack, { trackIdx: 99 });
+      expect(inst.track).toBe(origTrack);
+
+      await ctx.execute(SetInstanceTrack, { trackIdx: -1 });
+      expect(inst.track).toBe(origTrack);
+    });
+  });
+
+  describe("TransposeInstances", () => {
+    it("swaps tracks between two instances", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 2,
+        withTracks: true,
+      });
+      const lf = project.labeledFrames[0];
+      const inst0 = lf.instances[0];
+      const inst1 = lf.instances[1];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf);
+      useAppStore.getState().setInstance(inst0);
+
+      const track0Before = inst0.track;
+      const track1Before = inst1.track;
+
+      await ctx.execute(TransposeInstances);
+
+      expect(inst0.track).toBe(track1Before);
+      expect(inst1.track).toBe(track0Before);
+    });
+
+    it("does nothing with only one instance", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+        withTracks: true,
+      });
+      const lf = project.labeledFrames[0];
+      const inst = lf.instances[0];
+      useAppStore.getState().setFrameIdx(lf.frameIdx);
+      useAppStore.getState().setLabeledFrame(lf);
+      useAppStore.getState().setInstance(inst);
+
+      const trackBefore = inst.track;
+      await ctx.execute(TransposeInstances);
+      expect(inst.track).toBe(trackBefore);
+    });
+  });
+
+  describe("CopyTrack / PasteTrack", () => {
+    it("copies and pastes track between instances", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 2,
+        withTracks: true,
+      });
+      const lf = project.labeledFrames[0];
+      const inst0 = lf.instances[0];
+      const inst1 = lf.instances[1];
+
+      // Copy track from inst0
+      useAppStore.getState().setInstance(inst0);
+      await ctx.execute(CopyTrack);
+
+      expect(useAppStore.getState().clipboardTrack).toBe(inst0.track);
+
+      // Paste onto inst1
+      useAppStore.getState().setInstance(inst1);
+      await ctx.execute(PasteTrack);
+
+      expect(inst1.track).toBe(inst0.track);
+    });
+
+    it("CopyTrack does nothing when instance has no track", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+        withTracks: false,
+      });
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      await ctx.execute(CopyTrack);
+      expect(useAppStore.getState().clipboardTrack).toBeNull();
+    });
+
+    it("PasteTrack does nothing without clipboard", async () => {
+      const project = setupProjectInStore({
+        numFrames: 1,
+        numInstancesPerFrame: 1,
+        withTracks: true,
+      });
+      const inst = project.labeledFrames[0].instances[0];
+      useAppStore.getState().setInstance(inst);
+
+      const origTrack = inst.track;
+      await ctx.execute(PasteTrack);
+      expect(inst.track).toBe(origTrack);
     });
   });
 });
