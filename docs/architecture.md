@@ -1,0 +1,483 @@
+# SLEAP Label Web — Architecture Design
+
+## Overview
+
+Port of the SLEAP Qt labeling GUI to a web-based frontend using React + TypeScript. Initial target: desktop app via Tauri v2. Future: standalone browser app with File System Access API.
+
+## Tech Stack
+
+| Layer | Choice | Rationale |
+|-------|--------|-----------|
+| **Frontend framework** | React 19 + TypeScript | Ecosystem, component model, hooks |
+| **Build tool** | Vite 6 | Fast HMR, native ESM, TypeScript support |
+| **Desktop shell** | Tauri v2 | Small bundle (~5MB vs ~150MB Electron), native feel, Rust backend for file I/O, Python sidecar support |
+| **State management** | Zustand | Mirrors SLEAP's GuiState pub/sub pattern, minimal boilerplate, excellent devtools |
+| **Canvas rendering** | Canvas 2D API | Sufficient for skeleton overlays (<100 instances), simple compositing with video frames, good text rendering |
+| **Data layer** | @talmolab/sleap-io.js | SLP file loading, HDF5 via Web Worker, video backends |
+| **Panel layout** | react-resizable-panels | Matches Qt dock widget behavior, actively maintained |
+| **UI components** | Radix UI primitives + Tailwind CSS | Accessible, unstyled primitives we can customize to match desktop feel |
+| **Keyboard shortcuts** | tinykeys | Tiny (~400B), supports key sequences, customizable |
+| **Testing** | Vitest + Playwright | Unit + E2E, Playwright for visual testing |
+| **CSS** | Tailwind CSS v4 | Utility-first, fast prototyping, consistent spacing/colors |
+
+## Project Structure
+
+```
+sleap-label-web/
+├── docs/                        # Research docs, architecture, specs
+├── src/
+│   ├── main.tsx                 # App entry point
+│   ├── App.tsx                  # Root component (layout shell)
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── AppShell.tsx     # Main layout: menubar + panels + statusbar
+│   │   │   ├── MenuBar.tsx      # Application menu bar
+│   │   │   ├── StatusBar.tsx    # Bottom status bar
+│   │   │   └── PanelLayout.tsx  # Resizable panel container
+│   │   ├── video/
+│   │   │   ├── VideoPlayer.tsx  # Main video + canvas overlay container
+│   │   │   ├── VideoCanvas.tsx  # Canvas element for frame rendering
+│   │   │   ├── OverlayCanvas.tsx# Canvas element for skeleton overlay
+│   │   │   ├── Seekbar.tsx      # Frame navigation seekbar
+│   │   │   └── PlaybackControls.tsx
+│   │   ├── panels/
+│   │   │   ├── VideosPanel.tsx  # Video list panel
+│   │   │   ├── SkeletonPanel.tsx# Skeleton editor panel
+│   │   │   ├── InstancesPanel.tsx# Instance list panel
+│   │   │   └── SuggestionsPanel.tsx
+│   │   ├── dialogs/
+│   │   │   ├── ImportVideosDialog.tsx
+│   │   │   ├── DeleteDialog.tsx
+│   │   │   ├── MergeDialog.tsx
+│   │   │   ├── ShortcutsDialog.tsx
+│   │   │   ├── GoToFrameDialog.tsx
+│   │   │   └── ExportDialog.tsx
+│   │   └── common/
+│   │       ├── DataTable.tsx    # Generic sortable table
+│   │       ├── ContextMenu.tsx
+│   │       └── ColorSwatch.tsx
+│   ├── stores/
+│   │   ├── appStore.ts          # Main application state (mirrors GuiState)
+│   │   ├── labelsStore.ts       # Labels data (wraps sleap-io.js Labels)
+│   │   ├── selectionStore.ts    # Current video, frame, instance, node
+│   │   ├── viewStore.ts         # View settings (zoom, pan, show/hide flags)
+│   │   └── preferencesStore.ts  # Persistent user preferences
+│   ├── commands/
+│   │   ├── types.ts             # Command interfaces, UpdateTopic enum
+│   │   ├── CommandContext.ts     # Central command executor
+│   │   ├── fileCommands.ts      # New, Open, Save, Import, Export
+│   │   ├── navCommands.ts       # Frame navigation commands
+│   │   ├── editCommands.ts      # Instance/skeleton editing commands
+│   │   ├── trackCommands.ts     # Track management commands
+│   │   └── viewCommands.ts      # View toggle commands
+│   ├── canvas/
+│   │   ├── FrameRenderer.ts     # Renders video frame to canvas
+│   │   ├── SkeletonRenderer.ts  # Renders skeleton instances
+│   │   ├── NodeRenderer.ts      # Renders individual nodes with interaction
+│   │   ├── EdgeRenderer.ts      # Renders edges (line + wedge styles)
+│   │   ├── TrailRenderer.ts     # Renders track trails
+│   │   ├── SeekbarRenderer.ts   # Renders seekbar marks and tracks
+│   │   ├── HitTester.ts         # Point-in-shape hit testing for selection
+│   │   └── colors.ts            # Color palette management
+│   ├── hooks/
+│   │   ├── useVideoPlayer.ts    # Video loading and frame access
+│   │   ├── useCanvasInteraction.ts # Mouse/touch handlers for canvas
+│   │   ├── useKeyboardShortcuts.ts # Shortcut registration and dispatch
+│   │   ├── useUndoRedo.ts       # Undo/redo stack
+│   │   └── useFileIO.ts         # File open/save via Tauri or File System Access API
+│   ├── lib/
+│   │   ├── shortcuts.ts         # Shortcut definitions (from shortcuts.yaml)
+│   │   ├── colorPalettes.ts     # Color palette definitions
+│   │   └── platform.ts          # Platform detection (Tauri vs browser)
+│   └── types/
+│       └── index.ts             # Shared TypeScript types
+├── src-tauri/                   # Tauri Rust backend
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   └── src/
+│       ├── main.rs
+│       └── commands.rs          # Rust commands for file I/O
+├── public/
+│   └── index.html
+├── tests/
+│   ├── unit/                    # Vitest unit tests
+│   ├── e2e/                     # Playwright E2E tests
+│   └── fixtures/                # Test SLP files
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+├── tailwind.config.ts
+└── playwright.config.ts
+```
+
+## Architecture Patterns
+
+### 1. State Management (Zustand — mirrors GuiState)
+
+The Qt app uses `GuiState`, a key-value store with change callbacks. Zustand provides the same pattern natively:
+
+```typescript
+// stores/appStore.ts
+interface AppState {
+  // Selection state
+  video: Video | null;
+  frameIdx: number;
+  instance: Instance | null;
+  labeledFrame: LabeledFrame | null;
+  skeleton: Skeleton | null;
+
+  // View state
+  showInstances: boolean;
+  showLabels: boolean;
+  showEdges: boolean;
+  edgeStyle: 'Line' | 'Wedge';
+  fit: boolean;
+  fitSelection: boolean;
+  colorPredicted: boolean;
+  palette: string;
+  distinctlyColor: 'instances' | 'nodes' | 'edges';
+  markerSize: number;
+  nodeLabelSize: number;
+  trailLength: number;
+  trailShade: string;
+
+  // Project state
+  labels: Labels | null;
+  filename: string | null;
+  hasChanges: boolean;
+  projectLoaded: boolean;
+
+  // Clipboard
+  clipboardTrack: Track | null;
+  clipboardInstance: Instance | null;
+
+  // Frame range
+  frameRange: [number, number] | null;
+  hasFrameRange: boolean;
+
+  // Actions
+  setVideo: (video: Video) => void;
+  setFrameIdx: (idx: number) => void;
+  incrementFrameIdx: (step: number) => void;
+  toggleShowInstances: () => void;
+  // ... etc
+}
+```
+
+### 2. Command Pattern (mirrors CommandContext)
+
+Every user action goes through the command system, enabling undo/redo and change tracking:
+
+```typescript
+// commands/types.ts
+interface Command {
+  name: string;
+  topics: UpdateTopic[];        // What this command affects
+  execute(ctx: CommandContext, params?: any): void;
+  undo?(ctx: CommandContext): void;  // For future undo support
+}
+
+enum UpdateTopic {
+  Labels,
+  Frame,
+  Skeleton,
+  Tracks,
+  Suggestions,
+  // ...
+}
+```
+
+### 3. Canvas Rendering Pipeline
+
+Two layered canvases stacked via CSS:
+
+```
+┌─────────────────────────────────┐
+│  Overlay Canvas (skeleton)      │  ← Canvas 2D, transparent bg
+│  ┌─────────────────────────────┐│     Handles: instances, nodes, edges,
+│  │                             ││     labels, trails, bounding boxes
+│  │  Frame Canvas (video)       ││  ← Canvas 2D or ImageBitmap
+│  │                             ││     Handles: video frame rendering
+│  └─────────────────────────────┘│
+└─────────────────────────────────┘
+```
+
+The overlay canvas handles all mouse interaction. Hit testing uses simple distance-to-point checks for nodes and distance-to-line for edges.
+
+### 4. File I/O Strategy
+
+**Desktop (Tauri):**
+- File dialog via `@tauri-apps/plugin-dialog`
+- Read file via `@tauri-apps/plugin-fs` → ArrayBuffer → sleap-io.js `loadSlp()`
+- Save: serialize Labels → write via Tauri fs plugin
+
+**Browser (future):**
+- File dialog via File System Access API (`showOpenFilePicker()`)
+- Read via `FileHandle.getFile()` → `file.arrayBuffer()` → `loadSlp()`
+- Remote files: HTTP Range requests via sleap-io.js streaming
+
+**Abstraction layer:**
+```typescript
+// hooks/useFileIO.ts
+function useFileIO() {
+  const isTauri = '__TAURI__' in window;
+
+  return {
+    openFile: isTauri ? openViaTauri : openViaBrowser,
+    saveFile: isTauri ? saveViaTauri : saveViaBrowser,
+  };
+}
+```
+
+### 5. Video Frame Pipeline
+
+```
+sleap-io.js Video Backend
+    │
+    ├── Embedded: video.backend.getFrame(idx) → ImageData
+    ├── External MP4: HTML5 Video element (seek + drawImage)
+    └── External URL: Range requests via Worker
+    │
+    ▼
+ImageBitmap (or ImageData)
+    │
+    ▼
+Canvas 2D: ctx.drawImage(bitmap, 0, 0)
+    │
+    ▼
+Overlay Canvas: draw nodes, edges, labels
+```
+
+### 6. Keyboard Shortcut System
+
+```typescript
+// lib/shortcuts.ts
+const DEFAULT_SHORTCUTS: Record<string, string> = {
+  'new': 'Ctrl+N',
+  'open': 'Ctrl+O',
+  'save': 'Ctrl+S',
+  'save as': 'Ctrl+Shift+S',
+  'add instance': 'Ctrl+I',
+  'delete instance': 'Backspace',
+  'frame next': 'ArrowRight',
+  'frame prev': 'ArrowLeft',
+  'frame next medium step': 'Ctrl+ArrowRight',
+  'frame prev medium step': 'Ctrl+ArrowLeft',
+  'goto next labeled': 'Alt+ArrowRight',
+  'goto prev labeled': 'Alt+ArrowLeft',
+  'goto next suggestion': 'Ctrl+.',
+  'goto prev suggestion': 'Ctrl+,',
+  'select next': 'Tab',
+  'clear selection': 'Escape',
+  'transpose': 'T',
+  // ... full list from shortcuts.yaml
+};
+```
+
+## Component Interaction Flow
+
+```
+User clicks node on canvas
+        │
+        ▼
+OverlayCanvas.onMouseDown
+        │
+        ▼
+HitTester.findNodeAt(x, y) → node
+        │
+        ▼
+selectionStore.setSelectedNode(node)
+        │
+        ▼
+User drags mouse
+        │
+        ▼
+OverlayCanvas.onMouseMove
+        │
+        ▼
+CommandContext.execute(SetPointLocation, { node, x, y })
+        │
+        ├──→ labelsStore.updatePoint()  (mutate data)
+        ├──→ appStore.setHasChanges(true)
+        └──→ OverlayCanvas re-renders (subscribed to labelsStore)
+```
+
+## Menu Structure (Complete)
+
+### File
+- New Project (Ctrl+N)
+- Open Project... (Ctrl+O)
+- Import... → COCO, DeepLabCut, Multi-DLC, NWB, Analysis HDF5
+- Merge into Project...
+- ---
+- Add Videos...
+- Replace Videos...
+- ---
+- Save (Ctrl+S)
+- Save As... (Ctrl+Shift+S)
+- Export Analysis HDF5... → Current Video / All Videos
+- Export Analysis CSV... → Current Video / All Videos
+- Export NWB...
+- ---
+- Reset preferences to defaults...
+- Open Preferences Directory...
+- ---
+- Quit
+
+### Go
+- Next Labeled Frame
+- Previous Labeled Frame
+- Last Interacted Frame
+- Next User Labeled Frame
+- Next Suggestion
+- Previous Suggestion
+- Next Track Spawn Frame
+- ---
+- Next Video
+- Previous Video
+- ---
+- Go to Frame...
+- Select to Frame...
+- ---
+- Select Next Instance
+- Clear Selection
+
+### View
+- Fit View to Instances
+- Fit View to Selection
+- ---
+- Color Predicted Instances
+- Color Palette → [palette options]
+- Apply Distinct Colors To → instances / nodes / edges
+- ---
+- Show Instances
+- Show Non-Visible Nodes
+- Show Node Names
+- Show Edges
+- Edge Style → Line / Wedge
+- Node Marker Size → [size options]
+- Node Label Size → [size options]
+- ---
+- Trail Length → [length options]
+- Trail Shade → [shade options]
+- ---
+- Render Video Clip with Instances...
+- ---
+- [Dock panel toggles: Videos, Skeleton, Instances, Suggestions]
+
+### Labels
+- Add Instance (Ctrl+I)
+- Instance Placement Method → Best / Average / Force Directed / Random / Copy prior / Copy predictions
+- Delete Instance
+- Custom Instance Delete...
+- ---
+- Extract Clip and Labels...
+- Extract Clip Labels Package...
+- ---
+- Add Instances from All Predictions on Current Frame
+- ---
+- Copy Instance (Ctrl+C)
+- Paste Instance (Ctrl+V)
+- ---
+- Delete Predictions on Current Frame
+- Delete Predictions from Clip...
+- Delete Predictions in Area...
+- Delete Predictions with Low Score...
+- Delete Predictions with Fewer Points...
+- Delete Predictions beyond Max per Frame...
+- Delete All Predictions
+- Delete All User Instances
+
+### Predict
+- Run Training...
+- Run Inference...
+- ---
+- Active Learning Suggestions
+- Expert PMI...
+
+### Track
+- Track Methods... → Simple / Flow / FlowShift
+- ---
+- Transpose Instances (T)
+- Delete Track
+- ---
+- Set Instance Track → [track options]
+- Copy Track to clipboard
+- Paste Track from clipboard
+
+### Help
+- Keyboard Shortcuts
+- About
+
+## Rendering Details
+
+### Node Rendering
+- Circle with configurable radius (marker size)
+- Filled with instance color (alpha 128) for visible points
+- Hollow with thin border for non-visible points
+- Smaller radius for non-visible
+- Cosmetic pen (constant screen-space width regardless of zoom)
+- On hover: cursor change, tooltip with node name (+ score for predicted)
+- On click: select parent instance
+- On drag: update point position, update connected edges
+- Alt+click: drag entire instance
+- Shift+click: mark all points as complete
+- Ctrl+click: duplicate instance
+- Right-click: toggle visibility
+
+### Edge Rendering
+- Line style: straight line between nodes
+- Wedge style: tapered polygon (thicker at src, thinner at dst)
+- Color from color manager
+- Hidden when either endpoint is non-visible (unless show_non_visible)
+
+### Instance Selection
+- Dashed bounding box around selected instance
+- Yellow highlight box for predictions "not in training data"
+- Track label shows track name and prediction score on hover
+
+### Seekbar Marks
+- Simple marks: black vertical lines for labeled frames
+- Filled/open marks: blue for user labels
+- Predicted marks: light blue
+- Track bars: colored horizontal bars showing track occupancy
+- Tick marks: gray frame indicators
+- Selection range: highlighted region for frame range selection
+
+## Phase 1 Feature Priority (MVP)
+
+1. ✅ Load SLP file (via file picker)
+2. ✅ Display video frames
+3. ✅ Render skeleton instances (nodes + edges + labels)
+4. ✅ Frame navigation (arrow keys, seekbar)
+5. ✅ Instance selection (click)
+6. ✅ Node dragging (move keypoints)
+7. ✅ Seekbar with labeled frame marks
+8. ✅ Videos panel
+9. ✅ Instances panel
+10. ✅ Save project
+11. ✅ Add/delete instances
+12. ✅ Keyboard shortcuts (core navigation + editing)
+13. ✅ Zoom and pan
+
+## Phase 2 Features
+
+- Skeleton editor panel
+- Suggestions panel
+- Track management
+- Import/export (COCO, DLC, NWB, CSV, HDF5)
+- Color palettes and customization
+- Trail overlay
+- Multiple video support
+- Merge projects
+- Custom delete dialogs
+- Shortcut customization
+
+## Phase 3 Features (Future)
+
+- Training/inference integration (Python sidecar)
+- Active learning suggestions
+- Confidence map / PAF overlays
+- Video clip export with rendered instances
+- Static web hosting mode
+- Collaborative labeling

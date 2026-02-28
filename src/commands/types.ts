@@ -1,0 +1,22 @@
+/**
+ * Command system types.
+ *
+ * Ports SLEAP's AppCommand/EditCommand pattern to TypeScript.
+ * Each command declares which UpdateTopics it affects, enabling
+ * fine-grained UI reactivity.
+ */
+
+import type { UpdateTopic } from "../types";
+import type { CommandContext } from "./CommandContext";
+
+/** A command that can be executed via the CommandContext. */
+export interface Command {
+  /** Unique command name for logging and debugging. */
+  name: string;
+
+  /** Which data topics this command modifies, used to signal UI updates. */
+  topics: UpdateTopic[];
+
+  /** Execute the command. Receives the CommandContext for store access. */
+  execute(ctx: CommandContext, params?: Record<string, unknown>): Promise<void> | void;
+}

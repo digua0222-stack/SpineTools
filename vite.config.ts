@@ -1,0 +1,54 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import path from "path";
+
+// When running under Tauri (`npm run tauri dev`), TAURI_ENV_PLATFORM is set.
+// In that case, use real Tauri plugin packages instead of browser stubs.
+const isTauri = !!process.env.TAURI_ENV_PLATFORM;
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+
+  resolve: {
+    alias: {
+      // Stub out Node.js-only modules used by sleap-io.js
+      "skia-canvas": path.resolve(__dirname, "src/lib/stubs/skia-canvas.ts"),
+      child_process: path.resolve(
+        __dirname,
+        "src/lib/stubs/child_process.ts"
+      ),
+      // Redirect h5wasm Node.js subpath to ESM browser build
+      "h5wasm/node": path.resolve(
+        __dirname,
+        "../sleap-io.js/node_modules/h5wasm/dist/esm/hdf5_hl.js"
+      ),
+      // Stub Node.js 'module' used by h5wasm node build
+      module: path.resolve(__dirname, "src/lib/stubs/module.ts"),
+      // In browser mode, stub Tauri plugins; in Tauri mode, use real packages
+      ...(!isTauri && {
+        "@tauri-apps/plugin-fs": path.resolve(
+          __dirname,
+          "src/lib/stubs/tauri-fs.ts"
+        ),
+        "@tauri-apps/plugin-dialog": path.resolve(
+          __dirname,
+          "src/lib/stubs/tauri-dialog.ts"
+        ),
+      }),
+    },
+  },
+
+  build: {
+    chunkSizeWarningLimit: 5000, // h5wasm WASM module is ~4MB
+  },
+
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
+
+  // Tauri expects a fixed port and fails if port is already in use
+  clearScreen: false,
+  envPrefix: ["VITE_", "TAURI_ENV_"],
+});

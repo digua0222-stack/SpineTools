@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  /* SLEAP brand colors */
+  --color-sleap-primary: #6366f1;
+  --color-sleap-bg: #1e1e2e;
+  --color-sleap-surface: #2a2a3e;
+  --color-sleap-border: #3a3a4e;
+  --color-sleap-text: #e0e0e0;
+  --color-sleap-text-muted: #888;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-sleap-bg);
+  color: var(--color-sleap-text);
+  font-size: 13px;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-sleap-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-sleap-border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

@@ -1,0 +1,342 @@
+/**
+ * Canvas 2D skeleton overlay renderer.
+ *
+ * Draws skeleton instances (nodes, edges, labels, bounding boxes)
+ * on top of a video frame. Matches the visual style of SLEAP's
+ * Qt-based QtInstance/QtNode/QtEdge rendering.
+ */
+
+import { rgbToCSS, type RGB } from "../lib/colorPalettes";
+import type { EdgeStyle } from "../types";
+
+export interface RenderedNode {
+  x: number;
+  y: number;
+  visible: boolean;
+  complete: boolean;
+  name: string;
+  score?: number;
+}
+
+export interface RenderedEdge {
+  srcIdx: number;
+  dstIdx: number;
+}
+
+export interface RenderedInstance {
+  nodes: RenderedNode[];
+  edges: RenderedEdge[];
+  color: RGB;
+  isPredicted: boolean;
+  isSelected: boolean;
+  trackName: string | null;
+  score?: number;
+}
+
+export interface RenderOptions {
+  markerSize: number;
+  nodeLabelSize: number;
+  edgeStyle: EdgeStyle;
+  showInstances: boolean;
+  showLabels: boolean;
+  showEdges: boolean;
+  showNonVisibleNodes: boolean;
+  colorPredicted: boolean;
+  zoom: number;
+}
+
+const DEFAULT_OPTIONS: RenderOptions = {
+  markerSize: 4,
+  nodeLabelSize: 12,
+  edgeStyle: "Line",
+  showInstances: true,
+  showLabels: true,
+  showEdges: true,
+  showNonVisibleNodes: true,
+  colorPredicted: false,
+  zoom: 1,
+};
+
+/**
+ * Render all skeleton instances onto a canvas context.
+ */
+export function renderInstances(
+  ctx: CanvasRenderingContext2D,
+  instances: RenderedInstance[],
+  options: Partial<RenderOptions> = {}
+): void {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+
+  if (!opts.showInstances) return;
+
+  // Sort: predicted behind user instances, selected on top
+  const sorted = [...instances].sort((a, b) => {
+    if (a.isSelected !== b.isSelected) return a.isSelected ? 1 : -1;
+    if (a.isPredicted !== b.isPredicted) return a.isPredicted ? -1 : 1;
+    return 0;
+  });
+
+  for (const instance of sorted) {
+    renderInstance(ctx, instance, opts);
+  }
+}
+
+/**
+ * Render a single skeleton instance.
+ */
+function renderInstance(
+  ctx: CanvasRenderingContext2D,
+  instance: RenderedInstance,
+  opts: RenderOptions
+): void {
+  const { nodes, edges, color, isPredicted, isSelected } = instance;
+
+  // Draw edges first (behind nodes)
+  if (opts.showEdges) {
+    for (const edge of edges) {
+      const src = nodes[edge.srcIdx];
+      const dst = nodes[edge.dstIdx];
+      if (!src || !dst) continue;
+      if (!src.visible && !opts.showNonVisibleNodes) continue;
+      if (!dst.visible && !opts.showNonVisibleNodes) continue;
+
+      if (opts.edgeStyle === "Wedge") {
+        renderWedgeEdge(ctx, src, dst, color, isPredicted, opts);
+      } else {
+        renderLineEdge(ctx, src, dst, color, isPredicted, opts);
+      }
+    }
+  }
+
+  // Draw nodes
+  for (const node of nodes) {
+    if (!node.visible && !opts.showNonVisibleNodes) continue;
+    renderNode(ctx, node, color, isPredicted, opts);
+  }
+
+  // Draw node labels (skip for predicted unless colorPredicted is on)
+  if (opts.showLabels && (!isPredicted || opts.colorPredicted)) {
+    for (const node of nodes) {
+      if (!node.visible && !opts.showNonVisibleNodes) continue;
+      renderNodeLabel(ctx, node, color, opts);
+    }
+  }
+
+  // Draw selection bounding box
+  if (isSelected) {
+    renderSelectionBox(ctx, nodes, color, opts);
+  }
+
+  // Draw track label on selection (always show for predicted if colorPredicted)
+  if ((isSelected || (isPredicted && opts.colorPredicted)) && instance.trackName) {
+    renderTrackLabel(ctx, nodes, instance.trackName, color, instance.score);
+  }
+}
+
+function renderNode(
+  ctx: CanvasRenderingContext2D,
+  node: RenderedNode,
+  color: RGB,
+  isPredicted: boolean,
+  opts: RenderOptions
+): void {
+  const radius = node.visible
+    ? opts.markerSize
+    : opts.markerSize / 2;
+
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, radius / opts.zoom, 0, Math.PI * 2);
+
+  if (isPredicted) {
+    ctx.strokeStyle = rgbToCSS(color);
+    ctx.lineWidth = 1 / opts.zoom;
+    ctx.fillStyle = "rgba(128, 128, 128, 0.5)";
+    ctx.fill();
+    ctx.stroke();
+  } else if (node.visible) {
+    ctx.strokeStyle = rgbToCSS(color);
+    ctx.lineWidth = 1 / opts.zoom;
+    ctx.fillStyle = rgbToCSS(color, 0.5);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    // Non-visible: hollow circle, thin border
+    ctx.strokeStyle = rgbToCSS(color);
+    ctx.lineWidth = 0.5 / opts.zoom;
+    ctx.fillStyle = "transparent";
+    ctx.stroke();
+  }
+}
+
+function renderLineEdge(
+  ctx: CanvasRenderingContext2D,
+  src: RenderedNode,
+  dst: RenderedNode,
+  color: RGB,
+  isPredicted: boolean,
+  opts: RenderOptions
+): void {
+  ctx.beginPath();
+  ctx.moveTo(src.x, src.y);
+  ctx.lineTo(dst.x, dst.y);
+  ctx.strokeStyle = rgbToCSS(color, isPredicted ? 0.5 : 0.8);
+  ctx.lineWidth = (isPredicted ? 1 : 2) / opts.zoom;
+  ctx.stroke();
+}
+
+function renderWedgeEdge(
+  ctx: CanvasRenderingContext2D,
+  src: RenderedNode,
+  dst: RenderedNode,
+  color: RGB,
+  isPredicted: boolean,
+  opts: RenderOptions
+): void {
+  const dx = dst.x - src.x;
+  const dy = dst.y - src.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len === 0) return;
+
+  const nx = -dy / len;
+  const ny = dx / len;
+
+  const srcWidth = (3 / opts.zoom);
+  const dstWidth = (1 / opts.zoom);
+
+  ctx.beginPath();
+  ctx.moveTo(src.x + nx * srcWidth, src.y + ny * srcWidth);
+  ctx.lineTo(dst.x + nx * dstWidth, dst.y + ny * dstWidth);
+  ctx.lineTo(dst.x - nx * dstWidth, dst.y - ny * dstWidth);
+  ctx.lineTo(src.x - nx * srcWidth, src.y - ny * srcWidth);
+  ctx.closePath();
+  ctx.fillStyle = rgbToCSS(color, isPredicted ? 0.3 : 0.6);
+  ctx.fill();
+}
+
+function renderNodeLabel(
+  ctx: CanvasRenderingContext2D,
+  node: RenderedNode,
+  color: RGB,
+  opts: RenderOptions
+): void {
+  if (!node.name) return;
+
+  const fontSize = opts.nodeLabelSize / opts.zoom;
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.fillStyle = rgbToCSS(color, 0.9);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(
+    node.name,
+    node.x + opts.markerSize / opts.zoom + 2 / opts.zoom,
+    node.y - 2 / opts.zoom
+  );
+}
+
+function renderSelectionBox(
+  ctx: CanvasRenderingContext2D,
+  nodes: RenderedNode[],
+  color: RGB,
+  opts: RenderOptions
+): void {
+  const visibleNodes = nodes.filter((n) => n.visible || opts.showNonVisibleNodes);
+  if (visibleNodes.length === 0) return;
+
+  const xs = visibleNodes.map((n) => n.x);
+  const ys = visibleNodes.map((n) => n.y);
+  const pad = 10 / opts.zoom;
+  const minX = Math.min(...xs) - pad;
+  const minY = Math.min(...ys) - pad;
+  const maxX = Math.max(...xs) + pad;
+  const maxY = Math.max(...ys) + pad;
+
+  ctx.setLineDash([4 / opts.zoom, 4 / opts.zoom]);
+  ctx.strokeStyle = rgbToCSS(color);
+  ctx.lineWidth = 1 / opts.zoom;
+  ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+  ctx.setLineDash([]);
+}
+
+function renderTrackLabel(
+  ctx: CanvasRenderingContext2D,
+  nodes: RenderedNode[],
+  trackName: string,
+  color: RGB,
+  score?: number
+): void {
+  const visibleNodes = nodes.filter((n) => n.visible);
+  if (visibleNodes.length === 0) return;
+
+  const minY = Math.min(...visibleNodes.map((n) => n.y));
+  const centerX =
+    visibleNodes.reduce((s, n) => s + n.x, 0) / visibleNodes.length;
+
+  let text = `Track: ${trackName}`;
+  if (score !== undefined) {
+    text += ` (${score.toFixed(2)})`;
+  }
+
+  ctx.font = "10px sans-serif";
+  ctx.fillStyle = rgbToCSS(color, 0.8);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(text, centerX, minY - 14);
+}
+
+/**
+ * Hit test: find the closest node to a canvas point.
+ * Returns the instance index and node index, or null.
+ */
+export function hitTestNode(
+  instances: RenderedInstance[],
+  canvasX: number,
+  canvasY: number,
+  threshold: number = 10
+): { instanceIdx: number; nodeIdx: number } | null {
+  let best: { instanceIdx: number; nodeIdx: number; dist: number } | null =
+    null;
+
+  for (let i = instances.length - 1; i >= 0; i--) {
+    const inst = instances[i];
+    for (let j = 0; j < inst.nodes.length; j++) {
+      const node = inst.nodes[j];
+      if (!node.visible) continue;
+      const dx = node.x - canvasX;
+      const dy = node.y - canvasY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < threshold && (!best || dist < best.dist)) {
+        best = { instanceIdx: i, nodeIdx: j, dist };
+      }
+    }
+  }
+
+  return best ? { instanceIdx: best.instanceIdx, nodeIdx: best.nodeIdx } : null;
+}
+
+/**
+ * Hit test: find the closest instance (by centroid distance).
+ */
+export function hitTestInstance(
+  instances: RenderedInstance[],
+  canvasX: number,
+  canvasY: number,
+  threshold: number = 30
+): number | null {
+  let best: { idx: number; dist: number } | null = null;
+
+  for (let i = instances.length - 1; i >= 0; i--) {
+    const inst = instances[i];
+    const visible = inst.nodes.filter((n) => n.visible);
+    if (visible.length === 0) continue;
+
+    const cx = visible.reduce((s, n) => s + n.x, 0) / visible.length;
+    const cy = visible.reduce((s, n) => s + n.y, 0) / visible.length;
+    const dist = Math.sqrt((cx - canvasX) ** 2 + (cy - canvasY) ** 2);
+
+    if (dist < threshold && (!best || dist < best.dist)) {
+      best = { idx: i, dist };
+    }
+  }
+
+  return best?.idx ?? null;
+}

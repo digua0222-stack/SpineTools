@@ -1,0 +1,229 @@
+/**
+ * Global keyboard shortcut handler using tinykeys.
+ *
+ * Binds shortcuts defined in lib/shortcuts.ts to command actions.
+ * Navigation shortcuts that need immediate responsiveness call store directly.
+ * Logical commands go through the CommandContext.
+ */
+
+import { useEffect } from "react";
+import { tinykeys } from "tinykeys";
+import { DEFAULT_SHORTCUTS, STEP_SIZES } from "../lib/shortcuts";
+import { useAppStore } from "../stores/appStore";
+import {
+  commandContext,
+  OpenProjectCommand,
+  NewProjectCommand,
+  SaveProjectCommand,
+  GoNextLabeledFrame,
+  GoPrevLabeledFrame,
+  GoNextSuggestion,
+  GoPrevSuggestion,
+  GoToLastInteracted,
+  GoNextUserFrame,
+  AddInstance,
+  DeleteSelectedInstance,
+  CopyInstance,
+  PasteInstance,
+  TransposeInstances,
+  AddTrack,
+  CopyTrack,
+  PasteTrack,
+} from "../commands";
+
+export function useKeyboardShortcuts() {
+  useEffect(() => {
+    const store = useAppStore.getState;
+
+    const unsubscribe = tinykeys(window, {
+      // Frame navigation (direct store for responsiveness)
+      [DEFAULT_SHORTCUTS["frame next"]]: (e) => {
+        e.preventDefault();
+        store().incrementFrameIdx(STEP_SIZES.small);
+      },
+      [DEFAULT_SHORTCUTS["frame prev"]]: (e) => {
+        e.preventDefault();
+        store().incrementFrameIdx(-STEP_SIZES.small);
+      },
+      [DEFAULT_SHORTCUTS["frame next medium step"]]: (e) => {
+        e.preventDefault();
+        store().incrementFrameIdx(STEP_SIZES.medium);
+      },
+      [DEFAULT_SHORTCUTS["frame prev medium step"]]: (e) => {
+        e.preventDefault();
+        store().incrementFrameIdx(-STEP_SIZES.medium);
+      },
+      [DEFAULT_SHORTCUTS["frame next large step"]]: (e) => {
+        e.preventDefault();
+        store().incrementFrameIdx(STEP_SIZES.large);
+      },
+      [DEFAULT_SHORTCUTS["frame prev large step"]]: (e) => {
+        e.preventDefault();
+        store().incrementFrameIdx(-STEP_SIZES.large);
+      },
+
+      // Labeled frame navigation (via command system)
+      [DEFAULT_SHORTCUTS["goto next labeled"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(GoNextLabeledFrame);
+      },
+      [DEFAULT_SHORTCUTS["goto prev labeled"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(GoPrevLabeledFrame);
+      },
+
+      // Suggestion navigation
+      [DEFAULT_SHORTCUTS["goto next suggestion"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(GoNextSuggestion);
+      },
+      [DEFAULT_SHORTCUTS["goto prev suggestion"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(GoPrevSuggestion);
+      },
+
+      // Go to last interacted frame
+      [DEFAULT_SHORTCUTS["goto last interacted"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(GoToLastInteracted);
+      },
+      [DEFAULT_SHORTCUTS["goto next user"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(GoNextUserFrame);
+      },
+
+      // View toggles (direct store)
+      [DEFAULT_SHORTCUTS["show instances"]]: (e) => {
+        e.preventDefault();
+        store().toggle("showInstances");
+      },
+      [DEFAULT_SHORTCUTS["show labels"]]: (e) => {
+        e.preventDefault();
+        store().toggle("showLabels");
+      },
+      [DEFAULT_SHORTCUTS["show edges"]]: (e) => {
+        e.preventDefault();
+        store().toggle("showEdges");
+      },
+      [DEFAULT_SHORTCUTS.fit]: (e) => {
+        e.preventDefault();
+        store().toggle("fit");
+      },
+
+      // Instance editing (via command system)
+      [DEFAULT_SHORTCUTS["add instance"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(AddInstance);
+      },
+      [DEFAULT_SHORTCUTS["delete instance"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(DeleteSelectedInstance);
+      },
+
+      // Track commands
+      [DEFAULT_SHORTCUTS.transpose]: (e) => {
+        e.preventDefault();
+        commandContext.execute(TransposeInstances);
+      },
+      [DEFAULT_SHORTCUTS["add track"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(AddTrack);
+      },
+
+      // Undo/Redo
+      "$mod+KeyZ": (e) => {
+        e.preventDefault();
+        commandContext.undo();
+      },
+      "$mod+Shift+KeyZ": (e) => {
+        e.preventDefault();
+        commandContext.redo();
+      },
+
+      // File commands
+      [DEFAULT_SHORTCUTS.open]: (e) => {
+        e.preventDefault();
+        commandContext.execute(OpenProjectCommand);
+      },
+      [DEFAULT_SHORTCUTS.new]: (e) => {
+        e.preventDefault();
+        commandContext.execute(NewProjectCommand);
+      },
+      [DEFAULT_SHORTCUTS.save]: (e) => {
+        e.preventDefault();
+        commandContext.execute(SaveProjectCommand);
+      },
+
+      // Copy/paste
+      [DEFAULT_SHORTCUTS["copy instance"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(CopyInstance);
+      },
+      [DEFAULT_SHORTCUTS["paste instance"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(PasteInstance);
+      },
+
+      // Track copy/paste
+      [DEFAULT_SHORTCUTS["copy track"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(CopyTrack);
+      },
+      [DEFAULT_SHORTCUTS["paste track"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(PasteTrack);
+      },
+
+      // Selection
+      [DEFAULT_SHORTCUTS["clear selection"]]: (e) => {
+        e.preventDefault();
+        store().setInstance(null);
+      },
+      [DEFAULT_SHORTCUTS["select next"]]: (e) => {
+        e.preventDefault();
+        const { labeledFrame, instance } = store();
+        if (!labeledFrame) return;
+        const instances = labeledFrame.instances;
+        if (instances.length === 0) return;
+        if (!instance) {
+          store().setInstance(instances[0]);
+        } else {
+          const idx = instances.indexOf(instance);
+          store().setInstance(instances[(idx + 1) % instances.length]);
+        }
+      },
+
+      // Go to frame (Ctrl+J)
+      [DEFAULT_SHORTCUTS["goto frame"]]: (e) => {
+        e.preventDefault();
+        const input = prompt("Go to frame:", String(store().frameIdx));
+        if (input !== null) {
+          const frame = parseInt(input, 10);
+          if (!isNaN(frame)) {
+            store().setFrameIdx(frame);
+          }
+        }
+      },
+
+      // Video navigation
+      [DEFAULT_SHORTCUTS["next video"]]: (e) => {
+        e.preventDefault();
+        const { labels, video } = store();
+        if (!labels || !video) return;
+        const idx = labels.videos.indexOf(video);
+        const next = labels.videos[(idx + 1) % labels.videos.length];
+        if (next) store().setVideo(next);
+      },
+      [DEFAULT_SHORTCUTS["prev video"]]: (e) => {
+        e.preventDefault();
+        const { labels, video } = store();
+        if (!labels || !video) return;
+        const idx = labels.videos.indexOf(video);
+        const prev = labels.videos[(idx - 1 + labels.videos.length) % labels.videos.length];
+        if (prev) store().setVideo(prev);
+      },
+    });
+
+    return unsubscribe;
+  }, []);
+}
