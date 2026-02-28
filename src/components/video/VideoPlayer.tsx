@@ -21,6 +21,8 @@ import {
   type RenderedNode,
 } from "../../canvas/SkeletonRenderer";
 import { getPaletteColor } from "../../lib/colorPalettes";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export function VideoPlayer() {
   const frameCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -499,9 +501,10 @@ export function VideoPlayer() {
       {/* Canvas container */}
       <div
         ref={containerRef}
-        className={`flex-1 relative overflow-hidden bg-black min-h-0 ${
+        className={cn(
+          "flex-1 relative overflow-hidden bg-background min-h-0",
           isPanning ? "cursor-grabbing" : isDragging ? "cursor-move" : isPlacingNodes ? "cursor-cell" : "cursor-crosshair"
-        }`}
+        )}
         onWheel={handleWheel}
         onDoubleClick={handleDoubleClick}
       >
@@ -523,15 +526,21 @@ export function VideoPlayer() {
         />
 
         {/* Frame info overlay */}
-        <div className="absolute bottom-2 left-2 text-xs text-white/70 bg-black/50 px-2 py-1 rounded pointer-events-none">
+        <Badge
+          variant="secondary"
+          className="absolute bottom-2 left-2 pointer-events-none rounded-md bg-black/60 text-white/80 border-none"
+        >
           Frame {frameIdx}
           {video?.shape && ` / ${video.shape[0] - 1}`}
           {zoom !== 1 && ` | ${(zoom * 100).toFixed(0)}%`}
-        </div>
+        </Badge>
 
         {/* Node placement indicator */}
         {isPlacingNodes && selectedInstance && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 text-xs text-yellow-300 bg-black/70 px-3 py-1.5 rounded pointer-events-none">
+          <Badge
+            variant="default"
+            className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none rounded-md"
+          >
             Click to place: {
               selectedInstance.skeleton.nodes[
                 selectedInstance.points.findIndex(
@@ -540,7 +549,7 @@ export function VideoPlayer() {
               ]?.name ?? "node"
             }
             {" "}({selectedInstance.points.filter((p) => !isNaN(p.xy[0])).length}/{selectedInstance.points.length})
-          </div>
+          </Badge>
         )}
       </div>
 

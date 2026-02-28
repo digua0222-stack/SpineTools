@@ -20,6 +20,7 @@ import {
   AddTrack,
   SetInstanceTrack,
 } from "../../commands";
+import { cn } from "@/lib/utils";
 
 interface ContextMenuProps {
   x: number;
@@ -67,7 +68,7 @@ export function ContextMenu({
 
   return (
     <div
-      className="fixed z-[100] min-w-[180px] bg-[var(--color-sleap-surface)] border border-[var(--color-sleap-border)] rounded shadow-lg py-1"
+      className="fixed z-50 min-w-[180px] bg-popover text-popover-foreground border border-border rounded-md shadow-md py-1"
       style={{ left: x, top: y }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -116,7 +117,7 @@ export function ContextMenu({
       {/* Track assignment submenu */}
       {hasInstance && !isPredicted && tracks.length > 0 && (
         <>
-          <div className="px-3 py-1 text-[10px] text-[var(--color-sleap-text-muted)] uppercase tracking-wide">
+          <div className="px-2 py-1 text-[10px] text-muted-foreground uppercase tracking-wide">
             Assign Track
           </div>
           {tracks.map((track, i) => (
@@ -172,20 +173,21 @@ function ContextMenuItem({
 }) {
   return (
     <button
-      className={`w-full flex items-center justify-between px-3 py-1 text-xs text-left ${
+      className={cn(
+        "w-full flex items-center justify-between px-2 py-1.5 text-sm text-left rounded-sm",
         disabled
-          ? "text-[var(--color-sleap-text-muted)] cursor-default"
-          : "text-[var(--color-sleap-text)] hover:bg-[var(--color-sleap-border)]"
-      }`}
+          ? "text-muted-foreground cursor-default"
+          : "text-popover-foreground hover:bg-accent hover:text-accent-foreground"
+      )}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
     >
       <span>
-        {active && <span className="mr-1">&#x2713;</span>}
+        {active && <span className="mr-1.5 text-primary">&#x2713;</span>}
         {label}
       </span>
       {shortcut && (
-        <span className="text-[var(--color-sleap-text-muted)] ml-4 text-[10px]">
+        <span className="text-muted-foreground ml-4 text-xs">
           {shortcut}
         </span>
       )}
@@ -194,5 +196,5 @@ function ContextMenuItem({
 }
 
 function ContextMenuSeparator() {
-  return <div className="my-1 border-t border-[var(--color-sleap-border)]" />;
+  return <div className="my-1 border-t border-border mx-1" />;
 }

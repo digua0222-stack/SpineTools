@@ -5,6 +5,9 @@
 
 import { useCallback } from "react";
 import { useFileIO } from "../../hooks/useFileIO";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { modKey } from "../../lib/platform";
 
 export function WelcomeScreen() {
   const { openProject, openFromDrop, loading, error } = useFileIO();
@@ -27,38 +30,55 @@ export function WelcomeScreen() {
 
   return (
     <div
-      className="flex-1 flex items-center justify-center"
+      className="flex-1 flex items-center justify-center relative"
+      style={{
+        backgroundImage: "url(/background.jpg)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      <div className="text-center space-y-6 max-w-md">
-        <h1 className="text-3xl font-bold text-white">SLEAP Label</h1>
-        <p className="text-[var(--color-sleap-text-muted)]">
-          Open a SLEAP project (.slp) to start labeling
-        </p>
+      {/* Dim overlay */}
+      <div className="absolute inset-0 bg-background/85" />
 
-        <button
-          onClick={openProject}
-          disabled={loading}
-          className="px-6 py-3 bg-[var(--color-sleap-primary)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-        >
-          {loading ? "Loading..." : "Open Project"}
-        </button>
+      <Card className="relative z-10 w-full max-w-md border-border bg-card/95 backdrop-blur-sm py-8">
+        <CardContent className="flex flex-col items-center text-center space-y-6">
+          <img src="/icon.png" alt="SLEAP" className="w-16 h-16" />
 
-        <div className="border-2 border-dashed border-[var(--color-sleap-border)] rounded-lg p-8 text-[var(--color-sleap-text-muted)]">
-          or drag and drop a .slp file here
-        </div>
-
-        {error && (
-          <div className="text-red-400 text-sm bg-red-900/20 p-3 rounded">
-            {error}
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              SLEAP Label
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Open a SLEAP project (.slp) to start labeling
+            </p>
           </div>
-        )}
 
-        <div className="text-xs text-[var(--color-sleap-text-muted)] space-y-1">
-          <p>Keyboard shortcut: Ctrl+O</p>
-        </div>
-      </div>
+          <Button
+            onClick={openProject}
+            disabled={loading}
+            size="lg"
+            className="w-full max-w-[200px]"
+          >
+            {loading ? "Loading..." : "Open Project"}
+          </Button>
+
+          <div className="w-full border-2 border-dashed border-border rounded-lg p-6 text-muted-foreground text-sm">
+            or drag and drop a .slp file here
+          </div>
+
+          {error && (
+            <div className="w-full text-sm text-destructive bg-destructive/10 p-3 rounded-md border border-destructive/20">
+              {error}
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Keyboard shortcut: {modKey}+O
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -26,6 +26,8 @@ export default defineConfig({
 
   resolve: {
     alias: {
+      // Path alias for shadcn/ui
+      "@": path.resolve(__dirname, "./src"),
       // Stub out Node.js-only modules used by sleap-io.js
       "skia-canvas": path.resolve(__dirname, "src/lib/stubs/skia-canvas.ts"),
       child_process: path.resolve(

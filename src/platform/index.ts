@@ -60,6 +60,7 @@ function createWebPlatform(): PlatformAPI {
               "application/octet-stream": f.extensions.map((e) => `.${e}`),
             },
           }));
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const [handle] = await (window as any).showOpenFilePicker({
             types,
             multiple: false,
@@ -89,6 +90,7 @@ function createWebPlatform(): PlatformAPI {
       // File System Access API
       if ("showSaveFilePicker" in window) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const handle = await (window as any).showSaveFilePicker({
             suggestedName: _options?.defaultName,
           });

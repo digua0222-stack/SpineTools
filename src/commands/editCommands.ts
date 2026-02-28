@@ -22,7 +22,7 @@ export const AddInstance: Command = {
     const instance = Instance.empty({ skeleton });
 
     // Find or create the LabeledFrame for this video + frame
-    let frames = labels.find({ video, frameIdx });
+    const frames = labels.find({ video, frameIdx });
     let lf: LabeledFrame;
     if (frames.length > 0) {
       lf = frames[0];
@@ -139,7 +139,7 @@ export const PasteInstance: Command = {
     });
 
     // Find or create the LabeledFrame
-    let frames = labels.find({ video, frameIdx });
+    const frames = labels.find({ video, frameIdx });
     let lf: LabeledFrame;
     if (frames.length > 0) {
       lf = frames[0];

@@ -6,6 +6,18 @@
  */
 
 import { useAppStore } from "../../stores/appStore";
+import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import type { Video } from "../../types";
 
 /** Truncate a filename/path from the left, keeping the rightmost characters. */
@@ -38,27 +50,33 @@ function VideoRow({
   const width = shape?.[2] ?? "?";
 
   return (
-    <tr
+    <TableRow
       onClick={onSelect}
-      className={`cursor-pointer transition-colors ${
+      className={cn(
+        "cursor-pointer border-b-0",
         isSelected
-          ? "bg-[var(--color-sleap-primary)]/20 text-white"
-          : "hover:bg-[var(--color-sleap-border)]/50 text-[var(--color-sleap-text)]"
-      }`}
+          ? "bg-orange-500/10 border-l-2 border-l-orange-500 text-foreground"
+          : "hover:bg-muted/50 text-foreground"
+      )}
     >
-      <td className="py-1 px-2 text-xs text-[var(--color-sleap-text-muted)]">
+      <TableCell className="py-0.5 px-2 text-xs text-muted-foreground">
         {index + 1}
-      </td>
-      <td className="py-1 px-2 text-xs" title={Array.isArray(video.filename) ? video.filename[0] : video.filename}>
+      </TableCell>
+      <TableCell
+        className="py-0.5 px-2 text-xs"
+        title={
+          Array.isArray(video.filename) ? video.filename[0] : video.filename
+        }
+      >
         {truncateLeft(basename(video.filename), 30)}
-      </td>
-      <td className="py-1 px-2 text-xs text-right tabular-nums">
+      </TableCell>
+      <TableCell className="py-0.5 px-2 text-xs text-right tabular-nums">
         {frameCount}
-      </td>
-      <td className="py-1 px-2 text-xs text-right tabular-nums text-[var(--color-sleap-text-muted)]">
+      </TableCell>
+      <TableCell className="py-0.5 px-2 text-xs text-right tabular-nums text-muted-foreground">
         {width}x{height}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -71,23 +89,30 @@ export function VideosPanel() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
+      <ScrollArea className="flex-1">
         {videos.length === 0 ? (
-          <p className="text-xs text-[var(--color-sleap-text-muted)] p-2">
+          <p className="text-xs text-muted-foreground p-2">
             No videos in project.
           </p>
         ) : (
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-[var(--color-sleap-text-muted)]">
-                <th className="py-1 px-2 text-xs font-normal">#</th>
-                <th className="py-1 px-2 text-xs font-normal">Filename</th>
-                <th className="py-1 px-2 text-xs font-normal text-right">Frames</th>
-                <th className="py-1 px-2 text-xs font-normal text-right">Size</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b hover:bg-transparent">
+                <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+                  #
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+                  Filename
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal text-right h-auto">
+                  Frames
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal text-right h-auto">
+                  Size
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {videos.map((video, i) => (
                 <VideoRow
                   key={i}
@@ -97,25 +122,27 @@ export function VideosPanel() {
                   onSelect={() => setVideo(video)}
                 />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </ScrollArea>
 
-      {/* Action buttons */}
-      <div className="flex gap-1 p-2 border-t border-[var(--color-sleap-border)]">
-        <button
-          className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
+      <Separator />
+      <div className="flex gap-1 p-2">
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => console.log("Add Videos")}
         >
           Add Videos
-        </button>
-        <button
-          className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => console.log("Remove Video")}
         >
           Remove Video
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -15,11 +15,10 @@
  * └─────────────────────────────────────────┘
  */
 
-import { useState, useCallback } from "react";
+import { useCallback } from "react";
 import { loadSlp } from "@talmolab/sleap-io.js";
 import { MenuBar } from "./MenuBar";
 import { StatusBar } from "./StatusBar";
-import { ResizeDivider } from "./ResizeDivider";
 import { VideoPlayer } from "../video/VideoPlayer";
 import { VideosPanel } from "../panels/VideosPanel";
 import { SkeletonPanel } from "../panels/SkeletonPanel";
@@ -27,20 +26,15 @@ import { InstancesPanel } from "../panels/InstancesPanel";
 import { SuggestionsPanel } from "../panels/SuggestionsPanel";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { useAppStore } from "../../stores/appStore";
-
-const PANEL_TABS = ["videos", "skeleton", "instances", "suggestions"] as const;
-
-const MIN_PANEL_WIDTH = 200;
-const MAX_PANEL_WIDTH = 600;
-const DEFAULT_PANEL_WIDTH = 320;
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export function AppShell() {
   const projectLoaded = useAppStore((s) => s.projectLoaded);
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
-
-  const handleResize = useCallback((delta: number) => {
-    setPanelWidth((w) => Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, w + delta)));
-  }, []);
 
   // Global drag-and-drop for SLP files
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -63,7 +57,7 @@ export function AppShell() {
 
   return (
     <div
-      className="flex flex-col h-full w-full bg-[var(--color-sleap-bg)]"
+      className="flex flex-col h-full w-full bg-background"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
@@ -71,23 +65,19 @@ export function AppShell() {
 
       <div className="flex-1 flex overflow-hidden">
         {projectLoaded ? (
-          <>
-            {/* Main viewport */}
-            <div className="flex-1 flex flex-col min-w-0">
-              <VideoPlayer />
-            </div>
+          <ResizablePanelGroup orientation="horizontal">
+            <ResizablePanel defaultSize={75} minSize={50}>
+              <div className="flex-1 flex flex-col min-w-0 h-full">
+                <VideoPlayer />
+              </div>
+            </ResizablePanel>
 
-            {/* Resize handle */}
-            <ResizeDivider onResize={handleResize} />
+            <ResizableHandle className="w-1 bg-border hover:bg-primary/50 data-[resize-handle-active]:bg-primary transition-colors" />
 
-            {/* Side panels */}
-            <div
-              className="flex flex-col"
-              style={{ width: panelWidth }}
-            >
+            <ResizablePanel defaultSize={25} minSize={10} maxSize={40}>
               <SidePanel />
-            </div>
-          </>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         ) : (
           <WelcomeScreen />
         )}
@@ -99,31 +89,49 @@ export function AppShell() {
 }
 
 function SidePanel() {
-  const [activeTab, setActiveTab] = useState<(typeof PANEL_TABS)[number]>("videos");
-
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex border-b border-[var(--color-sleap-border)] bg-[var(--color-sleap-surface)]">
-        {PANEL_TABS.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-3 py-1.5 text-xs capitalize transition-colors ${
-              activeTab === tab
-                ? "text-white border-b-2 border-[var(--color-sleap-primary)]"
-                : "text-[var(--color-sleap-text-muted)] hover:text-white"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-      <div className="flex-1 overflow-auto p-2">
-        {activeTab === "videos" && <VideosPanel />}
-        {activeTab === "skeleton" && <SkeletonPanel />}
-        {activeTab === "instances" && <InstancesPanel />}
-        {activeTab === "suggestions" && <SuggestionsPanel />}
-      </div>
-    </div>
+    <Tabs defaultValue="videos" className="h-full gap-0">
+      <TabsList
+        variant="line"
+        className="w-full justify-start rounded-none border-b border-border bg-card h-8 px-0"
+      >
+        <TabsTrigger
+          value="videos"
+          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          Videos
+        </TabsTrigger>
+        <TabsTrigger
+          value="skeleton"
+          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          Skeleton
+        </TabsTrigger>
+        <TabsTrigger
+          value="instances"
+          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          Instances
+        </TabsTrigger>
+        <TabsTrigger
+          value="suggestions"
+          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
+        >
+          Suggestions
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="videos" className="overflow-auto p-2 mt-0">
+        <VideosPanel />
+      </TabsContent>
+      <TabsContent value="skeleton" className="overflow-auto p-2 mt-0">
+        <SkeletonPanel />
+      </TabsContent>
+      <TabsContent value="instances" className="overflow-auto p-2 mt-0">
+        <InstancesPanel />
+      </TabsContent>
+      <TabsContent value="suggestions" className="overflow-auto p-2 mt-0">
+        <SuggestionsPanel />
+      </TabsContent>
+    </Tabs>
   );
 }

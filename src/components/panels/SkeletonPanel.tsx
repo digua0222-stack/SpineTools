@@ -2,42 +2,79 @@
  * Skeleton panel: displays and edits the current skeleton structure.
  *
  * Shows skeleton name, node/edge counts, node list, edge list,
- * and placeholder controls for editing and loading templates.
+ * and controls for editing and loading templates.
  */
 
 import { useState } from "react";
 import { useAppStore } from "../../stores/appStore";
+import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import type { Skeleton } from "../../types";
 
 export function SkeletonPanel() {
   const skeleton = useAppStore((s) => s.skeleton);
-  const [activeTab, setActiveTab] = useState<"nodes" | "edges">("nodes");
+  const [selectedNodeIdx, setSelectedNodeIdx] = useState<number | null>(null);
+  const [selectedEdgeIdx, setSelectedEdgeIdx] = useState<number | null>(null);
+
+  // Dialog state for add node
+  const [addNodeOpen, setAddNodeOpen] = useState(false);
+  const [newNodeName, setNewNodeName] = useState("");
+
+  // Dialog state for delete node confirmation
+  const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
+
+  // Dialog state for add edge
+  const [addEdgeOpen, setAddEdgeOpen] = useState(false);
+  const [edgeSrcName, setEdgeSrcName] = useState("");
+  const [edgeDstName, setEdgeDstName] = useState("");
 
   if (!skeleton) {
     return (
-      <p className="text-xs text-[var(--color-sleap-text-muted)] p-2">
-        No skeleton loaded.
-      </p>
+      <p className="text-xs text-muted-foreground p-2">No skeleton loaded.</p>
     );
   }
 
   const nodes = skeleton.nodes ?? [];
   const edges = skeleton.edges ?? [];
-  const [selectedNodeIdx, setSelectedNodeIdx] = useState<number | null>(null);
-  const [selectedEdgeIdx, setSelectedEdgeIdx] = useState<number | null>(null);
 
   const addNode = () => {
-    const name = prompt("Node name:", `node_${nodes.length}`);
-    if (!name) return;
-    skeleton.nodes.push({ name } as Skeleton["nodes"][0]);
+    if (!newNodeName.trim()) return;
+    skeleton.nodes.push({ name: newNodeName.trim() } as Skeleton["nodes"][0]);
     useAppStore.getState().markChanged();
-    // Force re-render by toggling a dummy state
     setSelectedNodeIdx(skeleton.nodes.length - 1);
+    setNewNodeName("");
+    setAddNodeOpen(false);
   };
 
   const deleteNode = () => {
     if (selectedNodeIdx === null || selectedNodeIdx >= nodes.length) return;
-    if (!confirm(`Delete node "${nodes[selectedNodeIdx].name}"?`)) return;
     const node = nodes[selectedNodeIdx];
     // Remove edges referencing this node
     skeleton.edges = skeleton.edges.filter(
@@ -46,23 +83,22 @@ export function SkeletonPanel() {
     skeleton.nodes.splice(selectedNodeIdx, 1);
     setSelectedNodeIdx(null);
     useAppStore.getState().markChanged();
+    setDeleteNodeOpen(false);
   };
 
   const addEdge = () => {
-    if (nodes.length < 2) return;
-    const srcName = prompt("Source node name:");
-    if (!srcName) return;
-    const dstName = prompt("Destination node name:");
-    if (!dstName) return;
-    const src = nodes.find((n) => n.name === srcName);
-    const dst = nodes.find((n) => n.name === dstName);
-    if (!src || !dst) {
-      alert("Node not found");
-      return;
-    }
-    skeleton.edges.push({ source: src, destination: dst } as Skeleton["edges"][0]);
+    const src = nodes.find((n) => n.name === edgeSrcName);
+    const dst = nodes.find((n) => n.name === edgeDstName);
+    if (!src || !dst) return;
+    skeleton.edges.push({
+      source: src,
+      destination: dst,
+    } as Skeleton["edges"][0]);
     useAppStore.getState().markChanged();
     setSelectedEdgeIdx(skeleton.edges.length - 1);
+    setEdgeSrcName("");
+    setEdgeDstName("");
+    setAddEdgeOpen(false);
   };
 
   const deleteEdge = () => {
@@ -75,150 +111,293 @@ export function SkeletonPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Skeleton info header */}
-      <div className="px-2 py-1.5 border-b border-[var(--color-sleap-border)]">
-        <div className="text-xs font-medium text-white">
+      <div className="px-2 py-1.5 border-b border-border">
+        <div className="text-xs font-medium text-foreground">
           {skeleton.name || "Unnamed skeleton"}
         </div>
-        <div className="text-xs text-[var(--color-sleap-text-muted)]">
+        <div className="text-xs text-muted-foreground">
           {nodes.length} node{nodes.length !== 1 ? "s" : ""},{" "}
           {edges.length} edge{edges.length !== 1 ? "s" : ""}
         </div>
       </div>
 
       {/* Template selector */}
-      <div className="px-2 py-1.5 border-b border-[var(--color-sleap-border)]">
-        <label className="text-xs text-[var(--color-sleap-text-muted)] block mb-1">
+      <div className="px-2 py-1.5 border-b border-border">
+        <label className="text-xs text-muted-foreground block mb-1">
           Load template
         </label>
-        <select
-          className="w-full text-xs bg-[var(--color-sleap-surface)] border border-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded px-1.5 py-1"
-          defaultValue=""
-          onChange={(e) => console.log("Load template:", e.target.value)}
-        >
-          <option value="" disabled>
-            Select skeleton template...
-          </option>
-          <option value="fly">Fly (32 nodes)</option>
-          <option value="mouse_topdown">Mouse top-down (12 nodes)</option>
-          <option value="mouse_sideview">Mouse side-view (8 nodes)</option>
-          <option value="human">Human (17 nodes)</option>
-          <option value="hand">Hand (21 nodes)</option>
-        </select>
+        <Select onValueChange={(v) => console.log("Load template:", v)}>
+          <SelectTrigger className="w-full h-7 text-xs" size="sm">
+            <SelectValue placeholder="Select skeleton template..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fly">Fly (32 nodes)</SelectItem>
+            <SelectItem value="mouse_topdown">
+              Mouse top-down (12 nodes)
+            </SelectItem>
+            <SelectItem value="mouse_sideview">
+              Mouse side-view (8 nodes)
+            </SelectItem>
+            <SelectItem value="human">Human (17 nodes)</SelectItem>
+            <SelectItem value="hand">Hand (21 nodes)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Tabs for Nodes / Edges */}
-      <div className="flex border-b border-[var(--color-sleap-border)]">
-        <button
-          onClick={() => setActiveTab("nodes")}
-          className={`flex-1 px-2 py-1 text-xs transition-colors ${
-            activeTab === "nodes"
-              ? "text-white border-b-2 border-[var(--color-sleap-primary)]"
-              : "text-[var(--color-sleap-text-muted)] hover:text-white"
-          }`}
+      <Tabs defaultValue="nodes" className="flex flex-col flex-1 min-h-0 gap-0">
+        <TabsList
+          variant="line"
+          className="w-full justify-center border-b border-border px-2"
         >
-          Nodes ({nodes.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("edges")}
-          className={`flex-1 px-2 py-1 text-xs transition-colors ${
-            activeTab === "edges"
-              ? "text-white border-b-2 border-[var(--color-sleap-primary)]"
-              : "text-[var(--color-sleap-text-muted)] hover:text-white"
-          }`}
-        >
-          Edges ({edges.length})
-        </button>
-      </div>
+          <TabsTrigger value="nodes" className="text-xs h-7">
+            Nodes ({nodes.length})
+          </TabsTrigger>
+          <TabsTrigger value="edges" className="text-xs h-7">
+            Edges ({edges.length})
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Table content */}
-      <div className="flex-1 overflow-auto">
-        {activeTab === "nodes" ? (
-          <NodesTable nodes={nodes} selectedIdx={selectedNodeIdx} onSelect={setSelectedNodeIdx} />
-        ) : (
-          <EdgesTable edges={edges} selectedIdx={selectedEdgeIdx} onSelect={setSelectedEdgeIdx} />
-        )}
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex gap-1 p-2 border-t border-[var(--color-sleap-border)]">
-        {activeTab === "nodes" ? (
-          <>
-            <button
-              className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
-              onClick={addNode}
+        <TabsContent value="nodes" className="flex flex-col flex-1 min-h-0 mt-0">
+          <ScrollArea className="flex-1">
+            <NodesTable
+              nodes={nodes}
+              selectedIdx={selectedNodeIdx}
+              onSelect={setSelectedNodeIdx}
+            />
+          </ScrollArea>
+          <Separator />
+          <div className="flex gap-1 p-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setNewNodeName(`node_${nodes.length}`);
+                setAddNodeOpen(true);
+              }}
             >
               New Node
-            </button>
-            <button
-              className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors disabled:opacity-50"
-              onClick={deleteNode}
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setDeleteNodeOpen(true)}
               disabled={selectedNodeIdx === null}
             >
               Delete Node
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
-              onClick={addEdge}
+            </Button>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="edges" className="flex flex-col flex-1 min-h-0 mt-0">
+          <ScrollArea className="flex-1">
+            <EdgesTable
+              edges={edges}
+              selectedIdx={selectedEdgeIdx}
+              onSelect={setSelectedEdgeIdx}
+            />
+          </ScrollArea>
+          <Separator />
+          <div className="flex gap-1 p-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setEdgeSrcName("");
+                setEdgeDstName("");
+                setAddEdgeOpen(true);
+              }}
+              disabled={nodes.length < 2}
             >
               New Edge
-            </button>
-            <button
-              className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors disabled:opacity-50"
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={deleteEdge}
               disabled={selectedEdgeIdx === null}
             >
               Delete Edge
-            </button>
-          </>
-        )}
-      </div>
+            </Button>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Add Node Dialog */}
+      <Dialog open={addNodeOpen} onOpenChange={setAddNodeOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Node</DialogTitle>
+            <DialogDescription>
+              Enter a name for the new skeleton node.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newNodeName}
+            onChange={(e) => setNewNodeName(e.target.value)}
+            placeholder="Node name"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addNode();
+            }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAddNodeOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={addNode} disabled={!newNodeName.trim()}>
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Node Confirmation Dialog */}
+      <Dialog open={deleteNodeOpen} onOpenChange={setDeleteNodeOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Node</DialogTitle>
+            <DialogDescription>
+              Delete node "
+              {selectedNodeIdx !== null && selectedNodeIdx < nodes.length
+                ? nodes[selectedNodeIdx].name
+                : ""}
+              "? This will also remove any edges connected to it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteNodeOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" onClick={deleteNode}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Edge Dialog */}
+      <Dialog open={addEdgeOpen} onOpenChange={setAddEdgeOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Edge</DialogTitle>
+            <DialogDescription>
+              Select source and destination nodes for the new edge.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                Source
+              </label>
+              <Select value={edgeSrcName} onValueChange={setEdgeSrcName}>
+                <SelectTrigger className="w-full" size="sm">
+                  <SelectValue placeholder="Select source node..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {nodes.map((n, i) => (
+                    <SelectItem key={i} value={n.name}>
+                      {n.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">
+                Destination
+              </label>
+              <Select value={edgeDstName} onValueChange={setEdgeDstName}>
+                <SelectTrigger className="w-full" size="sm">
+                  <SelectValue placeholder="Select destination node..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {nodes.map((n, i) => (
+                    <SelectItem key={i} value={n.name}>
+                      {n.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAddEdgeOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={addEdge}
+              disabled={!edgeSrcName || !edgeDstName}
+            >
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function NodesTable({ nodes, selectedIdx, onSelect }: {
+function NodesTable({
+  nodes,
+  selectedIdx,
+  onSelect,
+}: {
   nodes: { name: string }[];
   selectedIdx: number | null;
   onSelect: (idx: number | null) => void;
 }) {
   if (nodes.length === 0) {
     return (
-      <p className="text-xs text-[var(--color-sleap-text-muted)] p-2">
-        No nodes defined.
-      </p>
+      <p className="text-xs text-muted-foreground p-2">No nodes defined.</p>
     );
   }
 
   return (
-    <table className="w-full text-left">
-      <thead>
-        <tr className="text-[var(--color-sleap-text-muted)]">
-          <th className="py-1 px-2 text-xs font-normal">#</th>
-          <th className="py-1 px-2 text-xs font-normal">Name</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableHeader>
+        <TableRow className="border-b hover:bg-transparent">
+          <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+            #
+          </TableHead>
+          <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+            Name
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {nodes.map((node, i) => (
-          <tr
+          <TableRow
             key={i}
             onClick={() => onSelect(selectedIdx === i ? null : i)}
-            className={`cursor-pointer transition-colors ${
+            className={cn(
+              "cursor-pointer border-b-0",
               selectedIdx === i
-                ? "bg-[var(--color-sleap-primary)]/20 text-white"
-                : "hover:bg-[var(--color-sleap-border)]/50 text-[var(--color-sleap-text)]"
-            }`}
+                ? "bg-orange-500/10 border-l-2 border-l-orange-500 text-foreground"
+                : "hover:bg-muted/50 text-foreground"
+            )}
           >
-            <td className="py-1 px-2 text-xs text-[var(--color-sleap-text-muted)]">
+            <TableCell className="py-0.5 px-2 text-xs text-muted-foreground">
               {i}
-            </td>
-            <td className="py-1 px-2 text-xs">{node.name}</td>
-          </tr>
+            </TableCell>
+            <TableCell className="py-0.5 px-2 text-xs">{node.name}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -233,44 +412,53 @@ function EdgesTable({
 }) {
   if (edges.length === 0) {
     return (
-      <p className="text-xs text-[var(--color-sleap-text-muted)] p-2">
-        No edges defined.
-      </p>
+      <p className="text-xs text-muted-foreground p-2">No edges defined.</p>
     );
   }
 
   return (
-    <table className="w-full text-left">
-      <thead>
-        <tr className="text-[var(--color-sleap-text-muted)]">
-          <th className="py-1 px-2 text-xs font-normal">#</th>
-          <th className="py-1 px-2 text-xs font-normal">Source</th>
-          <th className="py-1 px-2 text-xs font-normal"></th>
-          <th className="py-1 px-2 text-xs font-normal">Destination</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableHeader>
+        <TableRow className="border-b hover:bg-transparent">
+          <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+            #
+          </TableHead>
+          <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+            Source
+          </TableHead>
+          <TableHead className="py-1 px-2 text-xs font-normal h-auto" />
+          <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+            Destination
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {edges.map((edge, i) => (
-          <tr
+          <TableRow
             key={i}
             onClick={() => onSelect(selectedIdx === i ? null : i)}
-            className={`cursor-pointer transition-colors ${
+            className={cn(
+              "cursor-pointer border-b-0",
               selectedIdx === i
-                ? "bg-[var(--color-sleap-primary)]/20 text-white"
-                : "hover:bg-[var(--color-sleap-border)]/50 text-[var(--color-sleap-text)]"
-            }`}
+                ? "bg-orange-500/10 border-l-2 border-l-orange-500 text-foreground"
+                : "hover:bg-muted/50 text-foreground"
+            )}
           >
-            <td className="py-1 px-2 text-xs text-[var(--color-sleap-text-muted)]">
+            <TableCell className="py-0.5 px-2 text-xs text-muted-foreground">
               {i}
-            </td>
-            <td className="py-1 px-2 text-xs">{edge.source.name}</td>
-            <td className="py-0.5 px-1 text-xs text-[var(--color-sleap-text-muted)]">
+            </TableCell>
+            <TableCell className="py-0.5 px-2 text-xs">
+              {edge.source.name}
+            </TableCell>
+            <TableCell className="py-0.5 px-1 text-xs text-muted-foreground">
               &rarr;
-            </td>
-            <td className="py-1 px-2 text-xs">{edge.destination.name}</td>
-          </tr>
+            </TableCell>
+            <TableCell className="py-0.5 px-2 text-xs">
+              {edge.destination.name}
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

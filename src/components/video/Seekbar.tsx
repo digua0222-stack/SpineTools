@@ -12,6 +12,20 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { useAppStore } from "../../stores/appStore";
 import { getPaletteColor, rgbToCSS } from "../../lib/colorPalettes";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  SkipBack,
+  ChevronLeft,
+  Play,
+  Pause,
+  ChevronRight,
+  SkipForward,
+} from "lucide-react";
 
 /** Playback speed presets. */
 const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
@@ -197,9 +211,9 @@ export function Seekbar() {
   }, []);
 
   return (
-    <div className="flex items-center h-10 bg-[var(--color-sleap-surface)] border-t border-[var(--color-sleap-border)] px-2 gap-2 shrink-0">
+    <div className="flex items-center h-10 bg-card border-t border-border px-2 gap-2 shrink-0">
       {/* Frame counter */}
-      <div className="text-xs text-[var(--color-sleap-text-muted)] w-24 text-right tabular-nums shrink-0">
+      <div className="text-xs text-muted-foreground w-24 text-right tabular-nums shrink-0">
         {totalFrames > 0 ? `${frameIdx} / ${totalFrames - 1}` : "---"}
       </div>
 
@@ -220,71 +234,76 @@ export function Seekbar() {
       </div>
 
       {/* Transport controls */}
-      <div className="flex gap-1 shrink-0 items-center">
-        <NavButton
-          label="&#x23EA;"
+      <div className="flex gap-0.5 shrink-0 items-center">
+        <Button
+          variant="ghost"
+          size="icon-xs"
           title="Previous large step (Ctrl+Shift+Left)"
           onClick={() => useAppStore.getState().incrementFrameIdx(-100)}
-        />
-        <NavButton
-          label="&#x25C0;"
+        >
+          <SkipBack />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           title="Previous frame (Left)"
           onClick={() => useAppStore.getState().incrementFrameIdx(-1)}
-        />
-        <button
+        >
+          <ChevronLeft />
+        </Button>
+        <Button
+          variant={isPlaying ? "default" : "ghost"}
+          size="icon-xs"
           title={isPlaying ? "Pause" : "Play"}
           onClick={() => setIsPlaying(!isPlaying)}
-          className={`w-7 h-6 flex items-center justify-center text-xs rounded transition-colors ${
-            isPlaying
-              ? "bg-[var(--color-sleap-primary)] text-white"
-              : "text-[var(--color-sleap-text-muted)] hover:text-white hover:bg-[var(--color-sleap-border)]"
-          }`}
         >
-          {isPlaying ? "\u23F8" : "\u25B6"}
-        </button>
-        <NavButton
-          label="&#x25B6;"
+          {isPlaying ? <Pause /> : <Play />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           title="Next frame (Right)"
           onClick={() => useAppStore.getState().incrementFrameIdx(1)}
-        />
-        <NavButton
-          label="&#x23E9;"
+        >
+          <ChevronRight />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           title="Next large step (Ctrl+Shift+Right)"
           onClick={() => useAppStore.getState().incrementFrameIdx(100)}
-        />
-        {/* Speed indicator */}
-        <button
-          title="Click to cycle playback speed"
-          onClick={() => {
-            const idx = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
-            const next = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
-            setPlaybackSpeed(next);
-          }}
-          className="text-[9px] text-[var(--color-sleap-text-muted)] hover:text-white w-8 text-center tabular-nums"
         >
-          {playbackSpeed}x
-        </button>
+          <SkipForward />
+        </Button>
+        {/* Speed selector */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-[10px] text-muted-foreground tabular-nums w-8 px-0"
+              title="Playback speed"
+            >
+              {playbackSpeed}x
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-1" align="end" side="top">
+            <div className="flex flex-col">
+              {PLAYBACK_SPEEDS.map((speed) => (
+                <Button
+                  key={speed}
+                  variant={speed === playbackSpeed ? "secondary" : "ghost"}
+                  size="xs"
+                  className="justify-center tabular-nums text-xs"
+                  onClick={() => setPlaybackSpeed(speed)}
+                >
+                  {speed}x
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
-  );
-}
-
-function NavButton({
-  label,
-  title,
-  onClick,
-}: {
-  label: string;
-  title: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className="w-6 h-6 flex items-center justify-center text-[10px] text-[var(--color-sleap-text-muted)] hover:text-white hover:bg-[var(--color-sleap-border)] rounded transition-colors"
-    >
-      {label}
-    </button>
   );
 }

@@ -1,20 +1,180 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * SLEAP Label Web - Black & Orange Theme
+ *
+ * This app is permanently dark. The dark theme is defined on :root.
+ * A .dark class duplicate is included so shadcn components that
+ * conditionally apply .dark still work correctly.
+ *
+ * Palette:
+ *   Background:   zinc-950  #09090b
+ *   Surface/Card: zinc-900  #18181b
+ *   Secondary:    zinc-800  #27272a
+ *   Primary:      orange-500 #f97316
+ *   Destructive:  red-500   #ef4444
+ *   Foreground:   zinc-50   #fafafa
+ *   Muted text:   zinc-400  #a1a1aa
+ */
 
 :root {
-  /* SLEAP brand colors */
-  --color-sleap-primary: #6366f1;
-  --color-sleap-bg: #1e1e2e;
-  --color-sleap-surface: #2a2a3e;
-  --color-sleap-border: #3a3a4e;
-  --color-sleap-text: #e0e0e0;
-  --color-sleap-text-muted: #888;
+  --radius: 0.375rem;
+
+  /* Background & foreground */
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+
+  /* Cards & popovers: zinc-900 */
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+
+  /* Primary: orange-500 with black text */
+  --primary: oklch(0.705 0.213 47.604);
+  --primary-foreground: oklch(0.141 0.005 285.823);
+
+  /* Secondary: zinc-800 */
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+
+  /* Muted: zinc-800 with zinc-400 text */
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+
+  /* Accent: zinc-800 (subtle hover, not full orange) */
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+
+  /* Destructive: red-500 */
+  --destructive: oklch(0.637 0.237 25.331);
+
+  /* Borders & inputs: zinc-800 */
+  --border: oklch(0.274 0.006 286.033);
+  --input: oklch(0.274 0.006 286.033);
+
+  /* Focus ring: orange */
+  --ring: oklch(0.705 0.213 47.604);
+
+  /* Chart colors */
+  --chart-1: oklch(0.705 0.213 47.604);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.723 0.219 149.579);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.795 0.184 86.047);
+
+  /* Sidebar */
+  --sidebar: oklch(0.165 0.005 285.823);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.705 0.213 47.604);
+  --sidebar-primary-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.274 0.006 286.033);
+  --sidebar-ring: oklch(0.705 0.213 47.604);
+
+  /* Legacy SLEAP brand colors (for components still in transition) */
+  --color-sleap-primary: #f97316;
+  --color-sleap-bg: #09090b;
+  --color-sleap-surface: #18181b;
+  --color-sleap-border: #27272a;
+  --color-sleap-text: #fafafa;
+  --color-sleap-text-muted: #a1a1aa;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Duplicate for components that conditionally apply .dark */
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.705 0.213 47.604);
+  --primary-foreground: oklch(0.141 0.005 285.823);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.637 0.237 25.331);
+  --border: oklch(0.274 0.006 286.033);
+  --input: oklch(0.274 0.006 286.033);
+  --ring: oklch(0.705 0.213 47.604);
+  --chart-1: oklch(0.705 0.213 47.604);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.723 0.219 149.579);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.795 0.184 86.047);
+  --sidebar: oklch(0.165 0.005 285.823);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.705 0.213 47.604);
+  --sidebar-primary-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.274 0.006 286.033);
+  --sidebar-ring: oklch(0.705 0.213 47.604);
 }
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================================
+   Information-dense UI overrides
+   Scientific data annotation tool — compact, not marketing-site
+   ============================================================ */
 
 html,
 body,
@@ -22,24 +182,24 @@ body,
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--color-sleap-bg);
-  color: var(--color-sleap-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   font-size: 13px;
+  line-height: 1.4;
 }
 
-/* Scrollbar styling for dark theme */
+/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-sleap-bg);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-sleap-border);
+  background: oklch(1 0 0 / 15%);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: oklch(1 0 0 / 25%);
 }

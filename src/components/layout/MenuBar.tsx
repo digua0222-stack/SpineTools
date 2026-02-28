@@ -1,11 +1,10 @@
 /**
  * Application menu bar.
  *
- * Renders a desktop-style menu bar with File, Go, View, Labels, Tracks menus.
+ * Renders a desktop-style menu bar with File, Edit, Go, View, Labels, Tracks menus.
  * All actions are wired to the command system via CommandContext.
  */
 
-import { useState, useEffect, useCallback } from "react";
 import { useAppStore } from "../../stores/appStore";
 import { modKey } from "../../lib/platform";
 import {
@@ -32,176 +31,77 @@ import {
   PasteTrack,
 } from "../../commands";
 import { PALETTES } from "../../lib/colorPalettes";
-
+import {
+  Menubar,
+  MenubarMenu,
+  MenubarTrigger,
+  MenubarContent,
+  MenubarItem,
+  MenubarSeparator,
+  MenubarCheckboxItem,
+  MenubarShortcut,
+  MenubarLabel,
+  MenubarSub,
+  MenubarSubTrigger,
+  MenubarSubContent,
+  MenubarRadioGroup,
+  MenubarRadioItem,
+} from "@/components/ui/menubar";
 
 export function MenuBar() {
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-
-  const closeMenu = useCallback(() => setOpenMenu(null), []);
-
-  useEffect(() => {
-    if (openMenu) {
-      const handler = () => closeMenu();
-      window.addEventListener("click", handler);
-      return () => window.removeEventListener("click", handler);
-    }
-  }, [openMenu, closeMenu]);
-
   return (
-    <div className="flex items-center h-8 bg-[var(--color-sleap-surface)] border-b border-[var(--color-sleap-border)] shrink-0 select-none">
-      <div className="px-3 font-bold text-xs text-[var(--color-sleap-primary)]">
+    <Menubar className="h-8 rounded-none border-0 border-b border-border bg-card px-0 gap-0 shadow-none">
+      <div className="px-3 font-bold text-xs text-primary flex items-center">
         SLEAP
       </div>
-      <MenuButton label="File" id="file" openMenu={openMenu} setOpenMenu={setOpenMenu}>
-        <FileMenu onClose={closeMenu} />
-      </MenuButton>
-      <MenuButton label="Edit" id="edit" openMenu={openMenu} setOpenMenu={setOpenMenu}>
-        <EditMenu onClose={closeMenu} />
-      </MenuButton>
-      <MenuButton label="Go" id="go" openMenu={openMenu} setOpenMenu={setOpenMenu}>
-        <GoMenu onClose={closeMenu} />
-      </MenuButton>
-      <MenuButton label="View" id="view" openMenu={openMenu} setOpenMenu={setOpenMenu}>
-        <ViewMenu onClose={closeMenu} />
-      </MenuButton>
-      <MenuButton label="Labels" id="labels" openMenu={openMenu} setOpenMenu={setOpenMenu}>
-        <LabelsMenu onClose={closeMenu} />
-      </MenuButton>
-      <MenuButton label="Tracks" id="tracks" openMenu={openMenu} setOpenMenu={setOpenMenu}>
-        <TracksMenu onClose={closeMenu} />
-      </MenuButton>
-    </div>
+      <FileMenu />
+      <EditMenu />
+      <GoMenu />
+      <ViewMenu />
+      <LabelsMenu />
+      <TracksMenu />
+    </Menubar>
   );
 }
 
-function MenuButton({
-  label,
-  id,
-  openMenu,
-  setOpenMenu,
-  children,
-}: {
-  label: string;
-  id: string;
-  openMenu: string | null;
-  setOpenMenu: (id: string | null) => void;
-  children: React.ReactNode;
-}) {
-  const isOpen = openMenu === id;
-  return (
-    <div className="relative">
-      <button
-        className={`px-3 h-8 text-xs transition-colors ${
-          isOpen
-            ? "bg-[var(--color-sleap-border)] text-white"
-            : "text-[var(--color-sleap-text)] hover:bg-[var(--color-sleap-border)]"
-        }`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpenMenu(isOpen ? null : id);
-        }}
-        onMouseEnter={() => {
-          if (openMenu !== null) setOpenMenu(id);
-        }}
-      >
-        {label}
-      </button>
-      {isOpen && (
-        <div
-          className="absolute top-8 left-0 z-50 min-w-[220px] bg-[var(--color-sleap-surface)] border border-[var(--color-sleap-border)] rounded shadow-lg py-1"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// === Menu item components ===
-
-function MenuItem({
-  label,
-  shortcut,
-  onClick,
-  disabled,
-}: {
-  label: string;
-  shortcut?: string;
-  onClick?: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      className={`w-full flex items-center justify-between px-3 py-1 text-xs text-left ${
-        disabled
-          ? "text-[var(--color-sleap-text-muted)] cursor-default"
-          : "text-[var(--color-sleap-text)] hover:bg-[var(--color-sleap-border)]"
-      }`}
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled}
-    >
-      <span>{label}</span>
-      {shortcut && (
-        <span className="text-[var(--color-sleap-text-muted)] ml-4 text-[10px]">
-          {shortcut}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function MenuCheckItem({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      className="w-full flex items-center px-3 py-1 text-xs text-left text-[var(--color-sleap-text)] hover:bg-[var(--color-sleap-border)]"
-      onClick={onChange}
-    >
-      <span className="w-4 text-center">{checked ? "\u2713" : ""}</span>
-      <span className="ml-1">{label}</span>
-    </button>
-  );
-}
-
-function MenuSeparator() {
-  return <div className="my-1 border-t border-[var(--color-sleap-border)]" />;
-}
-
-// === Menu content ===
-
-function FileMenu({ onClose }: { onClose: () => void }) {
+function FileMenu() {
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
-    onClose();
     commandContext.execute(cmd);
   };
 
   return (
-    <>
-      <MenuItem label="New Project" shortcut={`${modKey}+N`} onClick={() => exec(NewProjectCommand)} />
-      <MenuItem label="Open Project..." shortcut={`${modKey}+O`} onClick={() => exec(OpenProjectCommand)} />
-      <MenuSeparator />
-      <MenuItem label="Save" shortcut={`${modKey}+S`} onClick={() => exec(SaveProjectCommand)} />
-      <MenuItem label="Save As..." shortcut={`${modKey}+Shift+S`} disabled />
-      <MenuSeparator />
-      <MenuItem label="Export JSON..." onClick={() => exec(ExportJsonCommand)} />
-      <MenuItem label="Export Analysis CSV..." disabled />
-      <MenuSeparator />
-      <MenuItem label="Quit" shortcut={`${modKey}+Q`} onClick={() => { onClose(); window.close(); }} />
-    </>
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">File</MenubarTrigger>
+      <MenubarContent>
+        <MenubarItem onClick={() => exec(NewProjectCommand)}>
+          New Project <MenubarShortcut>{modKey}+N</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(OpenProjectCommand)}>
+          Open Project... <MenubarShortcut>{modKey}+O</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(SaveProjectCommand)}>
+          Save <MenubarShortcut>{modKey}+S</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem disabled>
+          Save As... <MenubarShortcut>{modKey}+Shift+S</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(ExportJsonCommand)}>
+          Export JSON...
+        </MenubarItem>
+        <MenubarItem disabled>Export Analysis CSV...</MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => window.close()}>
+          Quit <MenubarShortcut>{modKey}+Q</MenubarShortcut>
+        </MenubarItem>
+      </MenubarContent>
+    </MenubarMenu>
   );
 }
 
-function EditMenu({ onClose }: { onClose: () => void }) {
+function EditMenu() {
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
-    onClose();
     commandContext.execute(cmd);
   };
 
@@ -213,106 +113,127 @@ function EditMenu({ onClose }: { onClose: () => void }) {
     : "Redo";
 
   return (
-    <>
-      <MenuItem
-        label={undoLabel}
-        shortcut={`${modKey}+Z`}
-        disabled={!commandContext.canUndo}
-        onClick={() => {
-          onClose();
-          commandContext.undo();
-        }}
-      />
-      <MenuItem
-        label={redoLabel}
-        shortcut={`${modKey}+Shift+Z`}
-        disabled={!commandContext.canRedo}
-        onClick={() => {
-          onClose();
-          commandContext.redo();
-        }}
-      />
-      <MenuSeparator />
-      <MenuItem label="Copy Instance" shortcut={`${modKey}+C`} onClick={() => exec(CopyInstance)} />
-      <MenuItem label="Paste Instance" shortcut={`${modKey}+V`} onClick={() => exec(PasteInstance)} />
-      <MenuSeparator />
-      <MenuItem label="Add Instance" shortcut={`${modKey}+I`} onClick={() => exec(AddInstance)} />
-      <MenuItem label="Delete Instance" shortcut={`${modKey}+Backspace`} onClick={() => exec(DeleteSelectedInstance)} />
-      <MenuSeparator />
-      <MenuItem label="Delete Predictions on Current Frame" onClick={() => exec(DeleteFramePredictions)} />
-    </>
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Edit</MenubarTrigger>
+      <MenubarContent>
+        <MenubarItem
+          disabled={!commandContext.canUndo}
+          onClick={() => commandContext.undo()}
+        >
+          {undoLabel} <MenubarShortcut>{modKey}+Z</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem
+          disabled={!commandContext.canRedo}
+          onClick={() => commandContext.redo()}
+        >
+          {redoLabel} <MenubarShortcut>{modKey}+Shift+Z</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(CopyInstance)}>
+          Copy Instance <MenubarShortcut>{modKey}+C</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(PasteInstance)}>
+          Paste Instance <MenubarShortcut>{modKey}+V</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(AddInstance)}>
+          Add Instance <MenubarShortcut>{modKey}+I</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(DeleteSelectedInstance)}>
+          Delete Instance <MenubarShortcut>{modKey}+Backspace</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(DeleteFramePredictions)}>
+          Delete Predictions on Current Frame
+        </MenubarItem>
+      </MenubarContent>
+    </MenubarMenu>
   );
 }
 
-function GoMenu({ onClose }: { onClose: () => void }) {
+function GoMenu() {
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
-    onClose();
     commandContext.execute(cmd);
   };
 
   return (
-    <>
-      <MenuItem label="Next Labeled Frame" shortcut="Alt+\u2192" onClick={() => exec(GoNextLabeledFrame)} />
-      <MenuItem label="Previous Labeled Frame" shortcut="Alt+\u2190" onClick={() => exec(GoPrevLabeledFrame)} />
-      <MenuSeparator />
-      <MenuItem label="Next Suggestion" shortcut="Space" onClick={() => exec(GoNextSuggestion)} />
-      <MenuItem label="Previous Suggestion" shortcut="Shift+Space" onClick={() => exec(GoPrevSuggestion)} />
-      <MenuSeparator />
-      <MenuItem label="Last Interacted Frame" shortcut={`${modKey}+A`} onClick={() => exec(GoToLastInteracted)} />
-      <MenuItem label="Next User Labeled Frame" shortcut={`${modKey}+U`} onClick={() => exec(GoNextUserFrame)} />
-      <MenuSeparator />
-      <MenuItem
-        label="Next Video"
-        shortcut="Alt+Shift+\u2192"
-        onClick={() => {
-          onClose();
-          const { labels, video } = useAppStore.getState();
-          if (!labels || !video) return;
-          const idx = labels.videos.indexOf(video);
-          const next = labels.videos[(idx + 1) % labels.videos.length];
-          if (next) useAppStore.getState().setVideo(next);
-        }}
-      />
-      <MenuItem
-        label="Previous Video"
-        shortcut="Alt+Shift+\u2190"
-        onClick={() => {
-          onClose();
-          const { labels, video } = useAppStore.getState();
-          if (!labels || !video) return;
-          const idx = labels.videos.indexOf(video);
-          const prev = labels.videos[(idx - 1 + labels.videos.length) % labels.videos.length];
-          if (prev) useAppStore.getState().setVideo(prev);
-        }}
-      />
-      <MenuSeparator />
-      <MenuItem
-        label="Select Next Instance"
-        shortcut="`"
-        onClick={() => {
-          onClose();
-          const { labeledFrame, instance } = useAppStore.getState();
-          if (!labeledFrame) return;
-          const instances = labeledFrame.instances;
-          if (instances.length === 0) return;
-          if (!instance) {
-            useAppStore.getState().setInstance(instances[0]);
-          } else {
-            const idx = instances.indexOf(instance);
-            useAppStore.getState().setInstance(instances[(idx + 1) % instances.length]);
-          }
-        }}
-      />
-      <MenuItem
-        label="Clear Selection"
-        shortcut="Esc"
-        onClick={() => { onClose(); useAppStore.getState().setInstance(null); }}
-      />
-    </>
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Go</MenubarTrigger>
+      <MenubarContent>
+        <MenubarItem onClick={() => exec(GoNextLabeledFrame)}>
+          Next Labeled Frame <MenubarShortcut>Alt+{"\u2192"}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(GoPrevLabeledFrame)}>
+          Previous Labeled Frame <MenubarShortcut>Alt+{"\u2190"}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(GoNextSuggestion)}>
+          Next Suggestion <MenubarShortcut>Space</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(GoPrevSuggestion)}>
+          Previous Suggestion <MenubarShortcut>Shift+Space</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(GoToLastInteracted)}>
+          Last Interacted Frame <MenubarShortcut>{modKey}+A</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(GoNextUserFrame)}>
+          Next User Labeled Frame <MenubarShortcut>{modKey}+U</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          onClick={() => {
+            const { labels, video } = useAppStore.getState();
+            if (!labels || !video) return;
+            const idx = labels.videos.indexOf(video);
+            const next = labels.videos[(idx + 1) % labels.videos.length];
+            if (next) useAppStore.getState().setVideo(next);
+          }}
+        >
+          Next Video <MenubarShortcut>Alt+Shift+{"\u2192"}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem
+          onClick={() => {
+            const { labels, video } = useAppStore.getState();
+            if (!labels || !video) return;
+            const idx = labels.videos.indexOf(video);
+            const prev =
+              labels.videos[(idx - 1 + labels.videos.length) % labels.videos.length];
+            if (prev) useAppStore.getState().setVideo(prev);
+          }}
+        >
+          Previous Video <MenubarShortcut>Alt+Shift+{"\u2190"}</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem
+          onClick={() => {
+            const { labeledFrame, instance } = useAppStore.getState();
+            if (!labeledFrame) return;
+            const instances = labeledFrame.instances;
+            if (instances.length === 0) return;
+            if (!instance) {
+              useAppStore.getState().setInstance(instances[0]);
+            } else {
+              const idx = instances.indexOf(instance);
+              useAppStore
+                .getState()
+                .setInstance(instances[(idx + 1) % instances.length]);
+            }
+          }}
+        >
+          Select Next Instance <MenubarShortcut>`</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem
+          onClick={() => useAppStore.getState().setInstance(null)}
+        >
+          Clear Selection <MenubarShortcut>Esc</MenubarShortcut>
+        </MenubarItem>
+      </MenubarContent>
+    </MenubarMenu>
   );
 }
 
-function ViewMenu({ onClose: _onClose }: { onClose: () => void }) {
+function ViewMenu() {
   const showInstances = useAppStore((s) => s.showInstances);
   const showLabels = useAppStore((s) => s.showLabels);
   const showEdges = useAppStore((s) => s.showEdges);
@@ -324,109 +245,162 @@ function ViewMenu({ onClose: _onClose }: { onClose: () => void }) {
   const setVal = useAppStore((s) => s.set);
 
   return (
-    <>
-      <MenuCheckItem label="Fit View to Instances" checked={fit} onChange={() => { toggle("fit"); }} />
-      <MenuSeparator />
-      <MenuCheckItem label="Color Predicted Instances" checked={colorPredicted} onChange={() => { toggle("colorPredicted"); }} />
-      <MenuSeparator />
-      <MenuCheckItem label="Show Instances" checked={showInstances} onChange={() => { toggle("showInstances"); }} />
-      <MenuCheckItem label="Show Non-Visible Nodes" checked={showNonVisibleNodes} onChange={() => { toggle("showNonVisibleNodes"); }} />
-      <MenuCheckItem label="Show Node Names" checked={showLabels} onChange={() => { toggle("showLabels"); }} />
-      <MenuCheckItem label="Show Edges" checked={showEdges} onChange={() => { toggle("showEdges"); }} />
-      <MenuSeparator />
-      <div className="px-3 py-1 text-[10px] text-[var(--color-sleap-text-muted)] uppercase tracking-wide">
-        Edge Style
-      </div>
-      <MenuCheckItem
-        label="Line"
-        checked={edgeStyle === "Line"}
-        onChange={() => { setVal("edgeStyle", "Line"); }}
-      />
-      <MenuCheckItem
-        label="Wedge"
-        checked={edgeStyle === "Wedge"}
-        onChange={() => { setVal("edgeStyle", "Wedge"); }}
-      />
-      <MenuSeparator />
-      <div className="px-3 py-1 text-[10px] text-[var(--color-sleap-text-muted)] uppercase tracking-wide">
-        Node Size
-      </div>
-      <div className="flex items-center px-3 py-1 gap-2">
-        <input
-          type="range"
-          min={1}
-          max={12}
-          value={useAppStore.getState().markerSize}
-          onChange={(e) => setVal("markerSize", Number(e.target.value))}
-          className="flex-1 h-1 accent-[var(--color-sleap-primary)]"
-        />
-        <span className="text-[10px] text-[var(--color-sleap-text-muted)] w-4 text-right">
-          {useAppStore.getState().markerSize}
-        </span>
-      </div>
-      <MenuSeparator />
-      <div className="px-3 py-1 text-[10px] text-[var(--color-sleap-text-muted)] uppercase tracking-wide">
-        Color Palette
-      </div>
-      {Object.keys(PALETTES).map((name) => (
-        <MenuCheckItem
-          key={name}
-          label={name}
-          checked={useAppStore.getState().palette === name}
-          onChange={() => { setVal("palette", name); }}
-        />
-      ))}
-    </>
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">View</MenubarTrigger>
+      <MenubarContent>
+        <MenubarCheckboxItem
+          checked={fit}
+          onCheckedChange={() => toggle("fit")}
+        >
+          Fit View to Instances
+        </MenubarCheckboxItem>
+        <MenubarSeparator />
+        <MenubarCheckboxItem
+          checked={colorPredicted}
+          onCheckedChange={() => toggle("colorPredicted")}
+        >
+          Color Predicted Instances
+        </MenubarCheckboxItem>
+        <MenubarSeparator />
+        <MenubarCheckboxItem
+          checked={showInstances}
+          onCheckedChange={() => toggle("showInstances")}
+        >
+          Show Instances
+        </MenubarCheckboxItem>
+        <MenubarCheckboxItem
+          checked={showNonVisibleNodes}
+          onCheckedChange={() => toggle("showNonVisibleNodes")}
+        >
+          Show Non-Visible Nodes
+        </MenubarCheckboxItem>
+        <MenubarCheckboxItem
+          checked={showLabels}
+          onCheckedChange={() => toggle("showLabels")}
+        >
+          Show Node Names
+        </MenubarCheckboxItem>
+        <MenubarCheckboxItem
+          checked={showEdges}
+          onCheckedChange={() => toggle("showEdges")}
+        >
+          Show Edges
+        </MenubarCheckboxItem>
+        <MenubarSeparator />
+        <MenubarSub>
+          <MenubarSubTrigger className="text-sm">Edge Style</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarRadioGroup
+              value={edgeStyle}
+              onValueChange={(val) => setVal("edgeStyle", val as "Line" | "Wedge")}
+            >
+              <MenubarRadioItem value="Line">Line</MenubarRadioItem>
+              <MenubarRadioItem value="Wedge">Wedge</MenubarRadioItem>
+            </MenubarRadioGroup>
+          </MenubarSubContent>
+        </MenubarSub>
+        <MenubarSeparator />
+        <MenubarLabel className="text-xs text-muted-foreground">Node Size</MenubarLabel>
+        <div className="flex items-center px-2 py-1 gap-2">
+          <input
+            type="range"
+            min={1}
+            max={12}
+            value={useAppStore.getState().markerSize}
+            onChange={(e) => setVal("markerSize", Number(e.target.value))}
+            className="flex-1 h-1 accent-primary"
+          />
+          <span className="text-xs text-muted-foreground w-4 text-right">
+            {useAppStore.getState().markerSize}
+          </span>
+        </div>
+        <MenubarSeparator />
+        <MenubarSub>
+          <MenubarSubTrigger className="text-sm">Color Palette</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarRadioGroup
+              value={useAppStore.getState().palette}
+              onValueChange={(val) => setVal("palette", val)}
+            >
+              {Object.keys(PALETTES).map((name) => (
+                <MenubarRadioItem key={name} value={name}>
+                  {name}
+                </MenubarRadioItem>
+              ))}
+            </MenubarRadioGroup>
+          </MenubarSubContent>
+        </MenubarSub>
+      </MenubarContent>
+    </MenubarMenu>
   );
 }
 
-function LabelsMenu({ onClose }: { onClose: () => void }) {
+function LabelsMenu() {
   const labels = useAppStore((s) => s.labels);
   const totalLabeled = labels?.labeledFrames.length ?? 0;
-  const totalInstances = labels?.labeledFrames.reduce(
-    (sum, lf) => sum + lf.instances.length, 0
-  ) ?? 0;
+  const totalInstances =
+    labels?.labeledFrames.reduce((sum, lf) => sum + lf.instances.length, 0) ?? 0;
 
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
-    onClose();
     commandContext.execute(cmd);
   };
 
   return (
-    <>
-      <MenuItem label="Add Instance" shortcut={`${modKey}+I`} onClick={() => exec(AddInstance)} />
-      <MenuItem label="Delete Instance" shortcut={`${modKey}+Backspace`} onClick={() => exec(DeleteSelectedInstance)} />
-      <MenuSeparator />
-      <MenuItem label="Delete Predictions on Current Frame" onClick={() => exec(DeleteFramePredictions)} />
-      <MenuItem label="Delete All Predictions..." onClick={() => {
-        if (confirm("Delete all predicted instances across all frames?")) {
-          exec(DeleteAllPredictions);
-        } else {
-          onClose();
-        }
-      }} />
-      <MenuSeparator />
-      <div className="px-3 py-1 text-[10px] text-[var(--color-sleap-text-muted)]">
-        {totalLabeled} labeled frames, {totalInstances} instances
-      </div>
-    </>
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Labels</MenubarTrigger>
+      <MenubarContent>
+        <MenubarItem onClick={() => exec(AddInstance)}>
+          Add Instance <MenubarShortcut>{modKey}+I</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(DeleteSelectedInstance)}>
+          Delete Instance <MenubarShortcut>{modKey}+Backspace</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(DeleteFramePredictions)}>
+          Delete Predictions on Current Frame
+        </MenubarItem>
+        <MenubarItem
+          onClick={() => {
+            if (confirm("Delete all predicted instances across all frames?")) {
+              exec(DeleteAllPredictions);
+            }
+          }}
+        >
+          Delete All Predictions...
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarLabel className="text-xs text-muted-foreground font-normal">
+          {totalLabeled} labeled frames, {totalInstances} instances
+        </MenubarLabel>
+      </MenubarContent>
+    </MenubarMenu>
   );
 }
 
-function TracksMenu({ onClose }: { onClose: () => void }) {
+function TracksMenu() {
   const exec = (cmd: Parameters<typeof commandContext.execute>[0]) => {
-    onClose();
     commandContext.execute(cmd);
   };
 
   return (
-    <>
-      <MenuItem label="Transpose Instance Tracks" shortcut={`${modKey}+T`} onClick={() => exec(TransposeInstances)} />
-      <MenuSeparator />
-      <MenuItem label="New Track" shortcut={`${modKey}+0`} onClick={() => exec(AddTrack)} />
-      <MenuSeparator />
-      <MenuItem label="Copy Instance Track" shortcut={`${modKey}+Shift+C`} onClick={() => exec(CopyTrack)} />
-      <MenuItem label="Paste Instance Track" shortcut={`${modKey}+Shift+V`} onClick={() => exec(PasteTrack)} />
-    </>
+    <MenubarMenu>
+      <MenubarTrigger className="px-3 h-8 text-xs rounded-none">Tracks</MenubarTrigger>
+      <MenubarContent>
+        <MenubarItem onClick={() => exec(TransposeInstances)}>
+          Transpose Instance Tracks <MenubarShortcut>{modKey}+T</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(AddTrack)}>
+          New Track <MenubarShortcut>{modKey}+0</MenubarShortcut>
+        </MenubarItem>
+        <MenubarSeparator />
+        <MenubarItem onClick={() => exec(CopyTrack)}>
+          Copy Instance Track <MenubarShortcut>{modKey}+Shift+C</MenubarShortcut>
+        </MenubarItem>
+        <MenubarItem onClick={() => exec(PasteTrack)}>
+          Paste Instance Track <MenubarShortcut>{modKey}+Shift+V</MenubarShortcut>
+        </MenubarItem>
+      </MenubarContent>
+    </MenubarMenu>
   );
 }

@@ -6,6 +6,19 @@
  */
 
 import { useAppStore } from "../../stores/appStore";
+import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import type { SuggestionFrame } from "../../types";
 
 /** Extract just the basename from a file path. */
@@ -27,24 +40,25 @@ function SuggestionRow({
   onNavigate: () => void;
 }) {
   return (
-    <tr
+    <TableRow
       onClick={onNavigate}
-      className={`cursor-pointer transition-colors ${
+      className={cn(
+        "cursor-pointer border-b-0",
         isActive
-          ? "bg-[var(--color-sleap-primary)]/20 text-white"
-          : "hover:bg-[var(--color-sleap-border)]/50 text-[var(--color-sleap-text)]"
-      }`}
+          ? "bg-orange-500/10 border-l-2 border-l-orange-500 text-foreground"
+          : "hover:bg-muted/50 text-foreground"
+      )}
     >
-      <td className="py-1 px-2 text-xs text-[var(--color-sleap-text-muted)]">
+      <TableCell className="py-0.5 px-2 text-xs text-muted-foreground">
         {index + 1}
-      </td>
-      <td className="py-1 px-2 text-xs">
+      </TableCell>
+      <TableCell className="py-0.5 px-2 text-xs">
         {basename(suggestion.video.filename)}
-      </td>
-      <td className="py-1 px-2 text-xs text-right tabular-nums">
+      </TableCell>
+      <TableCell className="py-0.5 px-2 text-xs text-right tabular-nums">
         {suggestion.frameIdx}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -68,28 +82,34 @@ export function SuggestionsPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Count header */}
-      <div className="px-2 py-1.5 border-b border-[var(--color-sleap-border)]">
-        <span className="text-xs text-[var(--color-sleap-text-muted)]">
-          {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""}
-        </span>
+      <div className="px-2 py-1.5 border-b border-border">
+        <Badge variant="secondary" className="text-xs">
+          {suggestions.length} suggestion
+          {suggestions.length !== 1 ? "s" : ""}
+        </Badge>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
+      <ScrollArea className="flex-1">
         {suggestions.length === 0 ? (
-          <p className="text-xs text-[var(--color-sleap-text-muted)] p-2">
+          <p className="text-xs text-muted-foreground p-2">
             No suggestions generated.
           </p>
         ) : (
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-[var(--color-sleap-text-muted)]">
-                <th className="py-1 px-2 text-xs font-normal">#</th>
-                <th className="py-1 px-2 text-xs font-normal">Video</th>
-                <th className="py-1 px-2 text-xs font-normal text-right">Frame</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b hover:bg-transparent">
+                <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+                  #
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+                  Video
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal text-right h-auto">
+                  Frame
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {suggestions.map((suggestion, i) => (
                 <SuggestionRow
                   key={i}
@@ -102,25 +122,27 @@ export function SuggestionsPanel() {
                   onNavigate={() => navigateToSuggestion(suggestion)}
                 />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </ScrollArea>
 
-      {/* Action buttons */}
-      <div className="flex gap-1 p-2 border-t border-[var(--color-sleap-border)]">
-        <button
-          className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
+      <Separator />
+      <div className="flex gap-1 p-2">
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => console.log("Generate Suggestions")}
         >
           Generate Suggestions
-        </button>
-        <button
-          className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => console.log("Clear Suggestions")}
         >
           Clear Suggestions
-        </button>
+        </Button>
       </div>
     </div>
   );

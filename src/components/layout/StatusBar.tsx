@@ -3,6 +3,8 @@
  */
 
 import { useAppStore } from "../../stores/appStore";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
 export function StatusBar() {
   const filename = useAppStore((s) => s.filename);
@@ -20,40 +22,55 @@ export function StatusBar() {
   const isPredicted = instance && "score" in instance;
 
   return (
-    <div className="flex items-center h-6 px-2 text-xs bg-[var(--color-sleap-surface)] border-t border-[var(--color-sleap-border)] text-[var(--color-sleap-text-muted)] gap-4 shrink-0">
-      {filename && (
+    <div className="flex items-center h-7 px-2 text-xs bg-card border-t border-border text-muted-foreground gap-2 shrink-0">
+      {filename ? (
         <>
-          <span>
+          <span className="text-foreground">
             {filename}
             {hasChanges ? " *" : ""}
           </span>
-          <span className="text-[var(--color-sleap-border)]">|</span>
+          <Separator orientation="vertical" className="h-3.5" />
           <span>
-            Frame {frameIdx}{totalFrames !== null ? ` / ${totalFrames - 1}` : ""}
+            Frame {frameIdx}
+            {totalFrames !== null ? ` / ${totalFrames - 1}` : ""}
           </span>
-          <span className="text-[var(--color-sleap-border)]">|</span>
-          <span>{totalLabeledFrames} labeled frames</span>
-          <span className="text-[var(--color-sleap-border)]">|</span>
-          <span>{totalVideos} video{totalVideos !== 1 ? "s" : ""}</span>
+          <Separator orientation="vertical" className="h-3.5" />
+          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 rounded-sm font-normal">
+            {totalLabeledFrames} labeled
+          </Badge>
+          <Separator orientation="vertical" className="h-3.5" />
+          <span>
+            {totalVideos} video{totalVideos !== 1 ? "s" : ""}
+          </span>
           {instanceCount > 0 && (
             <>
-              <span className="text-[var(--color-sleap-border)]">|</span>
-              <span>{instanceCount} instance{instanceCount !== 1 ? "s" : ""}</span>
+              <Separator orientation="vertical" className="h-3.5" />
+              <span>
+                {instanceCount} instance{instanceCount !== 1 ? "s" : ""}
+              </span>
             </>
           )}
           {instance && (
             <>
-              <span className="text-[var(--color-sleap-border)]">|</span>
+              <Separator orientation="vertical" className="h-3.5" />
+              <Badge
+                variant={isPredicted ? "outline" : "default"}
+                className="text-[10px] px-1.5 py-0 h-4 rounded-sm font-normal"
+              >
+                {isPredicted ? "Pred" : "User"}
+              </Badge>
               <span>
-                {isPredicted ? "Pred" : "User"}: {instance.track?.name ?? "[no track]"}
-                {" "}({instance.nVisible}/{instance.points.length} nodes)
-                {isPredicted && ` score=${(instance as unknown as { score: number }).score.toFixed(3)}`}
+                {instance.track?.name ?? "[no track]"} ({instance.nVisible}/
+                {instance.points.length} nodes)
+                {isPredicted &&
+                  ` score=${(instance as unknown as { score: number }).score.toFixed(3)}`}
               </span>
             </>
           )}
         </>
+      ) : (
+        <span>No project loaded</span>
       )}
-      {!filename && <span>No project loaded</span>}
     </div>
   );
 }

@@ -7,11 +7,31 @@
 
 import { useAppStore } from "../../stores/appStore";
 import { getPaletteColor, rgbToCSS } from "../../lib/colorPalettes";
-import { commandContext, AddInstance, DeleteSelectedInstance } from "../../commands";
+import {
+  commandContext,
+  AddInstance,
+  DeleteSelectedInstance,
+} from "../../commands";
+import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import type { Instance, PredictedInstance } from "../../types";
 
 function isPredicted(instance: Instance): instance is PredictedInstance {
-  return "score" in instance && typeof (instance as PredictedInstance).score === "number";
+  return (
+    "score" in instance &&
+    typeof (instance as PredictedInstance).score === "number"
+  );
 }
 
 function InstanceRow({
@@ -35,31 +55,34 @@ function InstanceRow({
   const score = predicted ? (instance as PredictedInstance).score : null;
 
   return (
-    <tr
+    <TableRow
       onClick={onSelect}
-      className={`cursor-pointer transition-colors ${
+      className={cn(
+        "cursor-pointer border-b-0",
         isSelected
-          ? "bg-[var(--color-sleap-primary)]/20 text-white"
-          : "hover:bg-[var(--color-sleap-border)]/50 text-[var(--color-sleap-text)]"
-      }`}
+          ? "bg-orange-500/10 border-l-2 border-l-orange-500 text-foreground"
+          : "hover:bg-muted/50 text-foreground"
+      )}
     >
-      <td className="py-1 px-2">
+      <TableCell className="py-0.5 px-2">
         <div
           className="w-3 h-3 rounded-sm"
           style={{ backgroundColor: rgbToCSS(color) }}
         />
-      </td>
-      <td className="py-1 px-2 text-xs">{trackName}</td>
-      <td className="py-1 px-2 text-xs text-[var(--color-sleap-text-muted)]">
-        {predicted ? "pred" : "user"}
-      </td>
-      <td className="py-1 px-2 text-xs text-right tabular-nums">
+      </TableCell>
+      <TableCell className="py-0.5 px-2 text-xs">{trackName}</TableCell>
+      <TableCell className="py-0.5 px-2 text-xs">
+        <Badge variant={predicted ? "secondary" : "outline"} className="text-[10px] px-1.5 py-0">
+          {predicted ? "pred" : "user"}
+        </Badge>
+      </TableCell>
+      <TableCell className="py-0.5 px-2 text-xs text-right tabular-nums">
         {visibleNodes}/{totalNodes}
-      </td>
-      <td className="py-1 px-2 text-xs text-right tabular-nums text-[var(--color-sleap-text-muted)]">
+      </TableCell>
+      <TableCell className="py-0.5 px-2 text-xs text-right tabular-nums text-muted-foreground">
         {score !== null ? score.toFixed(2) : "--"}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -72,31 +95,38 @@ export function InstancesPanel() {
   const palette = useAppStore((s) => s.palette);
 
   // Find the labeled frame for current video + frame
-  const labeledFrames = labels && video
-    ? labels.find({ video, frameIdx })
-    : [];
+  const labeledFrames =
+    labels && video ? labels.find({ video, frameIdx }) : [];
   const labeledFrame = labeledFrames.length > 0 ? labeledFrames[0] : null;
   const instances = labeledFrame?.instances ?? [];
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-auto">
+      <ScrollArea className="flex-1">
         {instances.length === 0 ? (
-          <p className="text-xs text-[var(--color-sleap-text-muted)] p-2">
+          <p className="text-xs text-muted-foreground p-2">
             No instances on this frame.
           </p>
         ) : (
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-[var(--color-sleap-text-muted)]">
-                <th className="py-1 px-2 text-xs font-normal w-6"></th>
-                <th className="py-1 px-2 text-xs font-normal">Track</th>
-                <th className="py-1 px-2 text-xs font-normal">Type</th>
-                <th className="py-1 px-2 text-xs font-normal text-right">Nodes</th>
-                <th className="py-1 px-2 text-xs font-normal text-right">Score</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b hover:bg-transparent">
+                <TableHead className="py-1 px-2 text-xs font-normal w-6 h-auto" />
+                <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+                  Track
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal h-auto">
+                  Type
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal text-right h-auto">
+                  Nodes
+                </TableHead>
+                <TableHead className="py-1 px-2 text-xs font-normal text-right h-auto">
+                  Score
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {instances.map((instance, i) => (
                 <InstanceRow
                   key={i}
@@ -107,25 +137,27 @@ export function InstancesPanel() {
                   palette={palette}
                 />
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </ScrollArea>
 
-      {/* Action buttons */}
-      <div className="flex gap-1 p-2 border-t border-[var(--color-sleap-border)]">
-        <button
-          className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
+      <Separator />
+      <div className="flex gap-1 p-2">
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => commandContext.execute(AddInstance)}
         >
           Add Instance
-        </button>
-        <button
-          className="px-2 py-1 text-xs bg-[var(--color-sleap-surface)] hover:bg-[var(--color-sleap-border)] text-[var(--color-sleap-text)] rounded transition-colors"
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={() => commandContext.execute(DeleteSelectedInstance)}
         >
           Delete Instance
-        </button>
+        </Button>
       </div>
     </div>
   );
