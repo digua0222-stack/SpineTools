@@ -155,14 +155,14 @@ export function VideosPanel() {
       <Separator />
       <div className="flex gap-1 p-2">
         <Button
-          variant="ghost"
+          variant="subtle"
           size="xs"
           onClick={handleAddVideos}
         >
           Add Videos
         </Button>
         <Button
-          variant="ghost"
+          variant="subtle"
           size="xs"
           onClick={() => toast.info("Remove Video is not yet implemented")}
         >

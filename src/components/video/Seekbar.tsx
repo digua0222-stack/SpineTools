@@ -36,6 +36,9 @@ import {
 /** Playback speed presets. */
 const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
 
+/** Snap threshold in pixels for snapping to labeled frames. */
+const SNAP_THRESHOLD_PX = 12;
+
 export function Seekbar() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,7 +61,7 @@ export function Seekbar() {
   // Use video shape if available, otherwise infer from labeled frames
   const shapeFrames = video?.shape?.[0] ?? null;
   const inferredFrames = labels && video
-    ? Math.max(0, ...labels.find({ video }).map((lf) => lf.frameIdx)) + 1
+    ? Math.max(0, ...labels.labeledFrames.filter((lf) => lf.video === video).map((lf) => lf.frameIdx)) + 1
     : 0;
   const totalFrames = shapeFrames ?? (inferredFrames > 0 ? inferredFrames : 0);
 
@@ -77,13 +80,42 @@ export function Seekbar() {
     [totalFrames]
   );
 
+  /** Find the nearest labeled frame within snap threshold pixels. */
+  const snapToLabeledFrame = useCallback(
+    (clientX: number): number | null => {
+      const canvas = canvasRef.current;
+      if (!canvas || !labels || !video || totalFrames === 0) return null;
+
+      const rect = canvas.getBoundingClientRect();
+      const clickX = clientX - rect.left;
+
+      let closestFrame: number | null = null;
+      let closestDist = Infinity;
+
+      for (const lf of labels.labeledFrames) {
+        if (lf.video !== video) continue;
+        const frameX = (lf.frameIdx / (totalFrames - 1)) * rect.width;
+        const dist = Math.abs(clickX - frameX);
+        if (dist < closestDist && dist <= SNAP_THRESHOLD_PX) {
+          closestDist = dist;
+          closestFrame = lf.frameIdx;
+        }
+      }
+
+      return closestFrame;
+    },
+    [labels, video, totalFrames]
+  );
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      const frame = pixelToFrame(e.clientX);
+      e.preventDefault();
+      const snapped = snapToLabeledFrame(e.clientX);
+      const frame = snapped !== null ? snapped : pixelToFrame(e.clientX);
       setFrameIdx(frame);
       setIsDragging(true);
     },
-    [pixelToFrame, setFrameIdx]
+    [pixelToFrame, snapToLabeledFrame, setFrameIdx]
   );
 
   const handleMouseMove = useCallback(
@@ -102,9 +134,33 @@ export function Seekbar() {
   }, []);
 
   const handleMouseLeave = useCallback(() => {
-    setIsDragging(false);
     setHoverFrame(null);
   }, []);
+
+  // Global mouse tracking during seekbar drag
+  useEffect(() => {
+    if (!isDragging) return;
+
+    document.body.style.userSelect = "none";
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const frame = pixelToFrame(e.clientX);
+      setFrameIdx(frame);
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener("mousemove", handleGlobalMouseMove);
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+
+    return () => {
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleGlobalMouseMove);
+      window.removeEventListener("mouseup", handleGlobalMouseUp);
+    };
+  }, [isDragging, pixelToFrame, setFrameIdx]);
 
   // Render seekbar
   useEffect(() => {
@@ -217,7 +273,7 @@ export function Seekbar() {
   }, []);
 
   return (
-    <div className="flex items-center h-10 bg-card border-t border-border px-2 gap-2 shrink-0">
+    <div className="flex items-center h-10 bg-card border-t border-border px-2 gap-2 shrink-0 select-none">
       {/* Frame counter */}
       <div className="text-xs text-muted-foreground w-24 text-right tabular-nums shrink-0">
         {totalFrames > 0 ? `${frameIdx} / ${totalFrames - 1}` : "---"}
@@ -245,7 +301,7 @@ export function Seekbar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="icon-xs"
               onClick={() => useAppStore.getState().incrementFrameIdx(-100)}
             >
@@ -257,7 +313,7 @@ export function Seekbar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="icon-xs"
               onClick={() => useAppStore.getState().incrementFrameIdx(-1)}
             >
@@ -269,7 +325,7 @@ export function Seekbar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={isPlaying ? "default" : "ghost"}
+              variant={isPlaying ? "default" : "subtle"}
               size="icon-xs"
               onClick={() => setIsPlaying(!isPlaying)}
             >
@@ -281,7 +337,7 @@ export function Seekbar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="icon-xs"
               onClick={() => useAppStore.getState().incrementFrameIdx(1)}
             >
@@ -293,7 +349,7 @@ export function Seekbar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="icon-xs"
               onClick={() => useAppStore.getState().incrementFrameIdx(100)}
             >
@@ -306,7 +362,7 @@ export function Seekbar() {
         <Popover>
           <PopoverTrigger asChild>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="xs"
               className="text-[10px] text-muted-foreground tabular-nums w-8 px-0"
               title="Playback speed"

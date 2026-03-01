@@ -44,6 +44,7 @@ export function VideoPlayer() {
   const markerSize = useAppStore((s) => s.markerSize);
   const nodeLabelSize = useAppStore((s) => s.nodeLabelSize);
   const palette = useAppStore((s) => s.palette);
+  const overlayVersion = useAppStore((s) => s.overlayVersion);
 
   // Local zoom/pan state
   const [zoom, setZoom] = useState(1);
@@ -152,12 +153,16 @@ export function VideoPlayer() {
     const [cw, ch] = containerSize;
     if (cw === 0 || ch === 0) return;
 
-    canvas.width = cw;
-    canvas.height = ch;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    canvas.style.width = `${cw}px`;
+    canvas.style.height = `${ch}px`;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, cw, ch);
     ctx.save();
     ctx.translate(offsetX + panX, offsetY + panY);
@@ -174,7 +179,11 @@ export function VideoPlayer() {
       return;
     }
 
-    const frames = labels.find({ video, frameIdx });
+    // Use reference equality (===) to avoid basename fallback in labels.find()
+    // which incorrectly matches videos sharing a container filename in .pkg.slp.
+    const frames = labels.labeledFrames.filter(
+      (lf) => lf.video === video && lf.frameIdx === frameIdx
+    );
     const lf = frames.length > 0 ? frames[0] : null;
     useAppStore.getState().setLabeledFrame(lf);
   }, [labels, video, frameIdx]);
@@ -190,12 +199,16 @@ export function VideoPlayer() {
     const [cw, ch] = containerSize;
     if (cw === 0 || ch === 0) return;
 
-    canvas.width = cw;
-    canvas.height = ch;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    canvas.style.width = `${cw}px`;
+    canvas.style.height = `${ch}px`;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, cw, ch);
 
     if (!labeledFrame || !showInstances) {
@@ -279,6 +292,7 @@ export function VideoPlayer() {
     baseScale,
     offsetX,
     offsetY,
+    overlayVersion,
   ]);
 
   // Fit view to instances when 'fit' is enabled and frame changes
@@ -367,10 +381,7 @@ export function VideoPlayer() {
           currentInstance.points[unplacedIdx].visible = true;
           currentInstance.points[unplacedIdx].complete = true;
           useAppStore.getState().markChanged();
-          // Force re-render
-          useAppStore
-            .getState()
-            .setLabeledFrame(useAppStore.getState().labeledFrame);
+          useAppStore.getState().bumpOverlayVersion();
           return;
         }
       }
@@ -434,10 +445,7 @@ export function VideoPlayer() {
         point.xy = [x, y];
         point.visible = true;
         useAppStore.getState().markChanged();
-        // Force overlay re-render via labeledFrame reference update
-        useAppStore
-          .getState()
-          .setLabeledFrame(useAppStore.getState().labeledFrame);
+        useAppStore.getState().bumpOverlayVersion();
       }
     },
     [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart]
@@ -550,12 +558,12 @@ export function VideoPlayer() {
         {/* Video frame layer */}
         <canvas
           ref={frameCanvasRef}
-          className="absolute inset-0 w-full h-full"
+          className="absolute inset-0"
         />
         {/* Skeleton overlay layer */}
         <canvas
           ref={overlayCanvasRef}
-          className="absolute inset-0 w-full h-full"
+          className="absolute inset-0"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}

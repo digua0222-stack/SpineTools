@@ -72,6 +72,9 @@ export interface AppState {
   // === Debug ===
   debugMode: boolean;
 
+  // === Overlay version ===
+  overlayVersion: number;
+
   // === Actions ===
   setLabels: (labels: Labels, filename?: string) => void;
   setVideo: (video: Video) => void;
@@ -87,6 +90,7 @@ export interface AppState {
   setGoToFrameDialogOpen: (open: boolean) => void;
   toggle: (key: keyof AppState) => void;
   set: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
+  bumpOverlayVersion: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -142,6 +146,9 @@ export const useAppStore = create<AppState>()(
 
       // Debug
       debugMode: false,
+
+      // Overlay version (bumped to force re-render)
+      overlayVersion: 0,
 
       // Actions
       setLabels: (labels, filename) =>
@@ -253,6 +260,11 @@ export const useAppStore = create<AppState>()(
       set: (key, value) =>
         set((state) => {
           (state as Record<string, unknown>)[key] = value;
+        }),
+
+      bumpOverlayVersion: () =>
+        set((state) => {
+          state.overlayVersion += 1;
         }),
     }))
   )

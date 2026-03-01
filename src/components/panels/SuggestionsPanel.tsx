@@ -161,14 +161,14 @@ export function SuggestionsPanel() {
       <Separator />
       <div className="flex gap-1 p-2">
         <Button
-          variant="ghost"
+          variant="subtle"
           size="xs"
           onClick={() => generateSuggestions(20)}
         >
           Generate Suggestions
         </Button>
         <Button
-          variant="ghost"
+          variant="subtle"
           size="xs"
           onClick={() => {
             if (!labels) return;

@@ -169,7 +169,7 @@ export function SkeletonPanel() {
           <Separator />
           <div className="flex gap-1 p-2">
             <Button
-              variant="ghost"
+              variant="subtle"
               size="xs"
               onClick={() => {
                 setNewNodeName(`node_${nodes.length}`);
@@ -179,7 +179,7 @@ export function SkeletonPanel() {
               New Node
             </Button>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="xs"
               onClick={() => setDeleteNodeOpen(true)}
               disabled={selectedNodeIdx === null}
@@ -200,7 +200,7 @@ export function SkeletonPanel() {
           <Separator />
           <div className="flex gap-1 p-2">
             <Button
-              variant="ghost"
+              variant="subtle"
               size="xs"
               onClick={() => {
                 setEdgeSrcName("");
@@ -212,7 +212,7 @@ export function SkeletonPanel() {
               New Edge
             </Button>
             <Button
-              variant="ghost"
+              variant="subtle"
               size="xs"
               onClick={deleteEdge}
               disabled={selectedEdgeIdx === null}
