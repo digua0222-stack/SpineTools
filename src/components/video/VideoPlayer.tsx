@@ -71,14 +71,12 @@ export function VideoPlayer() {
   // Rendered instances cache
   const renderedInstancesRef = useRef<RenderedInstance[]>([]);
 
-  // Load and render the current frame
+  // Store frame as ImageBitmap so we can re-draw with transforms
+  const frameBitmapRef = useRef<ImageBitmap | null>(null);
+
+  // Load the current frame (convert to ImageBitmap, trigger dimension update)
   useEffect(() => {
     if (!video || !video.backend) return;
-
-    const canvas = frameCanvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
     let cancelled = false;
 
@@ -87,36 +85,33 @@ export function VideoPlayer() {
         const frame = await video.backend!.getFrame(frameIdx);
         if (cancelled || !frame) return;
 
-        // Handle different frame types
+        let bmp: ImageBitmap;
+
         if (frame instanceof ImageBitmap) {
-          canvas.width = frame.width;
-          canvas.height = frame.height;
-          ctx.drawImage(frame, 0, 0);
+          bmp = frame;
         } else if (frame instanceof ImageData) {
-          canvas.width = frame.width;
-          canvas.height = frame.height;
-          ctx.putImageData(frame, 0, 0);
+          bmp = await createImageBitmap(frame);
         } else if (frame instanceof ArrayBuffer || frame instanceof Uint8Array) {
           const bytes =
             frame instanceof ArrayBuffer ? new Uint8Array(frame) : frame;
           const shape = video.shape;
-          if (shape) {
-            const [, h, w] = shape;
-            canvas.width = w;
-            canvas.height = h;
-            const imageData = new ImageData(
-              new Uint8ClampedArray(bytes),
-              w,
-              h
-            );
-            ctx.putImageData(imageData, 0, 0);
-          }
+          if (!shape) return;
+          const [, h, w] = shape;
+          const imageData = new ImageData(new Uint8ClampedArray(bytes), w, h);
+          bmp = await createImageBitmap(imageData);
+        } else {
+          return;
         }
 
-        // Signal that frame canvas dimensions changed
-        if (!cancelled) {
-          setFrameDims([canvas.width, canvas.height]);
+        if (cancelled) {
+          bmp.close();
+          return;
         }
+
+        // Close previous bitmap
+        frameBitmapRef.current?.close();
+        frameBitmapRef.current = bmp;
+        setFrameDims([bmp.width, bmp.height]);
       } catch (err) {
         console.error("Failed to render frame:", err);
       }
@@ -126,6 +121,29 @@ export function VideoPlayer() {
       cancelled = true;
     };
   }, [video, frameIdx]);
+
+  // Render the frame with zoom/pan transform
+  useEffect(() => {
+    const canvas = frameCanvasRef.current;
+    const bmp = frameBitmapRef.current;
+    if (!canvas || !bmp) return;
+
+    const [fw, fh] = frameDims;
+    if (fw === 0 || fh === 0) return;
+
+    canvas.width = fw;
+    canvas.height = fh;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, fw, fh);
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(zoom, zoom);
+    ctx.drawImage(bmp, 0, 0);
+    ctx.restore();
+  }, [frameDims, zoom, panX, panY]);
 
   // Find the current labeled frame and update store
   useEffect(() => {
@@ -412,8 +430,12 @@ export function VideoPlayer() {
   }, [isDragging, isPanning]);
 
   // Zoom with mouse wheel (towards pointer)
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Use native event listener with { passive: false } so preventDefault() works
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
       const canvas = overlayCanvasRef.current;
@@ -424,20 +446,20 @@ export function VideoPlayer() {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
-      // Mouse position in canvas pixel coords
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
 
       setZoom((prevZoom) => {
         const newZoom = Math.max(0.1, Math.min(20, prevZoom * factor));
-        // Adjust pan to keep the point under the cursor stationary
         setPanX((px) => mx - (mx - px) * (newZoom / prevZoom));
         setPanY((py) => my - (my - py) * (newZoom / prevZoom));
         return newZoom;
       });
-    },
-    []
-  );
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, []);
 
   // Double-click to reset zoom/pan
   const handleDoubleClick = useCallback(() => {
@@ -505,7 +527,6 @@ export function VideoPlayer() {
           "flex-1 relative overflow-hidden bg-background min-h-0",
           isPanning ? "cursor-grabbing" : isDragging ? "cursor-move" : isPlacingNodes ? "cursor-cell" : "cursor-crosshair"
         )}
-        onWheel={handleWheel}
         onDoubleClick={handleDoubleClick}
       >
         {/* Video frame layer */}

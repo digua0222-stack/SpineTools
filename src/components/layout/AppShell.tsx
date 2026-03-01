@@ -78,7 +78,7 @@ export function AppShell() {
       <div className="flex-1 flex overflow-hidden relative">
         {projectLoaded ? (
           <ResizablePanelGroup orientation="horizontal">
-            <ResizablePanel defaultSize={75} minSize={50}>
+            <ResizablePanel defaultSize="70%" minSize="40%">
               <div className="flex-1 flex flex-col min-w-0 h-full">
                 <VideoPlayer />
               </div>
@@ -86,7 +86,7 @@ export function AppShell() {
 
             <ResizableHandle className="w-1 bg-border hover:bg-primary/50 data-[resize-handle-active]:bg-primary transition-colors" />
 
-            <ResizablePanel defaultSize={25} minSize={10} maxSize={40}>
+            <ResizablePanel defaultSize="30%" minSize="15%" maxSize="50%">
               <SidePanel />
             </ResizablePanel>
           </ResizablePanelGroup>
