@@ -5,12 +5,10 @@
  */
 
 import { useCallback, useState } from "react";
-import { loadSlp } from "@talmolab/sleap-io.js";
-import { useAppStore } from "../stores/appStore";
 import { getPlatform } from "../platform";
+import { loadProjectFromFile, loadProjectFromPath } from "../lib/loadProject";
 
 export function useFileIO() {
-  const setLabels = useAppStore((s) => s.setLabels);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,23 +24,12 @@ export function useFileIO() {
 
     setLoading(true);
     try {
-      let labels;
       if (typeof result === "string") {
-        // Tauri path - read file bytes then load
-        const bytes = await platform.readFile(result);
-        labels = await loadSlp(bytes.buffer, {
-          openVideos: true,
-          h5: { filenameHint: result },
-        });
-        setLabels(labels, result);
+        // Tauri path
+        await loadProjectFromPath(result, platform.readFile);
       } else {
         // Browser File object
-        const buffer = await result.arrayBuffer();
-        labels = await loadSlp(buffer, {
-          openVideos: true,
-          h5: { filenameHint: result.name },
-        });
-        setLabels(labels, result.name);
+        await loadProjectFromFile(result);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -51,29 +38,21 @@ export function useFileIO() {
     } finally {
       setLoading(false);
     }
-  }, [setLabels]);
+  }, []);
 
-  const openFromDrop = useCallback(
-    async (file: File) => {
-      setError(null);
-      setLoading(true);
-      try {
-        const buffer = await file.arrayBuffer();
-        const labels = await loadSlp(buffer, {
-          openVideos: true,
-          h5: { filenameHint: file.name },
-        });
-        setLabels(labels, file.name);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(msg);
-        console.error("Failed to load dropped file:", err);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [setLabels]
-  );
+  const openFromDrop = useCallback(async (file: File) => {
+    setError(null);
+    setLoading(true);
+    try {
+      await loadProjectFromFile(file);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      console.error("Failed to load dropped file:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   return { openProject, openFromDrop, loading, error };
 }

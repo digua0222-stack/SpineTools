@@ -12,6 +12,7 @@
 import { loadSlp } from "@talmolab/sleap-io.js";
 import { useAppStore } from "../stores/appStore";
 import { toast } from "sonner";
+import { resolveExternalVideos } from "./resolveVideos";
 
 /**
  * Load an SLP project from a File object.
@@ -36,6 +37,7 @@ export async function loadProjectFromFile(file: File): Promise<boolean> {
       openVideos: true,
       h5: { filenameHint: file.name },
     });
+    await resolveExternalVideos(labels);
     store.setLabels(labels, file.name);
     toast.success(`Loaded ${file.name}`, {
       description: `${labels.videos.length} video(s), ${labels.labeledFrames.length} labeled frames`,
@@ -78,6 +80,7 @@ export async function loadProjectFromPath(
       openVideos: true,
       h5: { filenameHint: path },
     });
+    await resolveExternalVideos(labels);
     store.setLabels(labels, filename);
     toast.success(`Loaded ${filename}`, {
       description: `${labels.videos.length} video(s), ${labels.labeledFrames.length} labeled frames`,
