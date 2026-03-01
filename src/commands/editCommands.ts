@@ -22,7 +22,11 @@ export const AddInstance: Command = {
     const instance = Instance.empty({ skeleton });
 
     // Find or create the LabeledFrame for this video + frame
-    const frames = labels.find({ video, frameIdx });
+    // Use reference equality (===) to avoid basename fallback in labels.find()
+    // which incorrectly matches videos sharing a container filename in .pkg.slp.
+    const frames = labels.labeledFrames.filter(
+      (lf) => lf.video === video && lf.frameIdx === frameIdx
+    );
     let lf: LabeledFrame;
     if (frames.length > 0) {
       lf = frames[0];
@@ -48,7 +52,9 @@ export const DeleteSelectedInstance: Command = {
     const { labels, video, frameIdx, instance } = ctx.state;
     if (!labels || !video || !instance) return;
 
-    const frames = labels.find({ video, frameIdx });
+    const frames = labels.labeledFrames.filter(
+      (lf) => lf.video === video && lf.frameIdx === frameIdx
+    );
     if (frames.length === 0) return;
 
     const lf = frames[0];
@@ -139,7 +145,9 @@ export const PasteInstance: Command = {
     });
 
     // Find or create the LabeledFrame
-    const frames = labels.find({ video, frameIdx });
+    const frames = labels.labeledFrames.filter(
+      (lf) => lf.video === video && lf.frameIdx === frameIdx
+    );
     let lf: LabeledFrame;
     if (frames.length > 0) {
       lf = frames[0];
@@ -163,7 +171,9 @@ export const DeleteFramePredictions: Command = {
     const { labels, video, frameIdx, instance } = ctx.state;
     if (!labels || !video) return;
 
-    const frames = labels.find({ video, frameIdx });
+    const frames = labels.labeledFrames.filter(
+      (lf) => lf.video === video && lf.frameIdx === frameIdx
+    );
     if (frames.length === 0) return;
 
     const lf = frames[0];

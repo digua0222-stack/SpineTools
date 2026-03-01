@@ -95,8 +95,14 @@ export function InstancesPanel() {
   const palette = useAppStore((s) => s.palette);
 
   // Find the labeled frame for current video + frame
+  // Use reference equality (===) to avoid basename fallback in labels.find()
+  // which incorrectly matches videos sharing a container filename in .pkg.slp.
   const labeledFrames =
-    labels && video ? labels.find({ video, frameIdx }) : [];
+    labels && video
+      ? labels.labeledFrames.filter(
+          (lf) => lf.video === video && lf.frameIdx === frameIdx
+        )
+      : [];
   const labeledFrame = labeledFrames.length > 0 ? labeledFrames[0] : null;
   const instances = labeledFrame?.instances ?? [];
 
@@ -145,14 +151,14 @@ export function InstancesPanel() {
       <Separator />
       <div className="flex gap-1 p-2">
         <Button
-          variant="ghost"
+          variant="subtle"
           size="xs"
           onClick={() => commandContext.execute(AddInstance)}
         >
           Add Instance
         </Button>
         <Button
-          variant="ghost"
+          variant="subtle"
           size="xs"
           onClick={() => commandContext.execute(DeleteSelectedInstance)}
         >

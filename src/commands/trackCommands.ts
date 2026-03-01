@@ -63,7 +63,9 @@ export const TransposeInstances: Command = {
     const { labels, video, frameIdx, instance } = ctx.state;
     if (!labels || !video || !instance) return;
 
-    const frames = labels.find({ video, frameIdx });
+    const frames = labels.labeledFrames.filter(
+      (lf) => lf.video === video && lf.frameIdx === frameIdx
+    );
     if (frames.length === 0) return;
 
     const lf = frames[0];
