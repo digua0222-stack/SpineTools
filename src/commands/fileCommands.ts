@@ -9,6 +9,7 @@ import { UpdateTopic } from "../types";
 import type { Command } from "./types";
 import type { CommandContext } from "./CommandContext";
 import { loadProjectFromFile } from "../lib/loadProject";
+import { saveProjectAsSlp } from "../lib/saveProject";
 import { toast } from "sonner";
 
 /** Reset state to an empty project. */
@@ -78,38 +79,26 @@ export const OpenProjectCommand: Command = {
   },
 };
 
-/** Save the project as JSON (browser download). */
+/** Save the project as SLP (HDF5). */
 export const SaveProjectCommand: Command = {
   name: "SaveProject",
   topics: [],
-  execute(ctx: CommandContext) {
+  async execute(ctx: CommandContext) {
     const { labels, filename } = ctx.state;
     if (!labels) return;
+    await saveProjectAsSlp(labels, filename ?? undefined);
+  },
+};
 
-    try {
-      const dict = labels.toDict();
-      const json = JSON.stringify(dict, null, 2);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-
-      const baseName = filename
-        ? filename.replace(/\.slp$/, "")
-        : "labels";
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${baseName}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      ctx.state.clearChanges();
-      toast.success("Project saved", {
-        description: `${baseName}.json`,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error("Failed to save project", { description: msg });
-      console.error("[SaveProject] Failed to save:", err);
-    }
+/** Save the project as SLP, always showing the file picker. */
+export const SaveAsProjectCommand: Command = {
+  name: "SaveAsProject",
+  topics: [],
+  async execute(ctx: CommandContext) {
+    const { labels } = ctx.state;
+    if (!labels) return;
+    // Pass no filename so the picker always shows with default "labels.slp"
+    await saveProjectAsSlp(labels);
   },
 };
 

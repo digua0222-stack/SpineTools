@@ -15,6 +15,7 @@ export {
   NewProjectCommand,
   OpenProjectCommand,
   SaveProjectCommand,
+  SaveAsProjectCommand,
   ExportJsonCommand,
 } from "./fileCommands";
 

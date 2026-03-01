@@ -15,6 +15,7 @@ import {
   OpenProjectCommand,
   NewProjectCommand,
   SaveProjectCommand,
+  SaveAsProjectCommand,
   GoNextLabeledFrame,
   GoPrevLabeledFrame,
   GoNextSuggestion,
@@ -152,6 +153,10 @@ export function useKeyboardShortcuts() {
       [DEFAULT_SHORTCUTS.save]: (e) => {
         e.preventDefault();
         commandContext.execute(SaveProjectCommand);
+      },
+      [DEFAULT_SHORTCUTS["save as"]]: (e) => {
+        e.preventDefault();
+        commandContext.execute(SaveAsProjectCommand);
       },
 
       // Copy/paste

@@ -12,6 +12,7 @@ import {
   NewProjectCommand,
   OpenProjectCommand,
   SaveProjectCommand,
+  SaveAsProjectCommand,
   ExportJsonCommand,
   GoNextLabeledFrame,
   GoPrevLabeledFrame,
@@ -85,7 +86,7 @@ function FileMenu() {
         <MenubarItem onClick={() => exec(SaveProjectCommand)}>
           Save <MenubarShortcut>{modKey}+S</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem disabled>
+        <MenubarItem onClick={() => exec(SaveAsProjectCommand)}>
           Save As... <MenubarShortcut>{modKey}+Shift+S</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
