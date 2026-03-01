@@ -74,6 +74,27 @@ export function VideoPlayer() {
   // Store frame as ImageBitmap so we can re-draw with transforms
   const frameBitmapRef = useRef<ImageBitmap | null>(null);
 
+  // Track container dimensions for fit-to-window rendering
+  const [containerSize, setContainerSize] = useState<[number, number]>([0, 0]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setContainerSize([Math.round(width), Math.round(height)]);
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
+
+  // Compute fit-to-window base scale and centering offsets
+  const [cw, ch] = containerSize;
+  const [fw, fh] = frameDims;
+  const baseScale = fw > 0 && fh > 0 ? Math.min(cw / fw, ch / fh) : 1;
+  const offsetX = fw > 0 && fh > 0 ? (cw - fw * baseScale) / 2 : 0;
+  const offsetY = fw > 0 && fh > 0 ? (ch - fh * baseScale) / 2 : 0;
+
   // Load the current frame (convert to ImageBitmap, trigger dimension update)
   useEffect(() => {
     if (!video || !video.backend) return;
@@ -122,28 +143,29 @@ export function VideoPlayer() {
     };
   }, [video, frameIdx]);
 
-  // Render the frame with zoom/pan transform
+  // Render the frame with fit-to-window base transform + user zoom/pan
   useEffect(() => {
     const canvas = frameCanvasRef.current;
     const bmp = frameBitmapRef.current;
     if (!canvas || !bmp) return;
 
-    const [fw, fh] = frameDims;
-    if (fw === 0 || fh === 0) return;
+    const [cw, ch] = containerSize;
+    if (cw === 0 || ch === 0) return;
 
-    canvas.width = fw;
-    canvas.height = fh;
+    canvas.width = cw;
+    canvas.height = ch;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, fw, fh);
+    ctx.clearRect(0, 0, cw, ch);
     ctx.save();
-    ctx.translate(panX, panY);
-    ctx.scale(zoom, zoom);
+    ctx.translate(offsetX + panX, offsetY + panY);
+    ctx.scale(baseScale * zoom, baseScale * zoom);
+    ctx.imageSmoothingEnabled = baseScale * zoom <= 2;
     ctx.drawImage(bmp, 0, 0);
     ctx.restore();
-  }, [frameDims, zoom, panX, panY]);
+  }, [frameDims, containerSize, zoom, panX, panY, baseScale, offsetX, offsetY]);
 
   // Find the current labeled frame and update store
   useEffect(() => {
@@ -164,17 +186,17 @@ export function VideoPlayer() {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
 
-    // Use tracked frame dimensions
-    const [fw, fh] = frameDims;
-    if (fw === 0 || fh === 0) return;
+    // Use container dimensions for canvas size
+    const [cw, ch] = containerSize;
+    if (cw === 0 || ch === 0) return;
 
-    canvas.width = fw;
-    canvas.height = fh;
+    canvas.width = cw;
+    canvas.height = ch;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, cw, ch);
 
     if (!labeledFrame || !showInstances) {
       renderedInstancesRef.current = [];
@@ -219,10 +241,10 @@ export function VideoPlayer() {
 
     renderedInstancesRef.current = instances;
 
-    // Apply zoom/pan transform
+    // Apply fit-to-window base transform + user zoom/pan
     ctx.save();
-    ctx.translate(panX, panY);
-    ctx.scale(zoom, zoom);
+    ctx.translate(offsetX + panX, offsetY + panY);
+    ctx.scale(baseScale * zoom, baseScale * zoom);
 
     renderInstances(ctx, instances, {
       markerSize,
@@ -233,7 +255,7 @@ export function VideoPlayer() {
       showEdges,
       showNonVisibleNodes,
       colorPredicted,
-      zoom,
+      zoom: baseScale * zoom,
     });
 
     ctx.restore();
@@ -253,13 +275,17 @@ export function VideoPlayer() {
     panX,
     panY,
     frameDims,
+    containerSize,
+    baseScale,
+    offsetX,
+    offsetY,
   ]);
 
   // Fit view to instances when 'fit' is enabled and frame changes
   useEffect(() => {
     if (!fit || !labeledFrame) return;
-    const container = containerRef.current;
-    if (!container) return;
+    const [cw, ch] = containerSize;
+    if (cw === 0 || ch === 0) return;
     const [fw, fh] = frameDims;
     if (fw === 0 || fh === 0) return;
 
@@ -281,21 +307,19 @@ export function VideoPlayer() {
     const bboxH = maxY - minY;
     if (bboxW <= 0 || bboxH <= 0) return;
 
-    const rect = container.getBoundingClientRect();
-    const scaleX = rect.width / bboxW;
-    const scaleY = rect.height / bboxH;
-    const newZoom = Math.min(scaleX, scaleY, 10);
+    // Zoom relative to baseScale so bbox fills the container
+    const newZoom = Math.min(cw / (bboxW * baseScale), ch / (bboxH * baseScale), 10);
 
     // Center the bounding box
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
-    const newPanX = rect.width / 2 - centerX * newZoom;
-    const newPanY = rect.height / 2 - centerY * newZoom;
+    const newPanX = cw / 2 - offsetX - centerX * baseScale * newZoom;
+    const newPanY = ch / 2 - offsetY - centerY * baseScale * newZoom;
 
     setZoom(newZoom);
     setPanX(newPanX);
     setPanY(newPanY);
-  }, [fit, labeledFrame, frameDims]);
+  }, [fit, labeledFrame, frameDims, containerSize, baseScale, offsetX, offsetY]);
 
   // Mouse handlers for interaction
   const canvasToScene = useCallback(
@@ -303,14 +327,14 @@ export function VideoPlayer() {
       const canvas = overlayCanvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
+      const cx = clientX - rect.left;
+      const cy = clientY - rect.top;
       return {
-        x: ((clientX - rect.left) * scaleX - panX) / zoom,
-        y: ((clientY - rect.top) * scaleY - panY) / zoom,
+        x: (cx - offsetX - panX) / (baseScale * zoom),
+        y: (cy - offsetY - panY) / (baseScale * zoom),
       };
     },
-    [zoom, panX, panY]
+    [zoom, panX, panY, baseScale, offsetX, offsetY]
   );
 
   // Check if we're in node placement mode (selected instance has unplaced NaN nodes)
@@ -438,28 +462,22 @@ export function VideoPlayer() {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
-      const canvas = overlayCanvasRef.current;
-      if (!canvas) {
-        setZoom((z) => Math.max(0.1, Math.min(20, z * factor)));
-        return;
-      }
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      const mx = (e.clientX - rect.left) * scaleX;
-      const my = (e.clientY - rect.top) * scaleY;
+      const rect = container.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
 
       setZoom((prevZoom) => {
         const newZoom = Math.max(0.1, Math.min(20, prevZoom * factor));
-        setPanX((px) => mx - (mx - px) * (newZoom / prevZoom));
-        setPanY((py) => my - (my - py) * (newZoom / prevZoom));
+        const ratio = newZoom / prevZoom;
+        setPanX((px) => (mx - offsetX) - ((mx - offsetX) - px) * ratio);
+        setPanY((py) => (my - offsetY) - ((my - offsetY) - py) * ratio);
         return newZoom;
       });
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [offsetX, offsetY]);
 
   // Double-click to reset zoom/pan
   const handleDoubleClick = useCallback(() => {
@@ -532,13 +550,12 @@ export function VideoPlayer() {
         {/* Video frame layer */}
         <canvas
           ref={frameCanvasRef}
-          className="absolute inset-0 w-full h-full object-contain"
-          style={{ imageRendering: zoom > 2 ? "pixelated" : "auto" }}
+          className="absolute inset-0 w-full h-full"
         />
         {/* Skeleton overlay layer */}
         <canvas
           ref={overlayCanvasRef}
-          className="absolute inset-0 w-full h-full object-contain"
+          className="absolute inset-0 w-full h-full"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
