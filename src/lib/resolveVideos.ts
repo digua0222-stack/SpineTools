@@ -234,10 +234,10 @@ export async function assignVideoBackend(video: Video, file: File): Promise<void
 
     video.backend = backend;
     if (backend.shape) {
-      video.shape = backend.shape;
+      (video as any).shape = backend.shape;
     }
     if (backend.fps) {
-      video.fps = backend.fps;
+      (video as any).fps = backend.fps;
     }
   } catch (err) {
     console.error(`Failed to load video backend for ${file.name}:`, err);

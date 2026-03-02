@@ -6,7 +6,7 @@
  */
 
 import { useAppStore } from "../../stores/appStore";
-import { getPaletteColor, rgbToCSS, getInstanceColor } from "../../lib/colorPalettes";
+import { rgbToCSS, getInstanceColor } from "../../lib/colorPalettes";
 import {
   commandContext,
   AddInstance,
