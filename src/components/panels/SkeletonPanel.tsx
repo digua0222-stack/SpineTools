@@ -3,10 +3,26 @@
  *
  * Shows skeleton name, node/edge counts, node list, edge list,
  * and controls for editing and loading templates.
+ *
+ * All mutations go through the command system for undo/redo support.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAppStore } from "../../stores/appStore";
+import { commandContext } from "../../commands/CommandContext";
+import {
+  AddNodeCommand,
+  DeleteNodeCommand,
+  AddEdgeCommand,
+  DeleteEdgeCommand,
+  RenameNodeCommand,
+  LoadSkeletonTemplateCommand,
+  installSkeletonUndoInterceptor,
+} from "../../commands/skeletonCommands";
+import {
+  SKELETON_TEMPLATES,
+  TEMPLATE_ORDER,
+} from "../../lib/skeletonTemplates";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -36,7 +52,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import type { Skeleton } from "../../types";
+
+// Install skeleton undo interceptor once on module load
+let interceptorInstalled = false;
+function ensureInterceptor() {
+  if (!interceptorInstalled) {
+    installSkeletonUndoInterceptor(commandContext);
+    interceptorInstalled = true;
+  }
+}
 
 export function SkeletonPanel() {
   const skeleton = useAppStore((s) => s.skeleton);
@@ -55,6 +79,17 @@ export function SkeletonPanel() {
   const [edgeSrcName, setEdgeSrcName] = useState("");
   const [edgeDstName, setEdgeDstName] = useState("");
 
+  // Dialog state for template confirmation
+  const [templateConfirmOpen, setTemplateConfirmOpen] = useState(false);
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(
+    null
+  );
+
+  // Install undo interceptor
+  useEffect(() => {
+    ensureInterceptor();
+  }, []);
+
   if (!skeleton) {
     return (
       <p className="text-xs text-muted-foreground p-2">No skeleton loaded.</p>
@@ -66,36 +101,28 @@ export function SkeletonPanel() {
 
   const addNode = () => {
     if (!newNodeName.trim()) return;
-    skeleton.nodes.push({ name: newNodeName.trim() } as Skeleton["nodes"][0]);
-    useAppStore.getState().markChanged();
-    setSelectedNodeIdx(skeleton.nodes.length - 1);
+    // Validate no duplicate names
+    if (nodes.some((n) => n.name === newNodeName.trim())) return;
+    commandContext.execute(AddNodeCommand, { name: newNodeName.trim() });
+    setSelectedNodeIdx(nodes.length); // will be the new last index after add
     setNewNodeName("");
     setAddNodeOpen(false);
   };
 
   const deleteNode = () => {
     if (selectedNodeIdx === null || selectedNodeIdx >= nodes.length) return;
-    const node = nodes[selectedNodeIdx];
-    // Remove edges referencing this node
-    skeleton.edges = skeleton.edges.filter(
-      (e) => e.source !== node && e.destination !== node
-    );
-    skeleton.nodes.splice(selectedNodeIdx, 1);
+    commandContext.execute(DeleteNodeCommand, { nodeIdx: selectedNodeIdx });
     setSelectedNodeIdx(null);
-    useAppStore.getState().markChanged();
     setDeleteNodeOpen(false);
   };
 
   const addEdge = () => {
-    const src = nodes.find((n) => n.name === edgeSrcName);
-    const dst = nodes.find((n) => n.name === edgeDstName);
-    if (!src || !dst) return;
-    skeleton.edges.push({
-      source: src,
-      destination: dst,
-    } as Skeleton["edges"][0]);
-    useAppStore.getState().markChanged();
-    setSelectedEdgeIdx(skeleton.edges.length - 1);
+    if (!edgeSrcName || !edgeDstName) return;
+    commandContext.execute(AddEdgeCommand, {
+      srcName: edgeSrcName,
+      dstName: edgeDstName,
+    });
+    setSelectedEdgeIdx(edges.length); // new last index
     setEdgeSrcName("");
     setEdgeDstName("");
     setAddEdgeOpen(false);
@@ -103,9 +130,34 @@ export function SkeletonPanel() {
 
   const deleteEdge = () => {
     if (selectedEdgeIdx === null || selectedEdgeIdx >= edges.length) return;
-    skeleton.edges.splice(selectedEdgeIdx, 1);
+    commandContext.execute(DeleteEdgeCommand, { edgeIdx: selectedEdgeIdx });
     setSelectedEdgeIdx(null);
-    useAppStore.getState().markChanged();
+  };
+
+  const handleTemplateSelect = (templateId: string) => {
+    if (nodes.length > 0) {
+      // Existing skeleton — confirm replacement
+      setPendingTemplateId(templateId);
+      setTemplateConfirmOpen(true);
+    } else {
+      commandContext.execute(LoadSkeletonTemplateCommand, { templateId });
+    }
+  };
+
+  const confirmLoadTemplate = () => {
+    if (pendingTemplateId) {
+      commandContext.execute(LoadSkeletonTemplateCommand, {
+        templateId: pendingTemplateId,
+      });
+    }
+    setPendingTemplateId(null);
+    setTemplateConfirmOpen(false);
+    setSelectedNodeIdx(null);
+    setSelectedEdgeIdx(null);
+  };
+
+  const handleRename = (nodeIdx: number, newName: string) => {
+    commandContext.execute(RenameNodeCommand, { nodeIdx, newName });
   };
 
   return (
@@ -126,20 +178,19 @@ export function SkeletonPanel() {
         <label className="text-xs text-muted-foreground block mb-1">
           Load template
         </label>
-        <Select onValueChange={(v) => console.log("Load template:", v)}>
+        <Select onValueChange={handleTemplateSelect}>
           <SelectTrigger className="w-full h-7 text-xs" size="sm">
             <SelectValue placeholder="Select skeleton template..." />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="fly">Fly (32 nodes)</SelectItem>
-            <SelectItem value="mouse_topdown">
-              Mouse top-down (12 nodes)
-            </SelectItem>
-            <SelectItem value="mouse_sideview">
-              Mouse side-view (8 nodes)
-            </SelectItem>
-            <SelectItem value="human">Human (17 nodes)</SelectItem>
-            <SelectItem value="hand">Hand (21 nodes)</SelectItem>
+            {TEMPLATE_ORDER.map((id) => {
+              const t = SKELETON_TEMPLATES[id];
+              return (
+                <SelectItem key={id} value={id}>
+                  {t.name}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </div>
@@ -164,6 +215,7 @@ export function SkeletonPanel() {
               nodes={nodes}
               selectedIdx={selectedNodeIdx}
               onSelect={setSelectedNodeIdx}
+              onRename={handleRename}
             />
           </ScrollArea>
           <Separator />
@@ -241,6 +293,12 @@ export function SkeletonPanel() {
             }}
             autoFocus
           />
+          {newNodeName.trim() &&
+            nodes.some((n) => n.name === newNodeName.trim()) && (
+              <p className="text-xs text-destructive">
+                A node with this name already exists.
+              </p>
+            )}
           <DialogFooter>
             <Button
               variant="outline"
@@ -249,7 +307,14 @@ export function SkeletonPanel() {
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={addNode} disabled={!newNodeName.trim()}>
+            <Button
+              size="sm"
+              onClick={addNode}
+              disabled={
+                !newNodeName.trim() ||
+                nodes.some((n) => n.name === newNodeName.trim())
+              }
+            >
               Add
             </Button>
           </DialogFooter>
@@ -347,6 +412,40 @@ export function SkeletonPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Template Confirmation Dialog */}
+      <Dialog open={templateConfirmOpen} onOpenChange={setTemplateConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Replace Skeleton?</DialogTitle>
+            <DialogDescription>
+              The current skeleton has {nodes.length} node
+              {nodes.length !== 1 ? "s" : ""}. Loading a template will replace
+              all nodes and edges. All existing instance points will be reset.
+              This action can be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPendingTemplateId(null);
+                setTemplateConfirmOpen(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmLoadTemplate}
+            >
+              Replace
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -355,16 +454,60 @@ function NodesTable({
   nodes,
   selectedIdx,
   onSelect,
+  onRename,
 }: {
   nodes: { name: string }[];
   selectedIdx: number | null;
   onSelect: (idx: number | null) => void;
+  onRename: (nodeIdx: number, newName: string) => void;
 }) {
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingIdx !== null && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingIdx]);
+
   if (nodes.length === 0) {
     return (
       <p className="text-xs text-muted-foreground p-2">No nodes defined.</p>
     );
   }
+
+  const startEditing = (idx: number) => {
+    setEditingIdx(idx);
+    setEditValue(nodes[idx].name);
+  };
+
+  const commitEdit = () => {
+    if (editingIdx === null) return;
+    const trimmed = editValue.trim();
+
+    // Validate: not empty, not duplicate (unless same node)
+    if (
+      trimmed &&
+      !nodes.some((n, i) => n.name === trimmed && i !== editingIdx)
+    ) {
+      if (trimmed !== nodes[editingIdx].name) {
+        onRename(editingIdx, trimmed);
+      }
+    }
+    setEditingIdx(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingIdx(null);
+  };
+
+  const isDuplicate =
+    editingIdx !== null &&
+    editValue.trim() !== "" &&
+    nodes.some((n, i) => n.name === editValue.trim() && i !== editingIdx);
 
   return (
     <Table>
@@ -393,7 +536,48 @@ function NodesTable({
             <TableCell className="py-0.5 px-2 text-xs text-muted-foreground">
               {i}
             </TableCell>
-            <TableCell className="py-0.5 px-2 text-xs">{node.name}</TableCell>
+            <TableCell
+              className="py-0.5 px-2 text-xs"
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                startEditing(i);
+              }}
+            >
+              {editingIdx === i ? (
+                <div>
+                  <input
+                    ref={inputRef}
+                    className={cn(
+                      "w-full bg-transparent border-b outline-none text-xs py-0",
+                      isDuplicate
+                        ? "border-destructive text-destructive"
+                        : "border-primary"
+                    )}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={commitEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitEdit();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelEdit();
+                      }
+                      e.stopPropagation();
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  {isDuplicate && (
+                    <span className="text-[10px] text-destructive">
+                      Duplicate name
+                    </span>
+                  )}
+                </div>
+              ) : (
+                node.name
+              )}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

@@ -1,8 +1,9 @@
 /**
- * Edit commands: instance creation, deletion, copy/paste, and point manipulation.
+ * Edit commands: instance creation, deletion, copy/paste, point manipulation,
+ * and prediction-to-instance conversion.
  *
  * Ports SLEAP's AddInstance, DeleteSelectedInstance, CopyInstance, PasteInstance,
- * SetInstancePointLocations, DeleteFramePredictions.
+ * SetInstancePointLocations, DeleteFramePredictions, ConvertPredictionToInstance.
  */
 
 import { Instance, LabeledFrame } from "@talmolab/sleap-io.js";
@@ -185,6 +186,130 @@ export const DeleteFramePredictions: Command = {
       ctx.state.setInstance(null);
     }
     ctx.state.setLabeledFrame(userInstances.length > 0 ? lf : null);
+    ctx.state.markChanged();
+  },
+};
+
+/**
+ * Convert a predicted instance to a user instance.
+ *
+ * Params:
+ *   instanceIdx: number - index of the predicted instance in the labeled frame
+ *
+ * Clones the predicted instance's points into a new user Instance,
+ * replaces the predicted one in the frame, and selects the new instance.
+ */
+export const ConvertPredictionToInstance: Command = {
+  name: "ConvertPredictionToInstance",
+  topics: [UpdateTopic.Frame, UpdateTopic.Instance],
+  execute(ctx: CommandContext, params?: Record<string, unknown>) {
+    const { labels, video, frameIdx } = ctx.state;
+    if (!labels || !video) return;
+
+    const instanceIdx = params?.instanceIdx;
+    if (typeof instanceIdx !== "number") return;
+
+    const frames = labels.find({ video, frameIdx });
+    if (frames.length === 0) return;
+
+    const lf = frames[0];
+    const predicted = lf.instances[instanceIdx];
+    if (!predicted || !("score" in predicted)) return;
+
+    // Clone as a user Instance (no score property)
+    const userInstance = new Instance({
+      skeleton: predicted.skeleton,
+      points: clonePoints(predicted.points),
+      track: predicted.track,
+    });
+
+    // Replace the predicted instance with the user instance
+    lf.instances.splice(instanceIdx, 1, userInstance);
+
+    ctx.state.setLabeledFrame(lf);
+    ctx.state.setInstance(userInstance);
+    ctx.state.markChanged();
+  },
+};
+
+/**
+ * No-op mutating command to create an undo snapshot before a continuous edit
+ * operation (drag, placement). Since it has topics, CommandContext.execute()
+ * will auto-snapshot the current frame state before calling execute().
+ * The actual mutations happen directly on the data model during the drag.
+ */
+export const BeginEdit: Command = {
+  name: "BeginEdit",
+  topics: [UpdateTopic.Frame, UpdateTopic.Instance],
+  execute() {
+    // Intentionally empty - the snapshot is the point
+  },
+};
+
+/**
+ * Move an entire instance by a delta.
+ *
+ * Params:
+ *   dx: number - x offset
+ *   dy: number - y offset
+ */
+export const MoveInstance: Command = {
+  name: "MoveInstance",
+  topics: [], // No redraw topics - caller handles re-render
+  execute(ctx: CommandContext, params?: Record<string, unknown>) {
+    const { instance } = ctx.state;
+    if (!instance) return;
+
+    const dx = params?.dx;
+    const dy = params?.dy;
+    if (typeof dx !== "number" || typeof dy !== "number") return;
+
+    for (const point of instance.points) {
+      if (!isNaN(point.xy[0]) && !isNaN(point.xy[1])) {
+        point.xy = [point.xy[0] + dx, point.xy[1] + dy];
+      }
+    }
+
+    ctx.state.markChanged();
+  },
+};
+
+/**
+ * Rotate all points in the selected instance around its centroid.
+ *
+ * Params:
+ *   angle: number - rotation angle in radians
+ */
+export const RotateInstance: Command = {
+  name: "RotateInstance",
+  topics: [UpdateTopic.Frame, UpdateTopic.Instance],
+  skipAutoSnapshot: true,
+  execute(ctx: CommandContext, params?: Record<string, unknown>) {
+    const { instance } = ctx.state;
+    if (!instance || "score" in instance) return;
+
+    const angle = params?.angle;
+    if (typeof angle !== "number") return;
+
+    // Compute centroid of visible points
+    const visible = instance.points.filter(
+      (p) => !isNaN(p.xy[0]) && !isNaN(p.xy[1])
+    );
+    if (visible.length === 0) return;
+
+    const cx = visible.reduce((s, p) => s + p.xy[0], 0) / visible.length;
+    const cy = visible.reduce((s, p) => s + p.xy[1], 0) / visible.length;
+
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    for (const point of instance.points) {
+      if (isNaN(point.xy[0]) || isNaN(point.xy[1])) continue;
+      const dx = point.xy[0] - cx;
+      const dy = point.xy[1] - cy;
+      point.xy = [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos];
+    }
+
     ctx.state.markChanged();
   },
 };

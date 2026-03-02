@@ -18,7 +18,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Toaster } from "sonner";
 import { MenuBar } from "./MenuBar";
 import { StatusBar } from "./StatusBar";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { VideoPlayer } from "../video/VideoPlayer";
+
 import { VideosPanel } from "../panels/VideosPanel";
 import { SkeletonPanel } from "../panels/SkeletonPanel";
 import { InstancesPanel } from "../panels/InstancesPanel";
@@ -27,6 +29,10 @@ import { WelcomeScreen } from "./WelcomeScreen";
 import { TrainingDialog } from "../dialogs/TrainingDialog";
 import { InferenceDialog } from "../dialogs/InferenceDialog";
 import { GoToFrameDialog } from "../dialogs/GoToFrameDialog";
+import { DeletePredictionsDialog } from "../dialogs/DeletePredictionsDialog";
+import { ExportDialog } from "../dialogs/ExportDialog";
+import { ShortcutsDialog } from "../dialogs/ShortcutsDialog";
+import { HelpDialog } from "../dialogs/HelpDialog";
 import { useAppStore } from "../../stores/appStore";
 import { loadProjectFromFile } from "../../lib/loadProject";
 import {
@@ -58,6 +64,20 @@ export function AppShell() {
   const projectLoaded = useAppStore((s) => s.projectLoaded);
   const isLoading = useAppStore((s) => s.isLoading);
   const loadingMessage = useAppStore((s) => s.loadingMessage);
+
+  // Dialog state
+  const deletePredictionsDialogOpen = useAppStore(
+    (s) => s.deletePredictionsDialogOpen
+  );
+  const setDeletePredictionsDialogOpen = useAppStore(
+    (s) => s.setDeletePredictionsDialogOpen
+  );
+  const exportDialogOpen = useAppStore((s) => s.exportDialogOpen);
+  const setExportDialogOpen = useAppStore((s) => s.setExportDialogOpen);
+  const shortcutsDialogOpen = useAppStore((s) => s.shortcutsDialogOpen);
+  const setShortcutsDialogOpen = useAppStore((s) => s.setShortcutsDialogOpen);
+  const helpDialogOpen = useAppStore((s) => s.helpDialogOpen);
+  const setHelpDialogOpen = useAppStore((s) => s.setHelpDialogOpen);
 
   // Unsaved changes protection: warn before closing/refreshing
   useEffect(() => {
@@ -92,33 +112,35 @@ export function AppShell() {
     >
       <MenuBar />
 
-      <div className="flex-1 flex overflow-hidden relative">
-        {projectLoaded ? (
-          <div className="flex-1 flex min-w-0 h-full">
-            {/* Video player takes remaining space */}
-            <div className="flex-1 flex flex-col min-w-0 h-full">
-              <VideoPlayer />
-            </div>
+      <ErrorBoundary>
+        <div className="flex-1 flex overflow-hidden relative">
+          {projectLoaded ? (
+            <div className="flex-1 flex min-w-0 h-full">
+              {/* Video player takes remaining space */}
+              <div className="flex-1 flex flex-col min-w-0 h-full">
+                <VideoPlayer />
+              </div>
 
-            {/* Sidebar (icon strip + optional expanded panel) */}
-            <Sidebar />
-          </div>
-        ) : (
-          <WelcomeScreen />
-        )}
-
-        {/* Loading overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-sm text-muted-foreground">
-                {loadingMessage || "Loading..."}
-              </p>
+              {/* Sidebar (icon strip + optional expanded panel) */}
+              <Sidebar />
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <WelcomeScreen />
+          )}
+
+          {/* Loading overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                <p className="text-sm text-muted-foreground">
+                  {loadingMessage || "Loading..."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </ErrorBoundary>
 
       <StatusBar />
 
@@ -126,6 +148,22 @@ export function AppShell() {
       <TrainingDialog />
       <InferenceDialog />
       <GoToFrameDialog />
+      <DeletePredictionsDialog
+        open={deletePredictionsDialogOpen}
+        onOpenChange={setDeletePredictionsDialogOpen}
+      />
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+      />
+      <ShortcutsDialog
+        open={shortcutsDialogOpen}
+        onOpenChange={setShortcutsDialogOpen}
+      />
+      <HelpDialog
+        open={helpDialogOpen}
+        onOpenChange={setHelpDialogOpen}
+      />
 
       {/* Toast notifications */}
       <Toaster

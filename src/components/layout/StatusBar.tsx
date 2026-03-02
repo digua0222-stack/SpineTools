@@ -13,7 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Minus, Plus, RotateCcw } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 
 export function StatusBar() {
   const filename = useAppStore((s) => s.filename);
@@ -24,6 +24,7 @@ export function StatusBar() {
   const instance = useAppStore((s) => s.instance);
   const labeledFrame = useAppStore((s) => s.labeledFrame);
   const uiScale = useAppStore((s) => s.uiScale);
+  const frameRange = useAppStore((s) => s.frameRange);
 
   const totalFrames = video?.shape?.[0] ?? null;
   const totalLabeledFrames = labels?.labeledFrames.length ?? 0;
@@ -70,6 +71,14 @@ export function StatusBar() {
                 <Separator orientation="vertical" className="h-3.5" />
                 <span className="whitespace-nowrap">
                   {instanceCount} instance{instanceCount !== 1 ? "s" : ""}
+                </span>
+              </>
+            )}
+            {frameRange && (
+              <>
+                <Separator orientation="vertical" className="h-3.5" />
+                <span className="whitespace-nowrap">
+                  Frames {frameRange[0]}-{frameRange[1]} selected
                 </span>
               </>
             )}

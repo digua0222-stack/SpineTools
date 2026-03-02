@@ -15,6 +15,7 @@ import {
   CopyInstance,
   PasteInstance,
   DeleteAllPredictions,
+  ConvertPredictionToInstance,
 } from "@/commands/editCommands";
 import {
   GoNextLabeledFrame,
@@ -25,7 +26,14 @@ import {
   AddTrack,
   SetInstanceTrack,
   TransposeInstances,
+  PropagateTrackLabels,
 } from "@/commands/trackCommands";
+import {
+  AddNodeCommand,
+  DeleteNodeCommand,
+  RenameNodeCommand,
+  installSkeletonUndoInterceptor,
+} from "@/commands/skeletonCommands";
 import {
   Labels,
   Instance,
@@ -522,5 +530,158 @@ describe("Workflow: State consistency", () => {
     expect(useAppStore.getState().hasChanges).toBe(false);
     // lastInteractedFrame is NOT cleared by clearChanges
     expect(useAppStore.getState().lastInteractedFrame).toBe(25);
+  });
+});
+
+describe("Workflow: Convert prediction", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  it("load -> find predicted -> convert -> verify user instance", async () => {
+    const project = loadProject({
+      numFrames: 1,
+      numInstancesPerFrame: 1,
+      withPredictions: true,
+    });
+
+    // 1. Verify predicted instance exists
+    const lf = project.labels.labeledFrames[0];
+    useAppStore.getState().setFrameIdx(lf.frameIdx);
+
+    const predIdx = lf.instances.findIndex((i) => "score" in i);
+    expect(predIdx).not.toBe(-1);
+    expect("score" in lf.instances[predIdx]).toBe(true);
+
+    // 2. Convert
+    await ctx.execute(ConvertPredictionToInstance, { instanceIdx: predIdx });
+
+    // 3. Verify it's now a user instance
+    expect("score" in lf.instances[predIdx]).toBe(false);
+
+    // 4. The new instance should be selected
+    expect(useAppStore.getState().instance).toBe(lf.instances[predIdx]);
+
+    // 5. Changes should be marked
+    expect(useAppStore.getState().hasChanges).toBe(true);
+  });
+});
+
+describe("Workflow: Skeleton editing", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  it("add node -> rename -> delete -> verify point consistency", async () => {
+    const project = loadProject({
+      numFrames: 2,
+      numInstancesPerFrame: 1,
+    });
+    installSkeletonUndoInterceptor(ctx);
+
+    const skeleton = project.skeleton;
+    const initialNodeCount = skeleton.nodes.length;
+
+    // 1. Add a node
+    await ctx.execute(AddNodeCommand, { name: "new_joint" });
+    expect(skeleton.nodes.length).toBe(initialNodeCount + 1);
+
+    // All instances should have the new point
+    for (const lf of project.labels.labeledFrames) {
+      for (const inst of lf.instances) {
+        expect(inst.points.length).toBe(initialNodeCount + 1);
+      }
+    }
+
+    // 2. Rename the new node
+    const newNodeIdx = skeleton.nodes.length - 1;
+    await ctx.execute(RenameNodeCommand, { nodeIdx: newNodeIdx, newName: "renamed_joint" });
+    expect(skeleton.nodes[newNodeIdx].name).toBe("renamed_joint");
+
+    // Points should have updated names
+    for (const lf of project.labels.labeledFrames) {
+      for (const inst of lf.instances) {
+        expect(inst.points[newNodeIdx].name).toBe("renamed_joint");
+      }
+    }
+
+    // 3. Delete the node
+    await ctx.execute(DeleteNodeCommand, { nodeIdx: newNodeIdx });
+    expect(skeleton.nodes.length).toBe(initialNodeCount);
+
+    // Instance points should be back to original count
+    for (const lf of project.labels.labeledFrames) {
+      for (const inst of lf.instances) {
+        expect(inst.points.length).toBe(initialNodeCount);
+      }
+    }
+  });
+
+  it("undo after skeleton add restores node count", async () => {
+    const project = loadProject({
+      numFrames: 1,
+      numInstancesPerFrame: 1,
+    });
+    installSkeletonUndoInterceptor(ctx);
+
+    const skeleton = project.skeleton;
+    const initialNodeCount = skeleton.nodes.length;
+
+    // Add a node
+    await ctx.execute(AddNodeCommand, { name: "temp_node" });
+    expect(skeleton.nodes.length).toBe(initialNodeCount + 1);
+
+    // Undo
+    ctx.undo();
+
+    // Skeleton nodes should be restored
+    expect(skeleton.nodes.length).toBe(initialNodeCount);
+  });
+});
+
+describe("Workflow: Track propagation", () => {
+  let ctx: CommandContext;
+
+  beforeEach(() => {
+    resetStore();
+    ctx = new CommandContext();
+  });
+
+  it("assign track -> propagate forward -> verify", async () => {
+    const project = loadProject({
+      numFrames: 3,
+      numInstancesPerFrame: 2,
+      withTracks: true,
+    });
+
+    const [track1, track2] = project.tracks;
+
+    // All frames have inst0=track1, inst1=track2
+    // Simulate a swap that the user made on frame 0 and wants to propagate
+    const lf0 = project.labels.labeledFrames[0];
+    lf0.instances[0].track = track2;
+    lf0.instances[1].track = track1;
+
+    // Now propagate: swap track1<->track2 forward from frame 0
+    useAppStore.getState().setFrameIdx(lf0.frameIdx);
+    await ctx.execute(PropagateTrackLabels, {
+      oldTrack: track1,
+      newTrack: track2,
+    });
+
+    // Frames 1 and 2 should now have the swap
+    const lf1 = project.labels.labeledFrames[1];
+    expect(lf1.instances[0].track).toBe(track2);
+    expect(lf1.instances[1].track).toBe(track1);
+
+    const lf2 = project.labels.labeledFrames[2];
+    expect(lf2.instances[0].track).toBe(track2);
+    expect(lf2.instances[1].track).toBe(track1);
   });
 });

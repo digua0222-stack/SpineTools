@@ -299,6 +299,10 @@ describe("appStore", () => {
       expect(state.trainingDialogOpen).toBe(false);
       expect(state.inferenceDialogOpen).toBe(false);
       expect(state.goToFrameDialogOpen).toBe(false);
+      expect(state.deletePredictionsDialogOpen).toBe(false);
+      expect(state.exportDialogOpen).toBe(false);
+      expect(state.shortcutsDialogOpen).toBe(false);
+      expect(state.helpDialogOpen).toBe(false);
     });
 
     it("opens and closes training dialog", () => {
@@ -332,6 +336,38 @@ describe("appStore", () => {
       expect(useAppStore.getState().trainingDialogOpen).toBe(true);
       expect(useAppStore.getState().inferenceDialogOpen).toBe(true);
       expect(useAppStore.getState().goToFrameDialogOpen).toBe(false);
+    });
+
+    it("opens and closes delete predictions dialog", () => {
+      useAppStore.getState().setDeletePredictionsDialogOpen(true);
+      expect(useAppStore.getState().deletePredictionsDialogOpen).toBe(true);
+
+      useAppStore.getState().setDeletePredictionsDialogOpen(false);
+      expect(useAppStore.getState().deletePredictionsDialogOpen).toBe(false);
+    });
+
+    it("opens and closes export dialog", () => {
+      useAppStore.getState().setExportDialogOpen(true);
+      expect(useAppStore.getState().exportDialogOpen).toBe(true);
+
+      useAppStore.getState().setExportDialogOpen(false);
+      expect(useAppStore.getState().exportDialogOpen).toBe(false);
+    });
+
+    it("opens and closes shortcuts dialog", () => {
+      useAppStore.getState().setShortcutsDialogOpen(true);
+      expect(useAppStore.getState().shortcutsDialogOpen).toBe(true);
+
+      useAppStore.getState().setShortcutsDialogOpen(false);
+      expect(useAppStore.getState().shortcutsDialogOpen).toBe(false);
+    });
+
+    it("opens and closes help dialog", () => {
+      useAppStore.getState().setHelpDialogOpen(true);
+      expect(useAppStore.getState().helpDialogOpen).toBe(true);
+
+      useAppStore.getState().setHelpDialogOpen(false);
+      expect(useAppStore.getState().helpDialogOpen).toBe(false);
     });
   });
 

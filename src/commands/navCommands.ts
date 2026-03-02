@@ -157,3 +157,49 @@ export const GoNextUserFrame: Command = {
     ctx.state.setFrameIdx(next !== undefined ? next : userFrames[0]);
   },
 };
+
+/**
+ * Navigate to the next frame where a track first appears ("spawns").
+ *
+ * Finds the first frame index for each track in the current video,
+ * then navigates to the next spawn frame after the current position.
+ * Wraps around if at the end.
+ */
+export const GoNextTrackSpawnFrame: Command = {
+  name: "GoNextTrackSpawnFrame",
+  topics: [UpdateTopic.Frame],
+  execute(ctx: CommandContext) {
+    const { labels, video, frameIdx } = ctx.state;
+    if (!labels || !video) return;
+
+    const tracks = labels.tracks;
+    if (tracks.length === 0) return;
+
+    // Get all labeled frames for this video
+    const videoFrames = labels.find({ video });
+
+    // For each track, find the first frame where it appears
+    const spawnFrames = new Set<number>();
+    for (const track of tracks) {
+      let earliest = Infinity;
+      for (const lf of videoFrames) {
+        if (lf.instances.some((inst) => inst.track === track)) {
+          if (lf.frameIdx < earliest) {
+            earliest = lf.frameIdx;
+          }
+        }
+      }
+      if (earliest !== Infinity) {
+        spawnFrames.add(earliest);
+      }
+    }
+
+    if (spawnFrames.size === 0) return;
+
+    const sorted = [...spawnFrames].sort((a, b) => a - b);
+
+    // Find the next spawn frame after current
+    const next = sorted.find((idx) => idx > frameIdx);
+    ctx.state.setFrameIdx(next !== undefined ? next : sorted[0]);
+  },
+};

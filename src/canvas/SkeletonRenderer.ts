@@ -135,7 +135,7 @@ function renderInstance(
 
   // Draw track label on selection (always show for predicted if colorPredicted)
   if ((isSelected || (isPredicted && opts.colorPredicted)) && instance.trackName) {
-    renderTrackLabel(ctx, nodes, instance.trackName, color, instance.score);
+    renderTrackLabel(ctx, nodes, instance.trackName, color, instance.score, opts.zoom);
   }
 }
 
@@ -268,7 +268,8 @@ function renderTrackLabel(
   nodes: RenderedNode[],
   trackName: string,
   color: RGB,
-  score?: number
+  score?: number,
+  zoom: number = 1
 ): void {
   const visibleNodes = nodes.filter((n) => n.visible);
   if (visibleNodes.length === 0) return;
@@ -282,11 +283,13 @@ function renderTrackLabel(
     text += ` (${score.toFixed(2)})`;
   }
 
-  ctx.font = "10px sans-serif";
+  // Scale font size inversely with zoom so labels remain readable
+  const fontSize = 10 / zoom;
+  ctx.font = `${fontSize}px sans-serif`;
   ctx.fillStyle = rgbToCSS(color, 0.8);
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.fillText(text, centerX, minY - 14);
+  ctx.fillText(text, centerX, minY - 14 / zoom);
 }
 
 /**
