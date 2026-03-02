@@ -2,15 +2,74 @@
 
 Web-based labeling GUI for [SLEAP](https://sleap.ai) animal pose estimation and tracking.
 
-This is a port of SLEAP's Qt/Python desktop labeling interface to a modern web stack, with an optional Tauri v2 desktop shell for native file access.
+A port of SLEAP's Qt/Python desktop labeling interface to a modern web stack, with an optional [Tauri v2](https://v2.tauri.app/) desktop shell for native file access. Runs entirely in the browser -- no server or Python required.
 
 ## Tech Stack
 
-- **Frontend**: React 19, TypeScript, Vite 6, Tailwind CSS v4
-- **State**: Zustand + Immer
-- **Rendering**: Canvas 2D API (two-layer: video frame + skeleton overlay)
-- **Data**: [@talmolab/sleap-io.js](https://github.com/talmolab/sleap-io.js) for SLP file loading
-- **Desktop**: Tauri v2 (~5MB .deb vs ~244MB Electron)
+| Layer | Technology |
+|-------|-----------|
+| **UI** | React 19, TypeScript 5.7, Vite 6, Tailwind CSS v4 |
+| **Components** | [shadcn/ui](https://ui.shadcn.com/) (Radix primitives), black/orange theme |
+| **State** | [Zustand](https://zustand.docs.pmnd.rs/) + [Immer](https://immerjs.github.io/immer/) |
+| **Rendering** | Canvas 2D API (two-layer: video frame + skeleton overlay) |
+| **Data model** | [@talmolab/sleap-io.js](https://github.com/talmolab/sleap-io.js) -- SLP/HDF5 via [h5wasm](https://github.com/usnistgov/h5wasm) |
+| **Video** | [WebCodecs](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) + [mp4box.js](https://gpac.github.io/mp4box.js/) |
+| **Desktop** | Tauri v2 (~5 MB vs ~244 MB Electron) |
+| **Shortcuts** | [tinykeys](https://github.com/jamiebuilds/tinykeys) (~400 B) |
+| **Testing** | [Vitest](https://vitest.dev/) (200+ unit tests), [Playwright](https://playwright.dev/) (E2E) |
+
+## Features
+
+### File I/O
+- Open `.slp` files via file picker or drag-and-drop (including `.pkg.slp` with embedded videos)
+- Save / Save As in native SLP format (browser h5wasm writer)
+- Export labels as JSON
+
+### Video & Navigation
+- MP4 playback via WebCodecs with frame-accurate seeking
+- Seekbar with labeled frame marks, track occupancy bars, and snap-to-labeled-frame
+- Playback speed control (0.25x -- 8x)
+- Go to Frame dialog, next/prev labeled frame, next/prev suggestion
+
+### Labeling & Editing
+- Skeleton overlay with nodes (circles), edges (lines / wedges), and labels
+- Click to select instances, drag nodes to reposition
+- Add / delete instances and nodes
+- Copy / paste instances and tracks
+- Right-click context menu for instance and node actions
+- Undo / redo with frame-level snapshots via the command pattern
+
+### View Controls
+- Zoom, pan, and fit-to-instances
+- Show / hide: instances, node labels, edges, non-visible nodes
+- Color-by mode: **Track**, **Instance**, **Node**, or **Edge** (View > Apply Distinct Colors To)
+- Three color palettes: standard, five+, alphabet
+- Edge style: Line or Wedge
+- Configurable node marker size
+
+### Panels
+- **Videos** -- list and switch between project videos
+- **Skeleton** -- view and edit skeleton nodes and edges
+- **Instances** -- current frame's instances with track, type, score
+- **Suggestions** -- suggested frames for labeling
+
+### Keyboard Shortcuts
+
+40+ shortcuts matching SLEAP's defaults:
+
+| Action | Shortcut |
+|--------|----------|
+| Open / Save / Save As | `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S` |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
+| Next / prev frame | `Right` / `Left` |
+| Next / prev labeled frame | `Alt+Right` / `Alt+Left` |
+| Next / prev suggestion | `Space` / `Shift+Space` |
+| Go to frame | `Ctrl+J` |
+| Add / delete instance | `Ctrl+I` / `Ctrl+Backspace` |
+| Select next instance | `` ` `` |
+| Fit view | `Ctrl+=` |
+| Transpose tracks | `Ctrl+T` |
+| New track | `Ctrl+0` |
 
 ## Development
 
@@ -18,17 +77,19 @@ This is a port of SLEAP's Qt/Python desktop labeling interface to a modern web s
 # Install dependencies
 npm install
 
-# Start dev server (browser mode)
-npm run dev
+# Start dev server (browser)
+npm run dev          # http://localhost:5173
 
 # Start Tauri dev mode (desktop, requires system deps)
 npm run tauri:dev
 
-# Production build (browser)
-npm run build
+# Run tests
+npm test             # Vitest unit tests
+npm run test:e2e     # Playwright E2E tests
 
-# Production build (desktop)
-npm run tauri:build
+# Production builds
+npm run build        # Browser (dist/)
+npm run tauri:build  # Desktop installer (.msi / .dmg / .deb)
 ```
 
 ### System Dependencies (Linux, for Tauri)
@@ -41,9 +102,9 @@ sudo apt-get install libwebkit2gtk-4.1-dev libgtk-3-dev \
 
 ### sleap-io.js Dependency
 
-This project depends on `@talmolab/sleap-io.js` for SLP file loading and the data model. It can be used from either a local checkout or from npm.
+The data model and SLP file handling come from `@talmolab/sleap-io.js`. It can be used from a local checkout or from npm.
 
-**Local development (default):** Links to a sibling checkout for development against unpublished changes:
+**Local development (default)** -- links to a sibling checkout for developing against unpublished changes:
 
 ```bash
 # Expects ../sleap-io.js to exist (git clone it alongside this repo)
@@ -51,27 +112,70 @@ npm pkg set dependencies.@talmolab/sleap-io.js="file:../sleap-io.js"
 npm install
 ```
 
-**npm (CI / standalone):** Uses the published package from npm:
+**npm (CI / standalone)** -- uses the published package:
 
 ```bash
 npm pkg set dependencies.@talmolab/sleap-io.js="^0.1.9"
 npm install
 ```
 
-The Vite config auto-detects which mode is active by checking where `h5wasm` is installed — no manual config changes needed beyond `package.json`.
+The Vite config auto-detects which mode is active by checking where `h5wasm` is installed.
 
-## Features
+## Architecture
 
-- SLP file loading via drag-and-drop or file dialog
-- Video frame rendering with skeleton overlay
-- Instance selection, node dragging, and node placement
-- Zoom, pan, and fit-to-instances view controls
-- Undo/redo with frame-level snapshots
-- 40+ keyboard shortcuts matching SLEAP's defaults
-- Side panels: Videos, Skeleton, Instances, Suggestions
-- Right-click context menu for instance/node actions
-- Video playback with speed control (0.25x-8x)
-- Menu bar: File, Edit, Go, View, Labels, Tracks
+```
+src/
+├── main.tsx                     # Entry point, exposes window.sleap debug API
+├── App.tsx                      # Root component
+├── stores/appStore.ts           # Zustand store (selection, view, project state)
+├── commands/                    # SLEAP-style command pattern with undo/redo
+│   ├── CommandContext.ts        #   Executor with frame-level snapshots
+│   ├── fileCommands.ts          #   New, Open, Save, SaveAs, ExportJson
+│   ├── navCommands.ts           #   Frame/suggestion/video navigation
+│   ├── editCommands.ts          #   Instance/node editing, copy/paste
+│   └── trackCommands.ts         #   Track assignment, transpose, copy/paste
+├── canvas/SkeletonRenderer.ts   # Canvas 2D overlay renderer + hit testing
+├── components/
+│   ├── layout/                  #   AppShell, MenuBar, StatusBar, WelcomeScreen
+│   ├── video/                   #   VideoPlayer (two-canvas), Seekbar, ContextMenu
+│   ├── panels/                  #   Videos, Skeleton, Instances, Suggestions
+│   ├── dialogs/                 #   GoToFrame, Training, Inference
+│   └── ui/                      #   shadcn/ui component library
+├── hooks/                       #   useKeyboardShortcuts, useFileIO
+├── lib/
+│   ├── colorPalettes.ts         #   Palette definitions + color-by-mode logic
+│   ├── loadProject.ts           #   Consolidated SLP loading pipeline
+│   ├── slpWriter.ts             #   Browser SLP writer (h5wasm MEMFS)
+│   ├── resolveVideos.ts         #   Video backend resolution for .pkg.slp
+│   └── shortcuts.ts             #   40+ keyboard shortcut definitions
+├── platform/                    #   Tauri vs browser file I/O abstraction
+└── types/                       #   TypeScript type definitions
+
+src-tauri/                       # Tauri v2 desktop shell (Rust)
+tests/                           # Vitest unit tests + Playwright E2E
+docs/                            # Architecture, research, and feature audit docs
+```
+
+### Key Patterns
+
+- **Two-canvas rendering** -- video frame canvas + skeleton overlay canvas, independently updated for performance
+- **Command pattern** -- every edit goes through `CommandContext` for undo/redo with frame-level snapshots
+- **`overlayVersion` counter** -- bumped to force overlay re-renders when mutable data changes without React state changes
+- **Reference equality** -- all `labeledFrame` lookups use `===` on video objects (avoids a basename-matching bug in sleap-io.js `Labels.find()`)
+- **Platform abstraction** -- `src/platform/` abstracts file I/O so the same codebase runs in Tauri and the browser
+
+## Documentation
+
+The `docs/` directory contains detailed research and design documents:
+
+- **[architecture.md](docs/architecture.md)** -- system design, state management, rendering pipeline, command pattern
+- **[missing-features-audit.md](docs/missing-features-audit.md)** -- side-by-side comparison with SLEAP desktop (~40% implemented)
+- **[enhancement-proposals.md](docs/enhancement-proposals.md)** -- prioritized feature roadmap (P0--P3)
+- **[sleap-io-upstream-issues.md](docs/sleap-io-upstream-issues.md)** -- tracked bugs/improvements for sleap-io.js
+- **[user-flows.md](docs/user-flows.md)** -- supported labeling workflows
+- **[canvas-rendering-research.md](docs/canvas-rendering-research.md)** -- Canvas 2D vs WebGL vs PixiJS evaluation
+- **[desktop-shell-research.md](docs/desktop-shell-research.md)** -- Tauri v2 vs Electron analysis
+- **[ui-libraries-research.md](docs/ui-libraries-research.md)** -- component/state/styling library selection
 
 ## License
 
