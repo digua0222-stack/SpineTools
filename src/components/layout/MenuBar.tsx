@@ -53,7 +53,7 @@ import {
 export function MenuBar() {
   return (
     <Menubar className="h-8 rounded-none border-0 border-b border-border bg-card px-0 gap-0 shadow-none">
-      <div className="px-3 font-bold text-xs text-primary flex items-center">
+      <div className="px-3 font-semibold text-sm text-primary flex items-center tracking-wider">
         SLEAP
       </div>
       <FileMenu />
@@ -274,19 +274,52 @@ function ViewMenu() {
   const markerSize = useAppStore((s) => s.markerSize);
   const palette = useAppStore((s) => s.palette);
   const distinctlyColor = useAppStore((s) => s.distinctlyColor);
+  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
+  const uiScale = useAppStore((s) => s.uiScale);
   const toggle = useAppStore((s) => s.toggle);
   const setVal = useAppStore((s) => s.set);
+
+  const adjustScale = (delta: number) => {
+    const newScale = Math.max(0.75, Math.min(1.5, uiScale + delta));
+    setVal("uiScale", Math.round(newScale * 100) / 100);
+    document.documentElement.style.setProperty("--ui-scale", String(newScale));
+  };
 
   return (
     <MenubarMenu>
       <MenubarTrigger className="px-3 h-8 text-xs rounded-none">View</MenubarTrigger>
       <MenubarContent>
         <MenubarCheckboxItem
+          checked={!sidebarCollapsed}
+          onCheckedChange={() => toggle("sidebarCollapsed")}
+        >
+          Side Panel
+        </MenubarCheckboxItem>
+        <MenubarCheckboxItem
           checked={fit}
           onCheckedChange={() => toggle("fit")}
         >
           Fit View to Instances
         </MenubarCheckboxItem>
+        <MenubarSeparator />
+        <MenubarSub>
+          <MenubarSubTrigger className="text-sm">Text Size</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarItem onClick={() => adjustScale(0.05)}>
+              Increase <MenubarShortcut>{modKey}+Shift+=</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem onClick={() => adjustScale(-0.05)}>
+              Decrease <MenubarShortcut>{modKey}+-</MenubarShortcut>
+            </MenubarItem>
+            <MenubarSeparator />
+            <MenubarItem onClick={() => {
+              setVal("uiScale", 1);
+              document.documentElement.style.setProperty("--ui-scale", "1");
+            }}>
+              Reset to Default
+            </MenubarItem>
+          </MenubarSubContent>
+        </MenubarSub>
         <MenubarSeparator />
         <MenubarCheckboxItem
           checked={colorPredicted}

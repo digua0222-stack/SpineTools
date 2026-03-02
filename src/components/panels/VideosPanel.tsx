@@ -3,6 +3,7 @@
  *
  * Shows filename (truncated from left), frame count, and resolution.
  * Click to select a video as the active video.
+ * Missing videos (no backend) show a warning icon and a Locate button.
  */
 
 import { useAppStore } from "../../stores/appStore";
@@ -20,7 +21,13 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { AlertTriangle } from "lucide-react";
 import type { Video } from "../../types";
+import {
+  isVideoMissing,
+  resolveVideoFile,
+  resolveAllVideoFiles,
+} from "../../lib/resolveVideos";
 
 /** Truncate a filename/path from the left, keeping the rightmost characters. */
 function truncateLeft(path: string, maxLen: number): string {
@@ -39,12 +46,16 @@ function VideoRow({
   video,
   index,
   isSelected,
+  isMissing,
   onSelect,
+  onLocate,
 }: {
   video: Video;
   index: number;
   isSelected: boolean;
+  isMissing: boolean;
   onSelect: () => void;
+  onLocate: () => void;
 }) {
   const shape = video.shape;
   const frameCount = shape?.[0] ?? "?";
@@ -62,7 +73,12 @@ function VideoRow({
       )}
     >
       <TableCell className="py-0.5 px-2 text-xs text-muted-foreground">
-        {index + 1}
+        <span className="flex items-center gap-1">
+          {isMissing && (
+            <AlertTriangle className="h-3 w-3 text-yellow-500 shrink-0" />
+          )}
+          {index + 1}
+        </span>
       </TableCell>
       <TableCell
         className="py-0.5 px-2 text-xs"
@@ -70,7 +86,24 @@ function VideoRow({
           Array.isArray(video.filename) ? video.filename[0] : video.filename
         }
       >
-        {truncateLeft(basename(video.filename), 30)}
+        <span className="flex items-center gap-1">
+          <span className={cn(isMissing && "text-muted-foreground")}>
+            {truncateLeft(basename(video.filename), 30)}
+          </span>
+          {isMissing && (
+            <Button
+              variant="subtle"
+              size="xs"
+              className="h-4 px-1 text-[10px]"
+              onClick={(e) => {
+                e.stopPropagation();
+                onLocate();
+              }}
+            >
+              Locate
+            </Button>
+          )}
+        </span>
       </TableCell>
       <TableCell className="py-0.5 px-2 text-xs text-right tabular-nums">
         {frameCount}
@@ -109,8 +142,36 @@ export function VideosPanel() {
   const labels = useAppStore((s) => s.labels);
   const currentVideo = useAppStore((s) => s.video);
   const setVideo = useAppStore((s) => s.setVideo);
+  const setFrameIdx = useAppStore((s) => s.setFrameIdx);
+  const frameIdx = useAppStore((s) => s.frameIdx);
+  const bumpOverlayVersion = useAppStore((s) => s.bumpOverlayVersion);
 
   const videos = labels?.videos ?? [];
+  const missingVideos = videos.filter(isVideoMissing);
+
+  const handleLocateVideo = async (video: Video) => {
+    const ok = await resolveVideoFile(video);
+    if (ok) {
+      bumpOverlayVersion();
+      // If this is the current video, force a frame re-load
+      if (video === currentVideo) {
+        setVideo(video);
+        setFrameIdx(frameIdx);
+      }
+    }
+  };
+
+  const handleLocateAll = async () => {
+    const count = await resolveAllVideoFiles(missingVideos);
+    if (count > 0) {
+      bumpOverlayVersion();
+      // If the current video was resolved, force a frame re-load
+      if (currentVideo && !isVideoMissing(currentVideo)) {
+        setVideo(currentVideo);
+        setFrameIdx(frameIdx);
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -144,7 +205,9 @@ export function VideosPanel() {
                   video={video}
                   index={i}
                   isSelected={video === currentVideo}
+                  isMissing={isVideoMissing(video)}
                   onSelect={() => setVideo(video)}
+                  onLocate={() => handleLocateVideo(video)}
                 />
               ))}
             </TableBody>
@@ -168,6 +231,15 @@ export function VideosPanel() {
         >
           Remove Video
         </Button>
+        {missingVideos.length > 0 && (
+          <Button
+            variant="subtle"
+            size="xs"
+            onClick={handleLocateAll}
+          >
+            Locate All Missing
+          </Button>
+        )}
       </div>
     </div>
   );

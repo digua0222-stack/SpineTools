@@ -2,7 +2,7 @@
  * Resolve external video files that couldn't be loaded from the SLP.
  * When loadSlp() encounters external MP4 references, the video.backend
  * may be null because the bare filename can't be fetched in the browser.
- * This module prompts the user to locate those files via a file picker.
+ * This module provides helpers to locate those files via the Videos panel.
  */
 
 import { Mp4BoxVideoBackend } from "@talmolab/sleap-io.js";
@@ -10,41 +10,101 @@ import { toast } from "sonner";
 import type { Labels, Video } from "../types";
 
 /** Extract just the basename from a path or filename. */
-function getBasename(filename: string | string[]): string {
+export function getBasename(filename: string | string[]): string {
   const f = Array.isArray(filename) ? filename[0] ?? "" : filename;
   const parts = f.split(/[\\/]/);
   return parts[parts.length - 1] ?? f;
 }
 
 /** Check if a filename looks like a fetchable URL. */
-function isFetchableUrl(filename: string | string[]): boolean {
+export function isFetchableUrl(filename: string | string[]): boolean {
   const f = Array.isArray(filename) ? filename[0] ?? "" : filename;
   return /^(https?:|blob:|data:)/i.test(f);
 }
 
+/** Check if a video is missing its backend (unresolved external file). */
+export function isVideoMissing(video: Video): boolean {
+  return video.backend === null && !isFetchableUrl(video.filename);
+}
+
 /**
  * After loadSlp() returns, detect videos with no backend (external MP4s that
- * couldn't be resolved), prompt the user to pick the video file(s), create
- * blob URLs, and assign Mp4BoxVideoBackend instances.
+ * couldn't be resolved) and notify the user via toast. Does NOT open a file
+ * picker -- the user can locate files from the Videos panel instead.
  */
 export async function resolveExternalVideos(labels: Labels): Promise<void> {
-  // Find videos that need resolution
-  const unresolvedVideos = labels.videos.filter(
-    (v) => v.backend === null && !isFetchableUrl(v.filename)
-  );
+  const unresolvedVideos = labels.videos.filter(isVideoMissing);
 
   if (unresolvedVideos.length === 0) return;
 
-  // Build a list of expected filenames for the toast
-  const expectedNames = unresolvedVideos.map((v) => getBasename(v.filename));
+  const n = unresolvedVideos.length;
   toast.info(
-    `Please locate ${unresolvedVideos.length} video file${unresolvedVideos.length > 1 ? "s" : ""}: ${expectedNames.join(", ")}`
+    `${n} video${n > 1 ? "s" : ""} not found. Use the Videos panel to locate them.`,
+    {
+      description: "Annotations will be visible but video frames will be blank.",
+    }
   );
+}
+
+/**
+ * Open a file picker for a single video and assign its backend.
+ * Returns true if a video was successfully loaded.
+ */
+export async function resolveVideoFile(video: Video): Promise<boolean> {
+  let pickedFiles: File[];
+
+  try {
+    if ("showOpenFilePicker" in window) {
+      const handles = await (window as any).showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: "Video files",
+            accept: { "video/*": [".mp4", ".avi", ".mov", ".mkv", ".webm"] },
+          },
+        ],
+      });
+      pickedFiles = await Promise.all(
+        handles.map((h: any) => h.getFile() as Promise<File>)
+      );
+    } else {
+      pickedFiles = await new Promise<File[]>((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "video/*";
+        input.onchange = () => {
+          const files = input.files ? Array.from(input.files) : [];
+          resolve(files);
+        };
+        input.addEventListener("cancel", () => resolve([]));
+        input.click();
+      });
+    }
+  } catch {
+    return false;
+  }
+
+  if (pickedFiles.length === 0) return false;
+
+  await assignVideoBackend(video, pickedFiles[0]);
+  toast.success(`Loaded video: ${pickedFiles[0].name}`);
+  return true;
+}
+
+/**
+ * Open a multi-file picker to batch-resolve multiple missing videos.
+ * Matches picked files to videos by basename (case-insensitive).
+ * Returns the number of videos successfully resolved.
+ */
+export async function resolveAllVideoFiles(
+  videos: Video[]
+): Promise<number> {
+  const unresolvedVideos = videos.filter(isVideoMissing);
+  if (unresolvedVideos.length === 0) return 0;
 
   let pickedFiles: File[];
 
   try {
-    // Try the modern File System Access API first
     if ("showOpenFilePicker" in window) {
       const handles = await (window as any).showOpenFilePicker({
         multiple: true,
@@ -59,7 +119,6 @@ export async function resolveExternalVideos(labels: Labels): Promise<void> {
         handles.map((h: any) => h.getFile() as Promise<File>)
       );
     } else {
-      // Fallback: hidden <input type="file">
       pickedFiles = await new Promise<File[]>((resolve) => {
         const input = document.createElement("input");
         input.type = "file";
@@ -69,27 +128,20 @@ export async function resolveExternalVideos(labels: Labels): Promise<void> {
           const files = input.files ? Array.from(input.files) : [];
           resolve(files);
         };
-        // User cancelled
         input.addEventListener("cancel", () => resolve([]));
         input.click();
       });
     }
   } catch {
-    // User cancelled the picker
-    toast.warning("Video file selection cancelled", {
-      description: "Annotations will be visible but video frames will be blank.",
-    });
-    return;
+    toast.warning("Video file selection cancelled");
+    return 0;
   }
 
   if (pickedFiles.length === 0) {
-    toast.warning("No video files selected", {
-      description: "Annotations will be visible but video frames will be blank.",
-    });
-    return;
+    toast.warning("No video files selected");
+    return 0;
   }
 
-  // Match picked files to expected videos by basename (case-insensitive)
   let matchCount = 0;
 
   for (const video of unresolvedVideos) {
@@ -105,15 +157,17 @@ export async function resolveExternalVideos(labels: Labels): Promise<void> {
   }
 
   // Special case: 1 unresolved video + 1 picked file -> assign even if names don't match
-  if (matchCount === 0 && unresolvedVideos.length === 1 && pickedFiles.length === 1) {
+  if (
+    matchCount === 0 &&
+    unresolvedVideos.length === 1 &&
+    pickedFiles.length === 1
+  ) {
     await assignVideoBackend(unresolvedVideos[0], pickedFiles[0]);
     matchCount = 1;
   }
 
   if (matchCount > 0) {
-    toast.success(
-      `Loaded ${matchCount} video${matchCount > 1 ? "s" : ""}`,
-    );
+    toast.success(`Loaded ${matchCount} video${matchCount > 1 ? "s" : ""}`);
   }
 
   if (matchCount < unresolvedVideos.length) {
@@ -121,10 +175,13 @@ export async function resolveExternalVideos(labels: Labels): Promise<void> {
     toast.warning(
       `${remaining} video${remaining > 1 ? "s" : ""} could not be matched`,
       {
-        description: "Annotations will be visible but some video frames will be blank.",
+        description:
+          "Annotations will be visible but some video frames will be blank.",
       }
     );
   }
+
+  return matchCount;
 }
 
 /**
@@ -141,7 +198,7 @@ export async function resolveExternalVideos(labels: Labels): Promise<void> {
  * fileBlob.slice() when supportsRangeRequests is false, giving us lazy chunk
  * reading from the File without any network fetches.
  */
-async function assignVideoBackend(video: Video, file: File): Promise<void> {
+export async function assignVideoBackend(video: Video, file: File): Promise<void> {
   try {
     const filename = Array.isArray(video.filename) ? video.filename[0] ?? "" : video.filename;
 

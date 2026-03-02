@@ -2,20 +2,19 @@
  * Main application shell layout.
  *
  * Structure:
- * ┌─────────────────────────────────────────┐
- * │ MenuBar                                 │
- * ├──────────────────────┬──────────────────┤
- * │                      │ Side Panels      │
- * │  VideoPlayer         │ (Videos,         │
- * │  + Canvas Overlay    │  Skeleton,       │
- * │  + Seekbar           │  Instances,      │
- * │                      │  Suggestions)    │
- * ├──────────────────────┴──────────────────┤
- * │ StatusBar                               │
- * └─────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────┐
+ * │ MenuBar                                         │
+ * ├──────────────────────┬──────────────┬───────────┤
+ * │                      │ Panel Content│ Icon Strip│
+ * │  VideoPlayer         │ (expandable) │ (44px)    │
+ * │  + Canvas Overlay    │              │           │
+ * │  + Seekbar           │              │           │
+ * ├──────────────────────┴──────────────┴───────────┤
+ * │ StatusBar                                       │
+ * └─────────────────────────────────────────────────┘
  */
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Toaster } from "sonner";
 import { MenuBar } from "./MenuBar";
 import { StatusBar } from "./StatusBar";
@@ -31,11 +30,29 @@ import { GoToFrameDialog } from "../dialogs/GoToFrameDialog";
 import { useAppStore } from "../../stores/appStore";
 import { loadProjectFromFile } from "../../lib/loadProject";
 import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+  Film,
+  Bone,
+  Users,
+  Lightbulb,
+  PanelRightClose,
+  PanelRightOpen,
+  GripVertical,
+} from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+
+/** Panel definitions with icons. */
+const PANELS = [
+  { id: "videos", label: "Videos", icon: Film, component: VideosPanel },
+  { id: "skeleton", label: "Skeleton", icon: Bone, component: SkeletonPanel },
+  { id: "instances", label: "Instances", icon: Users, component: InstancesPanel },
+  { id: "suggestions", label: "Suggestions", icon: Lightbulb, component: SuggestionsPanel },
+] as const;
 
 export function AppShell() {
   const projectLoaded = useAppStore((s) => s.projectLoaded);
@@ -77,19 +94,15 @@ export function AppShell() {
 
       <div className="flex-1 flex overflow-hidden relative">
         {projectLoaded ? (
-          <ResizablePanelGroup orientation="horizontal">
-            <ResizablePanel defaultSize="70%" minSize="40%">
-              <div className="flex-1 flex flex-col min-w-0 h-full">
-                <VideoPlayer />
-              </div>
-            </ResizablePanel>
+          <div className="flex-1 flex min-w-0 h-full">
+            {/* Video player takes remaining space */}
+            <div className="flex-1 flex flex-col min-w-0 h-full">
+              <VideoPlayer />
+            </div>
 
-            <ResizableHandle className="w-1 bg-border hover:bg-primary/50 data-[resize-handle-active]:bg-primary transition-colors" />
-
-            <ResizablePanel defaultSize="30%" minSize="15%" maxSize="50%">
-              <SidePanel />
-            </ResizablePanel>
-          </ResizablePanelGroup>
+            {/* Sidebar (icon strip + optional expanded panel) */}
+            <Sidebar />
+          </div>
         ) : (
           <WelcomeScreen />
         )}
@@ -126,50 +139,204 @@ export function AppShell() {
   );
 }
 
-function SidePanel() {
+/** Collapsible sidebar with vertical icon strip + expandable panel content. */
+function Sidebar() {
+  const collapsed = useAppStore((s) => s.sidebarCollapsed);
+  const activePanel = useAppStore((s) => s.sidebarActivePanel);
+  const panelOrder = useAppStore((s) => s.panelOrder);
+  const set = useAppStore((s) => s.set);
+
+  // Sidebar resize state
+  const [panelWidth, setPanelWidth] = useState(320);
+  const isResizing = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  // Drag-to-reorder state
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const togglePanel = (panelId: string) => {
+    if (collapsed || activePanel !== panelId) {
+      set("sidebarActivePanel", panelId);
+      set("sidebarCollapsed", false);
+    } else {
+      set("sidebarCollapsed", true);
+    }
+  };
+
+  const toggleCollapse = () => {
+    set("sidebarCollapsed", !collapsed);
+  };
+
+  // Resize handlers
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    startX.current = e.clientX;
+    startWidth.current = panelWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      // Dragging left increases width (sidebar is on right)
+      const delta = startX.current - e.clientX;
+      const newWidth = Math.max(220, Math.min(600, startWidth.current + delta));
+      setPanelWidth(newWidth);
+    };
+
+    const handleUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  }, [panelWidth]);
+
+  // Drag-to-reorder handlers
+  const handleDragStart = (e: React.DragEvent, idx: number) => {
+    setDragIdx(idx);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(idx));
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIdx(idx);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIdx: number) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === dropIdx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+    const newOrder = [...panelOrder];
+    const [moved] = newOrder.splice(dragIdx, 1);
+    newOrder.splice(dropIdx, 0, moved);
+    set("panelOrder", newOrder);
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOverIdx(null);
+  };
+
+  // Get ordered panels
+  const orderedPanels = panelOrder
+    .map((id) => PANELS.find((p) => p.id === id))
+    .filter(Boolean) as typeof PANELS[number][];
+
+  // Find active panel component
+  const ActiveComponent = PANELS.find((p) => p.id === activePanel)?.component;
+
   return (
-    <Tabs defaultValue="videos" className="h-full gap-0">
-      <TabsList
-        variant="line"
-        className="w-full justify-start rounded-none border-b border-border bg-card h-8 px-0"
-      >
-        <TabsTrigger
-          value="videos"
-          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
+    <div className="flex h-full shrink-0">
+      {/* Resize handle (only when expanded) */}
+      {!collapsed && (
+        <div
+          className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary bg-border transition-colors"
+          onMouseDown={handleResizeStart}
+        />
+      )}
+
+      {/* Expanded panel content */}
+      {!collapsed && ActiveComponent && (
+        <div
+          className="h-full bg-card flex flex-col overflow-hidden"
+          style={{ width: panelWidth }}
         >
-          Videos
-        </TabsTrigger>
-        <TabsTrigger
-          value="skeleton"
-          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
-        >
-          Skeleton
-        </TabsTrigger>
-        <TabsTrigger
-          value="instances"
-          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
-        >
-          Instances
-        </TabsTrigger>
-        <TabsTrigger
-          value="suggestions"
-          className="rounded-none px-3 py-1.5 text-xs capitalize h-full data-[state=active]:text-foreground data-[state=active]:shadow-none"
-        >
-          Suggestions
-        </TabsTrigger>
-      </TabsList>
-      <TabsContent value="videos" className="overflow-auto p-2 mt-0">
-        <VideosPanel />
-      </TabsContent>
-      <TabsContent value="skeleton" className="overflow-auto p-2 mt-0">
-        <SkeletonPanel />
-      </TabsContent>
-      <TabsContent value="instances" className="overflow-auto p-2 mt-0">
-        <InstancesPanel />
-      </TabsContent>
-      <TabsContent value="suggestions" className="overflow-auto p-2 mt-0">
-        <SuggestionsPanel />
-      </TabsContent>
-    </Tabs>
+          {/* Panel header */}
+          <div className="flex items-center h-9 px-3 border-b border-border shrink-0">
+            <span className="text-sm font-medium text-foreground tracking-wide">
+              {PANELS.find((p) => p.id === activePanel)?.label}
+            </span>
+          </div>
+          {/* Panel content */}
+          <div className="flex-1 overflow-auto p-2 min-h-0">
+            <ActiveComponent />
+          </div>
+        </div>
+      )}
+
+      {/* Icon strip */}
+      <TooltipProvider delayDuration={200}>
+        <div className="flex flex-col w-11 bg-card border-l border-border shrink-0">
+          {/* Collapse/expand toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={toggleCollapse}
+                className={cn(
+                  "flex items-center justify-center h-9 w-full",
+                  "text-muted-foreground hover:text-foreground hover:bg-accent",
+                  "transition-colors border-b border-border"
+                )}
+              >
+                {collapsed ? (
+                  <PanelRightOpen className="h-4 w-4" />
+                ) : (
+                  <PanelRightClose className="h-4 w-4" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>{collapsed ? "Expand sidebar" : "Collapse sidebar"}</p>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Panel icons (reorderable) */}
+          {orderedPanels.map((panel, idx) => {
+            const Icon = panel.icon;
+            const isActive = !collapsed && activePanel === panel.id;
+            const isDragTarget = dragOverIdx === idx && dragIdx !== idx;
+
+            return (
+              <Tooltip key={panel.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, idx)}
+                    onDragOver={(e) => handleDragOver(e, idx)}
+                    onDrop={(e) => handleDrop(e, idx)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => togglePanel(panel.id)}
+                    className={cn(
+                      "group relative flex items-center justify-center h-11 w-full",
+                      "transition-all duration-150",
+                      isActive
+                        ? "text-primary bg-primary/8"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/60",
+                      isDragTarget && "border-t-2 border-t-primary",
+                      dragIdx === idx && "opacity-40"
+                    )}
+                  >
+                    {/* Active indicator bar */}
+                    {isActive && (
+                      <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 bg-primary rounded-r" />
+                    )}
+                    <Icon className="h-[18px] w-[18px]" />
+                    {/* Drag grip (visible on hover) */}
+                    <GripVertical className="absolute right-0.5 top-1/2 -translate-y-1/2 h-3 w-3 opacity-0 group-hover:opacity-30 transition-opacity" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p>{panel.label}</p>
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      </TooltipProvider>
+    </div>
   );
 }

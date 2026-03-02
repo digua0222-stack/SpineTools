@@ -1,10 +1,19 @@
 /**
  * Bottom status bar showing current state information.
+ * Includes UI scale controls on the right side.
  */
 
 import { useAppStore } from "../../stores/appStore";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Minus, Plus, RotateCcw } from "lucide-react";
 
 export function StatusBar() {
   const filename = useAppStore((s) => s.filename);
@@ -14,6 +23,7 @@ export function StatusBar() {
   const hasChanges = useAppStore((s) => s.hasChanges);
   const instance = useAppStore((s) => s.instance);
   const labeledFrame = useAppStore((s) => s.labeledFrame);
+  const uiScale = useAppStore((s) => s.uiScale);
 
   const totalFrames = video?.shape?.[0] ?? null;
   const totalLabeledFrames = labels?.labeledFrames.length ?? 0;
@@ -21,56 +31,116 @@ export function StatusBar() {
   const instanceCount = labeledFrame?.instances.length ?? 0;
   const isPredicted = instance && "score" in instance;
 
+  const adjustScale = (delta: number) => {
+    const newScale = Math.max(0.75, Math.min(1.5, uiScale + delta));
+    useAppStore.getState().set("uiScale", Math.round(newScale * 100) / 100);
+    document.documentElement.style.setProperty("--ui-scale", String(newScale));
+  };
+
+  const resetScale = () => {
+    useAppStore.getState().set("uiScale", 1);
+    document.documentElement.style.setProperty("--ui-scale", "1");
+  };
+
   return (
     <div className="flex items-center h-7 px-2 text-xs bg-card border-t border-border text-muted-foreground gap-2 shrink-0">
-      {filename ? (
-        <>
-          <span className="text-foreground">
-            {filename}
-            {hasChanges ? " *" : ""}
-          </span>
-          <Separator orientation="vertical" className="h-3.5" />
-          <span>
-            Frame {frameIdx}
-            {totalFrames !== null ? ` / ${totalFrames - 1}` : ""}
-          </span>
-          <Separator orientation="vertical" className="h-3.5" />
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 rounded-sm font-normal">
-            {totalLabeledFrames} labeled
-          </Badge>
-          <Separator orientation="vertical" className="h-3.5" />
-          <span>
-            {totalVideos} video{totalVideos !== 1 ? "s" : ""}
-          </span>
-          {instanceCount > 0 && (
-            <>
-              <Separator orientation="vertical" className="h-3.5" />
-              <span>
-                {instanceCount} instance{instanceCount !== 1 ? "s" : ""}
-              </span>
-            </>
-          )}
-          {instance && (
-            <>
-              <Separator orientation="vertical" className="h-3.5" />
-              <Badge
-                variant={isPredicted ? "outline" : "default"}
-                className="text-[10px] px-1.5 py-0 h-4 rounded-sm font-normal"
+      {/* Left: project info */}
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {filename ? (
+          <>
+            <span className="text-foreground truncate">
+              {filename}
+              {hasChanges ? " *" : ""}
+            </span>
+            <Separator orientation="vertical" className="h-3.5" />
+            <span className="tabular-nums whitespace-nowrap">
+              Frame {frameIdx}
+              {totalFrames !== null ? ` / ${totalFrames - 1}` : ""}
+            </span>
+            <Separator orientation="vertical" className="h-3.5" />
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 rounded-sm font-normal whitespace-nowrap">
+              {totalLabeledFrames} labeled
+            </Badge>
+            <Separator orientation="vertical" className="h-3.5" />
+            <span className="whitespace-nowrap">
+              {totalVideos} video{totalVideos !== 1 ? "s" : ""}
+            </span>
+            {instanceCount > 0 && (
+              <>
+                <Separator orientation="vertical" className="h-3.5" />
+                <span className="whitespace-nowrap">
+                  {instanceCount} instance{instanceCount !== 1 ? "s" : ""}
+                </span>
+              </>
+            )}
+            {instance && (
+              <>
+                <Separator orientation="vertical" className="h-3.5" />
+                <Badge
+                  variant={isPredicted ? "outline" : "default"}
+                  className="text-[10px] px-1.5 py-0 h-4 rounded-sm font-normal"
+                >
+                  {isPredicted ? "Pred" : "User"}
+                </Badge>
+                <span className="whitespace-nowrap">
+                  {instance.track?.name ?? "[no track]"} ({instance.nVisible}/
+                  {instance.points.length} nodes)
+                  {isPredicted &&
+                    ` score=${(instance as unknown as { score: number }).score.toFixed(3)}`}
+                </span>
+              </>
+            )}
+          </>
+        ) : (
+          <span>No project loaded</span>
+        )}
+      </div>
+
+      {/* Right: UI scale controls */}
+      <TooltipProvider delayDuration={300}>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <Separator orientation="vertical" className="h-3.5 mr-1" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                onClick={() => adjustScale(-0.05)}
               >
-                {isPredicted ? "Pred" : "User"}
-              </Badge>
-              <span>
-                {instance.track?.name ?? "[no track]"} ({instance.nVisible}/
-                {instance.points.length} nodes)
-                {isPredicted &&
-                  ` score=${(instance as unknown as { score: number }).score.toFixed(3)}`}
-              </span>
-            </>
-          )}
-        </>
-      ) : (
-        <span>No project loaded</span>
-      )}
+                <Minus className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top"><p>Decrease text size</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 text-[10px] tabular-nums"
+                onClick={resetScale}
+              >
+                {Math.round(uiScale * 100)}%
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top"><p>Reset text size</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5"
+                onClick={() => adjustScale(0.05)}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top"><p>Increase text size</p></TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
     </div>
   );
 }

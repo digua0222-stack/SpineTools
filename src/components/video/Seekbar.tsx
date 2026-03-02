@@ -179,8 +179,8 @@ export function Seekbar() {
     const w = rect.width;
     const h = rect.height;
 
-    // Background
-    ctx.fillStyle = "#1a1a2e";
+    // Background - matches card bg with subtle gradient
+    ctx.fillStyle = "#141418";
     ctx.fillRect(0, 0, w, h);
 
     if (totalFrames === 0) return;

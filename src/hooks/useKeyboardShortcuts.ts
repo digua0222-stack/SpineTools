@@ -204,6 +204,22 @@ export function useKeyboardShortcuts() {
         store().setGoToFrameDialogOpen(true);
       },
 
+      // UI scale
+      "$mod+Shift+Equal": (e) => {
+        e.preventDefault();
+        const uiScale = store().uiScale;
+        const newScale = Math.min(1.5, uiScale + 0.05);
+        store().set("uiScale", Math.round(newScale * 100) / 100);
+        document.documentElement.style.setProperty("--ui-scale", String(newScale));
+      },
+      "$mod+Minus": (e) => {
+        e.preventDefault();
+        const uiScale = store().uiScale;
+        const newScale = Math.max(0.75, uiScale - 0.05);
+        store().set("uiScale", Math.round(newScale * 100) / 100);
+        document.documentElement.style.setProperty("--ui-scale", String(newScale));
+      },
+
       // Video navigation
       [DEFAULT_SHORTCUTS["next video"]]: (e) => {
         e.preventDefault();

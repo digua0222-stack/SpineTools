@@ -35,6 +35,12 @@ export interface AppState {
   skeleton: Skeleton | null;
   lastInteractedFrame: number | null;
 
+  // === UI layout state ===
+  uiScale: number;
+  sidebarCollapsed: boolean;
+  sidebarActivePanel: string;
+  panelOrder: string[];
+
   // === View state ===
   showInstances: boolean;
   showLabels: boolean;
@@ -109,6 +115,12 @@ export const useAppStore = create<AppState>()(
       labeledFrame: null,
       skeleton: null,
       lastInteractedFrame: null,
+
+      // UI layout state
+      uiScale: 1,
+      sidebarCollapsed: false,
+      sidebarActivePanel: "videos",
+      panelOrder: ["videos", "skeleton", "instances", "suggestions"],
 
       // View state
       showInstances: true,

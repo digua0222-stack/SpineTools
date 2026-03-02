@@ -22,7 +22,10 @@ import {
 } from "../../canvas/SkeletonRenderer";
 import { getPaletteColor, getInstanceColor } from "../../lib/colorPalettes";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { isVideoMissing, resolveVideoFile } from "../../lib/resolveVideos";
+import { Film } from "lucide-react";
 
 export function VideoPlayer() {
   const frameCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -366,6 +369,29 @@ export function VideoPlayer() {
     [zoom, panX, panY, baseScale, offsetX, offsetY]
   );
 
+  // Constrain pan so at least 25% of the video remains visible
+  const constrainPan = useCallback(
+    (px: number, py: number, z: number) => {
+      const [cw, ch] = containerSize;
+      const [fw, fh] = frameDims;
+      if (fw === 0 || fh === 0) return { x: px, y: py };
+      const scaledW = fw * baseScale * z;
+      const scaledH = fh * baseScale * z;
+      const minVisible = 0.25;
+      const minVisibleX = scaledW * minVisible;
+      const minVisibleY = scaledH * minVisible;
+      const minPX = minVisibleX - scaledW - offsetX;
+      const maxPX = cw - minVisibleX - offsetX;
+      const minPY = minVisibleY - scaledH - offsetY;
+      const maxPY = ch - minVisibleY - offsetY;
+      return {
+        x: Math.max(minPX, Math.min(maxPX, px)),
+        y: Math.max(minPY, Math.min(maxPY, py)),
+      };
+    },
+    [containerSize, frameDims, baseScale, offsetX, offsetY]
+  );
+
   // Check if we're in node placement mode (selected instance has unplaced NaN nodes)
   const isPlacingNodes = selectedInstance
     ? selectedInstance.points.some((p) => isNaN(p.xy[0]) || isNaN(p.xy[1]))
@@ -382,6 +408,14 @@ export function VideoPlayer() {
       }
 
       if (e.button !== 0) return; // Only left-click for interaction
+
+      // Alt+left-click panning
+      if (e.altKey) {
+        e.preventDefault();
+        setIsPanning(true);
+        setPanStart({ x: e.clientX - panX, y: e.clientY - panY });
+        return;
+      }
 
       const { x, y } = canvasToScene(e.clientX, e.clientY);
       const currentInstance = useAppStore.getState().instance;
@@ -440,8 +474,11 @@ export function VideoPlayer() {
     (e: React.MouseEvent) => {
       // Handle panning
       if (isPanning) {
-        setPanX(e.clientX - panStart.x);
-        setPanY(e.clientY - panStart.y);
+        const rawPx = e.clientX - panStart.x;
+        const rawPy = e.clientY - panStart.y;
+        const constrained = constrainPan(rawPx, rawPy, zoom);
+        setPanX(constrained.x);
+        setPanY(constrained.y);
         return;
       }
 
@@ -463,7 +500,7 @@ export function VideoPlayer() {
         useAppStore.getState().bumpOverlayVersion();
       }
     },
-    [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart]
+    [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -484,23 +521,35 @@ export function VideoPlayer() {
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+
+      // Normalize deltaY for different input devices
+      let delta = e.deltaY;
+      if (e.deltaMode === 1) delta *= 40; // line mode
+      delta = Math.max(-100, Math.min(100, delta)); // Clamp
+      const zoomFactor = Math.exp(-delta * 0.001);
+
       const rect = container.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
       setZoom((prevZoom) => {
-        const newZoom = Math.max(0.1, Math.min(20, prevZoom * factor));
+        const newZoom = Math.max(0.1, Math.min(50, prevZoom * zoomFactor));
         const ratio = newZoom / prevZoom;
-        setPanX((px) => (mx - offsetX) - ((mx - offsetX) - px) * ratio);
-        setPanY((py) => (my - offsetY) - ((my - offsetY) - py) * ratio);
+        setPanX((px) => {
+          const newPx = (mx - offsetX) - ((mx - offsetX) - px) * ratio;
+          return constrainPan(newPx, 0, newZoom).x;
+        });
+        setPanY((py) => {
+          const newPy = (my - offsetY) - ((my - offsetY) - py) * ratio;
+          return constrainPan(0, newPy, newZoom).y;
+        });
         return newZoom;
       });
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
-  }, [offsetX, offsetY]);
+  }, [offsetX, offsetY, constrainPan]);
 
   // Double-click to reset zoom/pan
   const handleDoubleClick = useCallback(() => {
@@ -611,6 +660,29 @@ export function VideoPlayer() {
             }
             {" "}({selectedInstance.points.filter((p) => !isNaN(p.xy[0])).length}/{selectedInstance.points.length})
           </Badge>
+        )}
+
+        {/* Missing video placeholder */}
+        {video && isVideoMissing(video) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+            <div className="flex flex-col items-center gap-3 pointer-events-auto">
+              <Film className="h-12 w-12 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Video file not found</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const ok = await resolveVideoFile(video);
+                  if (ok) {
+                    useAppStore.getState().bumpOverlayVersion();
+                    useAppStore.getState().setFrameIdx(frameIdx);
+                  }
+                }}
+              >
+                Locate Video
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 

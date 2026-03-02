@@ -36,3 +36,4 @@ playwright-report/
 
 # MCP server config (local, may contain API keys)
 .mcp.json
+screenshots/
