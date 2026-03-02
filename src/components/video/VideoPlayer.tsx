@@ -190,7 +190,11 @@ export function VideoPlayer() {
     ctx.translate(offsetX + panX, offsetY + panY);
     ctx.scale(baseScale * zoom, baseScale * zoom);
     ctx.imageSmoothingEnabled = baseScale * zoom <= 2;
-    ctx.drawImage(bmp, 0, 0);
+    try {
+      ctx.drawImage(bmp, 0, 0);
+    } catch {
+      // Bitmap was closed (detached) by a racing frame load — skip, next frame will redraw
+    }
     ctx.restore();
   }, [frameDims, containerSize, zoom, panX, panY, baseScale, offsetX, offsetY]);
 
