@@ -20,7 +20,7 @@ import {
   type RenderedInstance,
   type RenderedNode,
 } from "../../canvas/SkeletonRenderer";
-import { getPaletteColor } from "../../lib/colorPalettes";
+import { getPaletteColor, getInstanceColor } from "../../lib/colorPalettes";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +45,7 @@ export function VideoPlayer() {
   const nodeLabelSize = useAppStore((s) => s.nodeLabelSize);
   const palette = useAppStore((s) => s.palette);
   const overlayVersion = useAppStore((s) => s.overlayVersion);
+  const distinctlyColor = useAppStore((s) => s.distinctlyColor);
 
   // Local zoom/pan state
   const [zoom, setZoom] = useState(1);
@@ -217,14 +218,25 @@ export function VideoPlayer() {
     }
 
     // Build renderable instances
+    const tracks = labels?.tracks ?? [];
     const instances: RenderedInstance[] = labeledFrame.instances.map(
       (inst, idx) => {
         const isPredicted = "score" in inst;
         const skeleton = inst.skeleton;
-        const color: [number, number, number] =
-          isPredicted && !colorPredicted
-            ? [128, 128, 128] // Gray for predicted when colorPredicted is off
-            : getPaletteColor(palette, idx);
+        const color = getInstanceColor(
+          palette, distinctlyColor, idx, inst.track, tracks, isPredicted, colorPredicted
+        );
+
+        // Per-node colors when distinctlyColor === "node"
+        const nodeColors = distinctlyColor === "node" && !(isPredicted && !colorPredicted)
+          ? skeleton.nodes.map((_, nIdx) => getPaletteColor(palette, nIdx))
+          : undefined;
+
+        // Per-edge colors when distinctlyColor === "edge"
+        const edgeIndices = skeleton.edgeIndices;
+        const edgeColors = distinctlyColor === "edge" && !(isPredicted && !colorPredicted)
+          ? edgeIndices.map((_, eIdx) => getPaletteColor(palette, eIdx))
+          : undefined;
 
         const nodes: RenderedNode[] = inst.points.map((point, nIdx) => ({
           x: point.xy[0],
@@ -235,7 +247,7 @@ export function VideoPlayer() {
           score: "score" in point ? (point as unknown as { score: number }).score : undefined,
         }));
 
-        const edges = skeleton.edgeIndices.map(
+        const edges = edgeIndices.map(
           ([srcIdx, dstIdx]) =>
             ({ srcIdx, dstIdx }) as { srcIdx: number; dstIdx: number }
         );
@@ -244,6 +256,8 @@ export function VideoPlayer() {
           nodes,
           edges,
           color,
+          nodeColors,
+          edgeColors,
           isPredicted,
           isSelected: inst === selectedInstance,
           trackName: inst.track?.name ?? null,
@@ -284,6 +298,7 @@ export function VideoPlayer() {
     markerSize,
     nodeLabelSize,
     palette,
+    distinctlyColor,
     zoom,
     panX,
     panY,

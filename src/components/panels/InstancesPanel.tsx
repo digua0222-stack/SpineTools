@@ -6,7 +6,7 @@
  */
 
 import { useAppStore } from "../../stores/appStore";
-import { getPaletteColor, rgbToCSS } from "../../lib/colorPalettes";
+import { getPaletteColor, rgbToCSS, getInstanceColor } from "../../lib/colorPalettes";
 import {
   commandContext,
   AddInstance,
@@ -25,7 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import type { Instance, PredictedInstance } from "../../types";
+import type { Instance, PredictedInstance, Labels } from "../../types";
 
 function isPredicted(instance: Instance): instance is PredictedInstance {
   return (
@@ -40,15 +40,29 @@ function InstanceRow({
   isSelected,
   onSelect,
   palette,
+  labels,
+  distinctlyColor,
+  colorPredicted,
 }: {
   instance: Instance | PredictedInstance;
   index: number;
   isSelected: boolean;
   onSelect: () => void;
   palette: string;
+  labels: Labels | null;
+  distinctlyColor: string;
+  colorPredicted: boolean;
 }) {
-  const color = getPaletteColor(palette, index);
   const predicted = isPredicted(instance);
+  const color = getInstanceColor(
+    palette,
+    distinctlyColor,
+    index,
+    instance.track,
+    labels?.tracks ?? [],
+    predicted,
+    colorPredicted,
+  );
   const trackName = instance.track?.name ?? "[no track]";
   const visibleNodes = instance.nVisible;
   const totalNodes = instance.points.length;
@@ -93,6 +107,8 @@ export function InstancesPanel() {
   const currentInstance = useAppStore((s) => s.instance);
   const setInstance = useAppStore((s) => s.setInstance);
   const palette = useAppStore((s) => s.palette);
+  const distinctlyColor = useAppStore((s) => s.distinctlyColor);
+  const colorPredicted = useAppStore((s) => s.colorPredicted);
 
   // Find the labeled frame for current video + frame
   // Use reference equality (===) to avoid basename fallback in labels.find()
@@ -141,6 +157,9 @@ export function InstancesPanel() {
                   isSelected={instance === currentInstance}
                   onSelect={() => setInstance(instance)}
                   palette={palette}
+                  labels={labels}
+                  distinctlyColor={distinctlyColor}
+                  colorPredicted={colorPredicted}
                 />
               ))}
             </TableBody>

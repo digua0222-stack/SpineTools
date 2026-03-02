@@ -34,7 +34,7 @@ export enum UpdateTopic {
 export type EdgeStyle = "Line" | "Wedge";
 
 /** Color application target. */
-export type ColorTarget = "instances" | "nodes" | "edges";
+export type ColorTarget = "instance" | "track" | "node" | "edge";
 
 /** Instance placement method when adding new instances. */
 export type InstancePlacementMethod =

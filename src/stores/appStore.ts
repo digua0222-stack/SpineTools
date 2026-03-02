@@ -120,7 +120,7 @@ export const useAppStore = create<AppState>()(
       fitSelection: false,
       colorPredicted: false,
       palette: "standard",
-      distinctlyColor: "instances" as ColorTarget,
+      distinctlyColor: "track" as ColorTarget,
       markerSize: 4,
       nodeLabelSize: 12,
       trailLength: 0,
@@ -189,7 +189,15 @@ export const useAppStore = create<AppState>()(
             state.frameIdx = Math.max(0, idx);
           }
           state.instance = null;
-          state.labeledFrame = null;
+          // Compute labeledFrame synchronously to avoid race condition during fast scrubbing
+          if (state.labels && state.video) {
+            const frames = state.labels.labeledFrames.filter(
+              (lf) => lf.video === state.video && lf.frameIdx === state.frameIdx
+            );
+            state.labeledFrame = frames.length > 0 ? frames[0] : null;
+          } else {
+            state.labeledFrame = null;
+          }
         }),
 
       incrementFrameIdx: (step) => {

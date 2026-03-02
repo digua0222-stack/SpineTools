@@ -27,6 +27,8 @@ export interface RenderedInstance {
   nodes: RenderedNode[];
   edges: RenderedEdge[];
   color: RGB;
+  nodeColors?: RGB[];   // Per-node colors when distinctlyColor === "node"
+  edgeColors?: RGB[];   // Per-edge colors when distinctlyColor === "edge"
   isPredicted: boolean;
   isSelected: boolean;
   trackName: string | null;
@@ -93,33 +95,37 @@ function renderInstance(
 
   // Draw edges first (behind nodes)
   if (opts.showEdges) {
-    for (const edge of edges) {
+    edges.forEach((edge, edgeIdx) => {
       const src = nodes[edge.srcIdx];
       const dst = nodes[edge.dstIdx];
-      if (!src || !dst) continue;
-      if (!src.visible && !opts.showNonVisibleNodes) continue;
-      if (!dst.visible && !opts.showNonVisibleNodes) continue;
+      if (!src || !dst) return;
+      if (!src.visible && !opts.showNonVisibleNodes) return;
+      if (!dst.visible && !opts.showNonVisibleNodes) return;
+
+      const edgeColor = instance.edgeColors?.[edgeIdx] ?? color;
 
       if (opts.edgeStyle === "Wedge") {
-        renderWedgeEdge(ctx, src, dst, color, isPredicted, opts);
+        renderWedgeEdge(ctx, src, dst, edgeColor, isPredicted, opts);
       } else {
-        renderLineEdge(ctx, src, dst, color, isPredicted, opts);
+        renderLineEdge(ctx, src, dst, edgeColor, isPredicted, opts);
       }
-    }
+    });
   }
 
   // Draw nodes
-  for (const node of nodes) {
-    if (!node.visible && !opts.showNonVisibleNodes) continue;
-    renderNode(ctx, node, color, isPredicted, opts);
-  }
+  nodes.forEach((node, nIdx) => {
+    if (!node.visible && !opts.showNonVisibleNodes) return;
+    const nodeColor = instance.nodeColors?.[nIdx] ?? color;
+    renderNode(ctx, node, nodeColor, isPredicted, opts);
+  });
 
   // Draw node labels (skip for predicted unless colorPredicted is on)
   if (opts.showLabels && (!isPredicted || opts.colorPredicted)) {
-    for (const node of nodes) {
-      if (!node.visible && !opts.showNonVisibleNodes) continue;
-      renderNodeLabel(ctx, node, color, opts);
-    }
+    nodes.forEach((node, nIdx) => {
+      if (!node.visible && !opts.showNonVisibleNodes) return;
+      const nodeColor = instance.nodeColors?.[nIdx] ?? color;
+      renderNodeLabel(ctx, node, nodeColor, opts);
+    });
   }
 
   // Draw selection bounding box

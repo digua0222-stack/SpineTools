@@ -76,6 +76,33 @@ export function rgbToCSS(color: RGB, alpha: number = 1): string {
   return `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`;
 }
 
+/** Get the color for an instance based on the current color target mode. */
+export function getInstanceColor(
+  palette: string,
+  colorTarget: string,
+  instanceIndex: number,
+  track: unknown,
+  tracks: unknown[],
+  isPredicted: boolean,
+  colorPredicted: boolean,
+): RGB {
+  if (isPredicted && !colorPredicted) return [128, 128, 128];
+  switch (colorTarget) {
+    case "track":
+      if (track) {
+        const idx = tracks.indexOf(track);
+        return getPaletteColor(palette, idx >= 0 ? idx : instanceIndex);
+      }
+      return getPaletteColor(palette, instanceIndex);
+    case "node":
+    case "edge":
+      return [180, 180, 180]; // Neutral for per-node/edge coloring
+    case "instance":
+    default:
+      return getPaletteColor(palette, instanceIndex);
+  }
+}
+
 /** Convert RGB to hex string. */
 export function rgbToHex(color: RGB): string {
   return `#${color.map((c) => c.toString(16).padStart(2, "0")).join("")}`;

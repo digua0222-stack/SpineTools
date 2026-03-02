@@ -273,6 +273,7 @@ function ViewMenu() {
   const edgeStyle = useAppStore((s) => s.edgeStyle);
   const markerSize = useAppStore((s) => s.markerSize);
   const palette = useAppStore((s) => s.palette);
+  const distinctlyColor = useAppStore((s) => s.distinctlyColor);
   const toggle = useAppStore((s) => s.toggle);
   const setVal = useAppStore((s) => s.set);
 
@@ -359,6 +360,21 @@ function ViewMenu() {
                   {name}
                 </MenubarRadioItem>
               ))}
+            </MenubarRadioGroup>
+          </MenubarSubContent>
+        </MenubarSub>
+        <MenubarSeparator />
+        <MenubarSub>
+          <MenubarSubTrigger className="text-sm">Apply Distinct Colors To</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarRadioGroup
+              value={distinctlyColor}
+              onValueChange={(val) => setVal("distinctlyColor", val)}
+            >
+              <MenubarRadioItem value="track">Tracks</MenubarRadioItem>
+              <MenubarRadioItem value="instance">Instances</MenubarRadioItem>
+              <MenubarRadioItem value="node">Nodes</MenubarRadioItem>
+              <MenubarRadioItem value="edge">Edges</MenubarRadioItem>
             </MenubarRadioGroup>
           </MenubarSubContent>
         </MenubarSub>
