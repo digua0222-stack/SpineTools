@@ -54,6 +54,11 @@ export function VideoPlayer() {
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
+
+  // Ref tracks latest zoom/pan for synchronous access in wheel handler,
+  // avoiding stale closures and React batching issues with nested setState.
+  const viewRef = useRef({ zoom: 1, panX: 0, panY: 0 });
+  viewRef.current = { zoom, panX, panY };
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -348,6 +353,7 @@ export function VideoPlayer() {
     const newPanX = cw / 2 - offsetX - centerX * baseScale * newZoom;
     const newPanY = ch / 2 - offsetY - centerY * baseScale * newZoom;
 
+    viewRef.current = { zoom: newZoom, panX: newPanX, panY: newPanY };
     setZoom(newZoom);
     setPanX(newPanX);
     setPanY(newPanY);
@@ -477,6 +483,8 @@ export function VideoPlayer() {
         const rawPx = e.clientX - panStart.x;
         const rawPy = e.clientY - panStart.y;
         const constrained = constrainPan(rawPx, rawPy, zoom);
+        viewRef.current.panX = constrained.x;
+        viewRef.current.panY = constrained.y;
         setPanX(constrained.x);
         setPanY(constrained.y);
         return;
@@ -532,27 +540,33 @@ export function VideoPlayer() {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
 
-      setZoom((prevZoom) => {
-        const newZoom = Math.max(0.1, Math.min(50, prevZoom * zoomFactor));
-        const ratio = newZoom / prevZoom;
-        setPanX((px) => {
-          const newPx = (mx - offsetX) - ((mx - offsetX) - px) * ratio;
-          return constrainPan(newPx, 0, newZoom).x;
-        });
-        setPanY((py) => {
-          const newPy = (my - offsetY) - ((my - offsetY) - py) * ratio;
-          return constrainPan(0, newPy, newZoom).y;
-        });
-        return newZoom;
-      });
+      // Read latest zoom/pan from ref (avoids stale closures with rapid events)
+      const prev = viewRef.current;
+      const newZoom = Math.max(0.1, Math.min(50, prev.zoom * zoomFactor));
+      const ratio = newZoom / prev.zoom;
+
+      // Zoom towards cursor: keep the scene point under the cursor fixed
+      const anchorX = mx - offsetX;
+      const anchorY = my - offsetY;
+      const newPanX = anchorX - (anchorX - prev.panX) * ratio;
+      const newPanY = anchorY - (anchorY - prev.panY) * ratio;
+
+      // Eagerly update ref so next wheel event (before React commits) sees latest values
+      viewRef.current = { zoom: newZoom, panX: newPanX, panY: newPanY };
+
+      // Update state for rendering (no nested setState, no constrainPan interference)
+      setZoom(newZoom);
+      setPanX(newPanX);
+      setPanY(newPanY);
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
-  }, [offsetX, offsetY, constrainPan]);
+  }, [offsetX, offsetY]);
 
   // Double-click to reset zoom/pan
   const handleDoubleClick = useCallback(() => {
+    viewRef.current = { zoom: 1, panX: 0, panY: 0 };
     setZoom(1);
     setPanX(0);
     setPanY(0);
