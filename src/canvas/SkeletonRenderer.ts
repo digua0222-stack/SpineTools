@@ -300,7 +300,8 @@ export function hitTestNode(
   instances: RenderedInstance[],
   canvasX: number,
   canvasY: number,
-  threshold: number = 10
+  threshold: number = 10,
+  includeNonVisible: boolean = false
 ): { instanceIdx: number; nodeIdx: number } | null {
   let best: { instanceIdx: number; nodeIdx: number; dist: number } | null =
     null;
@@ -309,7 +310,8 @@ export function hitTestNode(
     const inst = instances[i];
     for (let j = 0; j < inst.nodes.length; j++) {
       const node = inst.nodes[j];
-      if (!node.visible) continue;
+      if (!node.visible && !includeNonVisible) continue;
+      if (!node.visible && isNaN(node.x)) continue; // truly unplaced
       const dx = node.x - canvasX;
       const dy = node.y - canvasY;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -416,6 +418,37 @@ export function renderSelectedNodeHighlights(
     ctx.fill();
     ctx.stroke();
   }
+}
+
+/**
+ * Render a highlight ring on the hovered node (brighter/thicker than selection).
+ */
+export function renderHoveredNodeHighlight(
+  ctx: CanvasRenderingContext2D,
+  instances: RenderedInstance[],
+  instanceIdx: number,
+  nodeIdx: number,
+  opts: RenderOptions
+): void {
+  const node = instances[instanceIdx]?.nodes[nodeIdx];
+  if (!node || isNaN(node.x)) return;
+
+  const color = instances[instanceIdx].color;
+  const baseRadius = node.visible ? opts.markerSize : opts.markerSize / 2;
+  const radius = (baseRadius + 2) / opts.zoom;
+
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2.5 / opts.zoom;
+  ctx.stroke();
+
+  // Inner colored ring
+  ctx.beginPath();
+  ctx.arc(node.x, node.y, radius - 1.5 / opts.zoom, 0, Math.PI * 2);
+  ctx.strokeStyle = rgbToCSS(color, 0.9);
+  ctx.lineWidth = 1.5 / opts.zoom;
+  ctx.stroke();
 }
 
 /**

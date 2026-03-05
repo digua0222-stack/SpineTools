@@ -19,6 +19,7 @@ import {
   hitTestNode,
   hitTestInstance,
   renderSelectedNodeHighlights,
+  renderHoveredNodeHighlight,
   renderHoverInstanceBBox,
   renderMarqueeRect,
   nodesInRect,
@@ -399,9 +400,10 @@ export function VideoPlayer() {
       renderSelectedNodeHighlights(ctx, instances, effectiveSelection, renderOpts);
     }
 
-    // Render hover instance bbox
+    // Render hover highlights
     if (hoveredNode && instances[hoveredNode.instanceIdx]) {
       renderHoverInstanceBBox(ctx, instances[hoveredNode.instanceIdx], renderOpts);
+      renderHoveredNodeHighlight(ctx, instances, hoveredNode.instanceIdx, hoveredNode.nodeIdx, renderOpts);
     }
 
     // Render marquee selection rectangle
@@ -572,7 +574,7 @@ export function VideoPlayer() {
       const instanceThreshold = 30 / zoom;
 
       // Try to hit a node first
-      const nodeHit = hitTestNode(instances, x, y, nodeThreshold);
+      const nodeHit = hitTestNode(instances, x, y, nodeThreshold, showNonVisibleNodes);
       if (nodeHit) {
         const key = makeNodeKey(nodeHit.instanceIdx, nodeHit.nodeIdx);
         const lf = useAppStore.getState().labeledFrame;
@@ -639,7 +641,7 @@ export function VideoPlayer() {
       setMarqueeStart({ x, y });
       setMarqueeEnd({ x, y });
     },
-    [canvasToScene, markerSize, panX, panY, zoom, isSpaceHeld, selectedNodes]
+    [canvasToScene, markerSize, panX, panY, zoom, isSpaceHeld, selectedNodes, showNonVisibleNodes]
   );
 
   const handleMouseMove = useCallback(
@@ -728,18 +730,18 @@ export function VideoPlayer() {
       const { x, y } = canvasToScene(e.clientX, e.clientY);
       const instances = renderedInstancesRef.current;
       const nodeThreshold = (markerSize * 2) / zoom;
-      const hit = hitTestNode(instances, x, y, nodeThreshold);
+      const hit = hitTestNode(instances, x, y, nodeThreshold, showNonVisibleNodes);
 
       if (hit) {
-        const prevInstanceIdx = hoveredNode?.instanceIdx;
+        const prevIdx = hoveredNode?.instanceIdx;
+        const prevNode = hoveredNode?.nodeIdx;
         setHoveredNode({
           instanceIdx: hit.instanceIdx,
           nodeIdx: hit.nodeIdx,
           clientX: e.clientX,
           clientY: e.clientY,
         });
-        // Only bump overlay if hovered instance changed (to render/clear bbox)
-        if (prevInstanceIdx !== hit.instanceIdx) {
+        if (prevIdx !== hit.instanceIdx || prevNode !== hit.nodeIdx) {
           useAppStore.getState().bumpOverlayVersion();
         }
       } else if (hoveredNode) {
@@ -747,7 +749,7 @@ export function VideoPlayer() {
         useAppStore.getState().bumpOverlayVersion();
       }
     },
-    [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom, interactionMode, selectedNodes, markerSize, hoveredNode]
+    [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom, interactionMode, selectedNodes, markerSize, hoveredNode, showNonVisibleNodes]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -905,7 +907,7 @@ export function VideoPlayer() {
       const instances = renderedInstancesRef.current;
 
       // Check if right-clicking on a node
-      const nodeHit = hitTestNode(instances, x, y, markerSize * 2);
+      const nodeHit = hitTestNode(instances, x, y, markerSize * 2, showNonVisibleNodes);
       if (nodeHit) {
         const lf = useAppStore.getState().labeledFrame;
         if (lf) {
@@ -944,7 +946,7 @@ export function VideoPlayer() {
         nodeIdx: null,
       });
     },
-    [canvasToScene, markerSize]
+    [canvasToScene, markerSize, showNonVisibleNodes]
   );
 
   return (
@@ -988,6 +990,7 @@ export function VideoPlayer() {
           const tipY = hoveredNode.clientY - containerRect.top - 8;
           const nodeScore = "score" in point ? (point as unknown as { score: number }).score : undefined;
           const instScore = "score" in lfInst ? (lfInst as unknown as { score: number }).score : undefined;
+          const isPredicted = "score" in lfInst;
           const isDragActive = interactionMode === "dragging" && selectedNodes.size > 1;
           return (
             <div
@@ -997,6 +1000,9 @@ export function VideoPlayer() {
               <div className="font-medium">{nodeName}</div>
               <div className="text-white/70">
                 x: {point.xy[0].toFixed(1)}, y: {point.xy[1].toFixed(1)}
+              </div>
+              <div className="text-white/50">
+                {isPredicted ? "predicted" : "user"} · {point.visible ? "visible" : "not visible"}
               </div>
               {nodeScore !== undefined && (
                 <div className="text-white/70">conf: {nodeScore.toFixed(3)}</div>
