@@ -128,9 +128,7 @@ export function ContextMenu({
               if (point) {
                 point.visible = !point.visible;
                 useAppStore.getState().markChanged();
-                useAppStore
-                  .getState()
-                  .setLabeledFrame(useAppStore.getState().labeledFrame);
+                useAppStore.getState().bumpOverlayVersion();
               }
               onClose();
             }}
