@@ -127,7 +127,9 @@ export function VideoPlayer() {
     if (!container) return;
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      setContainerSize([Math.round(width), Math.round(height)]);
+      const w = Math.round(width);
+      const h = Math.round(height);
+      setContainerSize((prev) => (prev[0] === w && prev[1] === h ? prev : [w, h]));
     });
     ro.observe(container);
     return () => ro.disconnect();
@@ -253,7 +255,7 @@ export function VideoPlayer() {
         // Close previous bitmap
         frameBitmapRef.current?.close();
         frameBitmapRef.current = bmp;
-        setFrameDims([bmp.width, bmp.height]);
+        setFrameDims((prev) => (prev[0] === bmp.width && prev[1] === bmp.height ? prev : [bmp.width, bmp.height]));
         if (debugFlags.logSeeking) console.debug(`[seek] frame ${frameIdx} rendered (${bmp.width}x${bmp.height}) total ${(performance.now() - t0).toFixed(1)}ms`);
       } catch (err) {
         console.error("Failed to render frame:", err);
@@ -488,7 +490,9 @@ export function VideoPlayer() {
     frameIdx,
   ]);
 
-  // Fit view to instances when 'fit' is enabled and frame changes
+  // Fit view to instances when 'fit' is enabled and frame/labels change
+  // Only re-fit when fit is toggled on or the labeled frame changes,
+  // not on container resize or other incidental triggers.
   useEffect(() => {
     if (!fit || !labeledFrame) return;
     const [cw, ch] = containerSize;
@@ -527,7 +531,8 @@ export function VideoPlayer() {
     setZoom(newZoom);
     setPanX(newPanX);
     setPanY(newPanY);
-  }, [fit, labeledFrame, frameDims, containerSize, baseScale, offsetX, offsetY]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fit, labeledFrame]);
 
   // Mouse handlers for interaction
   const canvasToScene = useCallback(
