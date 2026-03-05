@@ -924,12 +924,26 @@ export function VideoPlayer() {
       const nodeThreshold = (markerSize * 2) / zoom;
       const instanceThreshold = 30 / zoom;
 
-      // Check if double-clicking on a predicted instance (by node)
-      const nodeHit = hitTestNode(instances, x, y, nodeThreshold);
-      if (nodeHit && instances[nodeHit.instanceIdx]?.isPredicted) {
-        commandContext.execute(ConvertPredictionToInstance, {
-          instanceIdx: nodeHit.instanceIdx,
+      // Check if double-clicking on a node
+      const nodeHit = hitTestNode(instances, x, y, nodeThreshold, showNonVisibleNodes);
+      if (nodeHit) {
+        const inst = instances[nodeHit.instanceIdx];
+        // Predicted: convert to user instance
+        if (inst?.isPredicted) {
+          commandContext.execute(ConvertPredictionToInstance, {
+            instanceIdx: nodeHit.instanceIdx,
+          });
+          return;
+        }
+        // User instance: select all nodes in this instance
+        const keys = new Set<string>();
+        inst.nodes.forEach((n, nIdx) => {
+          if (n.visible || showNonVisibleNodes) keys.add(makeNodeKey(nodeHit.instanceIdx, nIdx));
         });
+        setSelectedNodes(keys);
+        const lf = useAppStore.getState().labeledFrame;
+        if (lf) useAppStore.getState().setInstance(lf.instances[nodeHit.instanceIdx]);
+        useAppStore.getState().bumpOverlayVersion();
         return;
       }
 
