@@ -69,6 +69,7 @@ export function VideoPlayer() {
   viewRef.current = { zoom, panX, panY };
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [isSpaceHeld, setIsSpaceHeld] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dragNodeInfo, setDragNodeInfo] = useState<{
     instanceIdx: number;
@@ -110,6 +111,30 @@ export function VideoPlayer() {
     });
     ro.observe(container);
     return () => ro.disconnect();
+  }, []);
+
+  // Track spacebar hold for pan mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat) {
+        // Don't hijack space when typing in an input/textarea
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        e.preventDefault();
+        setIsSpaceHeld(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        setIsSpaceHeld(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
   }, []);
 
   // Compute fit-to-window base scale and centering offsets
@@ -174,7 +199,7 @@ export function VideoPlayer() {
     return () => {
       cancelled = true;
     };
-  }, [video, frameIdx]);
+  }, [video, frameIdx, overlayVersion]);
 
   // Render the frame with fit-to-window base transform + user zoom/pan
   useEffect(() => {
@@ -460,8 +485,8 @@ export function VideoPlayer() {
 
       if (e.button !== 0) return; // Only left-click for interaction
 
-      // Alt+left-click panning
-      if (e.altKey) {
+      // Space+left-click or Alt+left-click panning
+      if (isSpaceHeld || e.altKey) {
         e.preventDefault();
         setIsPanning(true);
         setPanStart({ x: e.clientX - panX, y: e.clientY - panY });
@@ -527,7 +552,7 @@ export function VideoPlayer() {
       // Click on empty space - deselect
       useAppStore.getState().setInstance(null);
     },
-    [canvasToScene, markerSize, panX, panY, zoom]
+    [canvasToScene, markerSize, panX, panY, zoom, isSpaceHeld]
   );
 
   const handleMouseMove = useCallback(
@@ -645,7 +670,7 @@ export function VideoPlayer() {
       let delta = e.deltaY;
       if (e.deltaMode === 1) delta *= 40; // line mode
       delta = Math.max(-100, Math.min(100, delta)); // Clamp
-      const zoomFactor = Math.exp(-delta * 0.001);
+      const zoomFactor = Math.exp(-delta * 0.004);
 
       const rect = container.getBoundingClientRect();
       const mx = e.clientX - rect.left;
@@ -769,7 +794,7 @@ export function VideoPlayer() {
         ref={containerRef}
         className={cn(
           "flex-1 relative overflow-hidden bg-background min-h-0",
-          isPanning ? "cursor-grabbing" : isDragging ? "cursor-move" : isPlacingNodes ? "cursor-cell" : "cursor-crosshair"
+          isPanning ? "cursor-grabbing" : isSpaceHeld ? "cursor-grab" : isDragging ? "cursor-move" : isPlacingNodes ? "cursor-cell" : "cursor-crosshair"
         )}
         onDoubleClick={handleDoubleClick}
       >
