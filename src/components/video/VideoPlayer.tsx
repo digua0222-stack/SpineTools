@@ -28,7 +28,7 @@ import {
   type RenderedInstance,
   type RenderedNode,
 } from "../../canvas/SkeletonRenderer";
-import { getPaletteColor, getInstanceColor } from "../../lib/colorPalettes";
+import { getPaletteColor, getInstanceColor, rgbToCSS } from "../../lib/colorPalettes";
 import { COLORMAPS } from "../../lib/colormaps";
 import { renderTrails } from "../../canvas/TrailRenderer";
 import {
@@ -241,10 +241,16 @@ export function VideoPlayer() {
 
         setIsSpaceHeld(true);
       }
+      if (e.key === "Meta" || e.key === "Control") {
+        setIsCmdHeld(true);
+      }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") {
         setIsSpaceHeld(false);
+      }
+      if (e.key === "Meta" || e.key === "Control") {
+        setIsCmdHeld(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -784,9 +790,10 @@ export function VideoPlayer() {
       if (!src?.visible || !dst?.visible) continue;
       const s = toInset(src.x, src.y);
       const d = toInset(dst.x, dst.y);
-      ctx.strokeStyle = inst.edgeColors
+      const edgeColor = inst.edgeColors
         ? inst.edgeColors[inst.edges.indexOf(edge)]
         : inst.color;
+      ctx.strokeStyle = rgbToCSS(edgeColor);
       ctx.beginPath();
       ctx.moveTo(s.ix, s.iy);
       ctx.lineTo(d.ix, d.iy);
@@ -801,7 +808,8 @@ export function VideoPlayer() {
       if (!n.visible) continue;
       const { ix, iy } = toInset(n.x, n.y);
       if (ix < -10 || ix > INSET_SIZE + 10 || iy < -10 || iy > INSET_SIZE + 10) continue;
-      ctx.fillStyle = inst.nodeColors ? inst.nodeColors[nIdx] : inst.color;
+      const nodeColor = inst.nodeColors ? inst.nodeColors[nIdx] : inst.color;
+      ctx.fillStyle = rgbToCSS(nodeColor);
       ctx.beginPath();
       ctx.arc(ix, iy, 3, 0, Math.PI * 2);
       ctx.fill();
