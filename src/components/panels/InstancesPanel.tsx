@@ -5,9 +5,10 @@
  * and a color indicator matching the instance's palette color.
  * When an instance is selected, shows a detail panel with metadata
  * and copyable Python points.
+ * Supports multi-select via Shift+click (range) and Cmd/Ctrl+click (toggle).
  */
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Clipboard, Check } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
 import { rgbToCSS, getInstanceColor } from "../../lib/colorPalettes";
@@ -59,7 +60,7 @@ function InstanceRow({
   instance: Instance | PredictedInstance;
   index: number;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e: React.MouseEvent) => void;
   palette: string;
   labels: Labels | null;
   distinctlyColor: string;
@@ -181,11 +182,83 @@ export function InstancesPanel() {
   const distinctlyColor = useAppStore((s) => s.distinctlyColor);
   const colorPredicted = useAppStore((s) => s.colorPredicted);
 
+  // Local multi-select state
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(
+    new Set(),
+  );
+  const lastClickedRef = useRef<number | null>(null);
+
   // Find the labeled frame for current video + frame
   const labeledFrames =
     labels && video ? labels.find({ video, frameIdx }) : [];
   const labeledFrame = labeledFrames.length > 0 ? labeledFrames[0] : null;
   const instances = labeledFrame?.instances ?? [];
+
+  // Derive the selected index from the store's currentInstance
+  const currentIndex = currentInstance
+    ? instances.indexOf(currentInstance)
+    : -1;
+
+  // Sync local selection when store's instance changes externally
+  // (e.g. from canvas click or keyboard shortcut)
+  useEffect(() => {
+    if (currentIndex >= 0) {
+      setSelectedIndices((prev) => {
+        if (prev.size === 1 && prev.has(currentIndex)) return prev;
+        return new Set([currentIndex]);
+      });
+    } else {
+      setSelectedIndices((prev) => {
+        if (prev.size === 0) return prev;
+        return new Set();
+      });
+    }
+  }, [currentIndex]);
+
+  // Clear selection on frame change
+  useEffect(() => {
+    setSelectedIndices(new Set());
+    lastClickedRef.current = null;
+  }, [frameIdx, video]);
+
+  const handleSelect = useCallback(
+    (index: number, e: React.MouseEvent) => {
+      const instance = instances[index];
+      if (!instance) return;
+
+      if (e.shiftKey && lastClickedRef.current !== null) {
+        // Shift+click: select range from last clicked to current
+        const start = Math.min(lastClickedRef.current, index);
+        const end = Math.max(lastClickedRef.current, index);
+        const newIndices = new Set(selectedIndices);
+        for (let i = start; i <= end; i++) newIndices.add(i);
+        setSelectedIndices(newIndices);
+        setInstance(instance);
+      } else if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl+click: toggle individual instance
+        const newIndices = new Set(selectedIndices);
+        if (newIndices.has(index)) {
+          newIndices.delete(index);
+          if (newIndices.size > 0) {
+            const last = [...newIndices].pop()!;
+            setInstance(instances[last]);
+          } else {
+            setInstance(null);
+          }
+        } else {
+          newIndices.add(index);
+          setInstance(instance);
+        }
+        setSelectedIndices(newIndices);
+      } else {
+        // Plain click: single select
+        setSelectedIndices(new Set([index]));
+        setInstance(instance);
+      }
+      lastClickedRef.current = index;
+    },
+    [instances, selectedIndices, setInstance],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -214,13 +287,13 @@ export function InstancesPanel() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {instances.map((instance, i) => (
+              {instances.map((inst, i) => (
                 <InstanceRow
                   key={i}
-                  instance={instance}
+                  instance={inst}
                   index={i}
-                  isSelected={instance === currentInstance}
-                  onSelect={() => setInstance(instance)}
+                  isSelected={selectedIndices.has(i)}
+                  onSelect={(e) => handleSelect(i, e)}
                   palette={palette}
                   labels={labels}
                   distinctlyColor={distinctlyColor}
