@@ -105,6 +105,7 @@ export function ContextMenu({
         <>
           <ContextMenuItem
             label={`Toggle ${selectedNodes.size} Selected Nodes Visibility`}
+            shortcut="V"
             onClick={() => {
               onToggleSelectedNodesVisibility?.();
               onClose();
@@ -123,6 +124,7 @@ export function ContextMenu({
                 ? "Mark Node Non-Visible"
                 : "Mark Node Visible"
             }
+            shortcut="V"
             onClick={() => {
               const point = instance.points[nodeIdx!];
               if (point) {

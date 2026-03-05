@@ -63,6 +63,7 @@ const CATEGORIES: Record<string, string[]> = {
     "delete instance",
     "copy instance",
     "paste instance",
+    "toggle node visibility",
   ],
   View: ["fit", "show instances", "show labels", "show edges"],
   Tracks: [

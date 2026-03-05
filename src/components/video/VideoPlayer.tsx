@@ -157,6 +157,50 @@ export function VideoPlayer() {
     };
   }, []);
 
+  // Toggle node visibility with 'v' key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.code !== "KeyV" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      const lf = useAppStore.getState().labeledFrame;
+      if (!lf) return;
+
+      if (selectedNodes.size > 0) {
+        // Toggle selected nodes
+        e.preventDefault();
+        commandContext.execute(BeginEdit);
+        let visibleCount = 0;
+        for (const key of selectedNodes) {
+          const { instanceIdx, nodeIdx } = parseNodeKey(key);
+          const point = lf.instances[instanceIdx]?.points[nodeIdx];
+          if (point?.visible) visibleCount++;
+        }
+        const makeVisible = visibleCount <= selectedNodes.size / 2;
+        for (const key of selectedNodes) {
+          const { instanceIdx, nodeIdx } = parseNodeKey(key);
+          const point = lf.instances[instanceIdx]?.points[nodeIdx];
+          if (point) point.visible = makeVisible;
+        }
+        useAppStore.getState().markChanged();
+        useAppStore.getState().bumpOverlayVersion();
+      } else if (hoveredNode) {
+        // Toggle hovered node
+        e.preventDefault();
+        commandContext.execute(BeginEdit);
+        const point = lf.instances[hoveredNode.instanceIdx]?.points[hoveredNode.nodeIdx];
+        if (point) {
+          point.visible = !point.visible;
+          useAppStore.getState().markChanged();
+          useAppStore.getState().bumpOverlayVersion();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedNodes, hoveredNode]);
+
   // Compute fit-to-window base scale and centering offsets
   const [cw, ch] = containerSize;
   const [fw, fh] = frameDims;
