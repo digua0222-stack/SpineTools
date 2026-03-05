@@ -349,3 +349,128 @@ export function hitTestInstance(
 
   return best?.idx ?? null;
 }
+
+// --- Multi-node selection helpers ---
+
+export function makeNodeKey(instanceIdx: number, nodeIdx: number): string {
+  return `${instanceIdx}:${nodeIdx}`;
+}
+
+export function parseNodeKey(key: string): { instanceIdx: number; nodeIdx: number } {
+  const [i, n] = key.split(":");
+  return { instanceIdx: parseInt(i), nodeIdx: parseInt(n) };
+}
+
+/**
+ * Find all visible nodes within a scene-space rectangle.
+ */
+export function nodesInRect(
+  instances: RenderedInstance[],
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): Set<string> {
+  const minX = Math.min(x1, x2);
+  const maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2);
+  const result = new Set<string>();
+
+  for (let i = 0; i < instances.length; i++) {
+    const inst = instances[i];
+    for (let j = 0; j < inst.nodes.length; j++) {
+      const node = inst.nodes[j];
+      if (!node.visible) continue;
+      if (node.x >= minX && node.x <= maxX && node.y >= minY && node.y <= maxY) {
+        result.add(makeNodeKey(i, j));
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Render highlight rings on selected nodes.
+ */
+export function renderSelectedNodeHighlights(
+  ctx: CanvasRenderingContext2D,
+  instances: RenderedInstance[],
+  selectedNodes: Set<string>,
+  opts: RenderOptions
+): void {
+  if (selectedNodes.size === 0) return;
+
+  const radius = (opts.markerSize + 3) / opts.zoom;
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2 / opts.zoom;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+
+  for (const key of selectedNodes) {
+    const { instanceIdx, nodeIdx } = parseNodeKey(key);
+    const node = instances[instanceIdx]?.nodes[nodeIdx];
+    if (!node?.visible) continue;
+
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+/**
+ * Render a faint dashed bounding box around a hovered instance.
+ */
+export function renderHoverInstanceBBox(
+  ctx: CanvasRenderingContext2D,
+  instance: RenderedInstance,
+  opts: RenderOptions
+): void {
+  const visibleNodes = instance.nodes.filter((n) => n.visible);
+  if (visibleNodes.length === 0) return;
+
+  const xs = visibleNodes.map((n) => n.x);
+  const ys = visibleNodes.map((n) => n.y);
+  const pad = 10 / opts.zoom;
+  const minX = Math.min(...xs) - pad;
+  const minY = Math.min(...ys) - pad;
+  const maxX = Math.max(...xs) + pad;
+  const maxY = Math.max(...ys) + pad;
+
+  ctx.save();
+  ctx.setLineDash([4 / opts.zoom, 4 / opts.zoom]);
+  ctx.strokeStyle = rgbToCSS(instance.color, 0.3);
+  ctx.lineWidth = 1 / opts.zoom;
+  ctx.fillStyle = rgbToCSS(instance.color, 0.05);
+  ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+  ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+/**
+ * Render a marquee selection rectangle in scene space.
+ */
+export function renderMarqueeRect(
+  ctx: CanvasRenderingContext2D,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  zoom: number
+): void {
+  const minX = Math.min(x1, x2);
+  const minY = Math.min(y1, y2);
+  const w = Math.abs(x2 - x1);
+  const h = Math.abs(y2 - y1);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+  ctx.fillRect(minX, minY, w, h);
+  ctx.setLineDash([4 / zoom, 4 / zoom]);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  ctx.lineWidth = 1.5 / zoom;
+  ctx.strokeRect(minX, minY, w, h);
+  ctx.setLineDash([]);
+  ctx.restore();
+}

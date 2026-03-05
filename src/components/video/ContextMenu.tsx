@@ -27,6 +27,8 @@ interface ContextMenuProps {
   y: number;
   instanceIdx: number | null;
   nodeIdx: number | null;
+  selectedNodes?: Set<string>;
+  onToggleSelectedNodesVisibility?: () => void;
   onClose: () => void;
 }
 
@@ -34,6 +36,8 @@ export function ContextMenu({
   x,
   y,
   nodeIdx,
+  selectedNodes,
+  onToggleSelectedNodesVisibility,
   onClose,
 }: ContextMenuProps) {
   const labels = useAppStore((s) => s.labels);
@@ -96,6 +100,20 @@ export function ContextMenu({
       style={{ left: clampedPos.left, top: clampedPos.top }}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* Selected nodes visibility toggle */}
+      {selectedNodes && selectedNodes.size > 1 && !isPredicted && (
+        <>
+          <ContextMenuItem
+            label={`Toggle ${selectedNodes.size} Selected Nodes Visibility`}
+            onClick={() => {
+              onToggleSelectedNodesVisibility?.();
+              onClose();
+            }}
+          />
+          <ContextMenuSeparator />
+        </>
+      )}
+
       {/* Node-specific actions */}
       {hasNode && !isPredicted && (
         <>

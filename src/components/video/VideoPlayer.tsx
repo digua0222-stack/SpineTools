@@ -18,6 +18,12 @@ import {
   renderInstances,
   hitTestNode,
   hitTestInstance,
+  renderSelectedNodeHighlights,
+  renderHoverInstanceBBox,
+  renderMarqueeRect,
+  nodesInRect,
+  makeNodeKey,
+  parseNodeKey,
   type RenderedInstance,
   type RenderedNode,
 } from "../../canvas/SkeletonRenderer";
@@ -75,6 +81,19 @@ export function VideoPlayer() {
     instanceIdx: number;
     nodeIdx: number;
   } | null>(null);
+
+  // Multi-node selection state (local/ephemeral)
+  const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set());
+  const [interactionMode, setInteractionMode] = useState<"idle" | "marquee" | "dragging">("idle");
+  const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null);
+  const [marqueeEnd, setMarqueeEnd] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredNode, setHoveredNode] = useState<{
+    instanceIdx: number;
+    nodeIdx: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const shiftHeldOnMouseDown = useRef(false);
 
   // Track the last scene position during drag for delta calculations (alt-drag)
   const lastDragPos = useRef<{ x: number; y: number } | null>(null);
@@ -248,6 +267,15 @@ export function VideoPlayer() {
   // Render skeleton overlay
   const labeledFrame = useAppStore((s) => s.labeledFrame);
 
+  // Clear multi-node selection on frame change
+  useEffect(() => {
+    setSelectedNodes(new Set());
+    setHoveredNode(null);
+    setInteractionMode("idle");
+    setMarqueeStart(null);
+    setMarqueeEnd(null);
+  }, [frameIdx, labeledFrame]);
+
   useEffect(() => {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
@@ -343,7 +371,7 @@ export function VideoPlayer() {
       );
     }
 
-    renderInstances(ctx, instances, {
+    const renderOpts = {
       markerSize,
       nodeLabelSize,
       edgeStyle,
@@ -353,7 +381,24 @@ export function VideoPlayer() {
       showNonVisibleNodes,
       colorPredicted,
       zoom: baseScale * zoom,
-    });
+    };
+
+    renderInstances(ctx, instances, renderOpts);
+
+    // Render multi-node selection highlights
+    if (selectedNodes.size > 0) {
+      renderSelectedNodeHighlights(ctx, instances, selectedNodes, renderOpts);
+    }
+
+    // Render hover instance bbox
+    if (hoveredNode && instances[hoveredNode.instanceIdx]) {
+      renderHoverInstanceBBox(ctx, instances[hoveredNode.instanceIdx], renderOpts);
+    }
+
+    // Render marquee selection rectangle
+    if (marqueeStart && marqueeEnd) {
+      renderMarqueeRect(ctx, marqueeStart.x, marqueeStart.y, marqueeEnd.x, marqueeEnd.y, baseScale * zoom);
+    }
 
     ctx.restore();
   }, [
@@ -379,6 +424,10 @@ export function VideoPlayer() {
     offsetX,
     offsetY,
     overlayVersion,
+    selectedNodes,
+    hoveredNode,
+    marqueeStart,
+    marqueeEnd,
     labels,
     video,
     frameIdx,
@@ -481,8 +530,8 @@ export function VideoPlayer() {
 
       if (e.button !== 0) return; // Only left-click for interaction
 
-      // Space+left-click or Alt+left-click panning
-      if (isSpaceHeld || e.altKey) {
+      // Space+left-click panning
+      if (isSpaceHeld) {
         e.preventDefault();
         setIsPanning(true);
         setPanStart({ x: e.clientX - panX, y: e.clientY - panY });
@@ -491,6 +540,7 @@ export function VideoPlayer() {
 
       const { x, y } = canvasToScene(e.clientX, e.clientY);
       const currentInstance = useAppStore.getState().instance;
+      shiftHeldOnMouseDown.current = e.shiftKey;
 
       // Node placement mode: place the next unplaced node (with undo snapshot)
       if (currentInstance && !("score" in currentInstance)) {
@@ -498,7 +548,6 @@ export function VideoPlayer() {
           (p) => isNaN(p.xy[0]) || isNaN(p.xy[1])
         );
         if (unplacedIdx !== -1) {
-          // Take undo snapshot before placement
           commandContext.execute(BeginEdit);
           currentInstance.points[unplacedIdx].xy = [x, y];
           currentInstance.points[unplacedIdx].visible = true;
@@ -510,26 +559,42 @@ export function VideoPlayer() {
       }
 
       const instances = renderedInstancesRef.current;
-
-      // Scale hit test thresholds by 1/zoom for consistent feel at all zoom levels
       const nodeThreshold = (markerSize * 2) / zoom;
       const instanceThreshold = 30 / zoom;
 
       // Try to hit a node first
       const nodeHit = hitTestNode(instances, x, y, nodeThreshold);
       if (nodeHit) {
+        const key = makeNodeKey(nodeHit.instanceIdx, nodeHit.nodeIdx);
         const lf = useAppStore.getState().labeledFrame;
-        if (lf) {
-          useAppStore.getState().setInstance(lf.instances[nodeHit.instanceIdx]);
+
+        if (e.shiftKey) {
+          // Shift+click: toggle node in selection
+          setSelectedNodes((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+          });
+          if (lf) useAppStore.getState().setInstance(lf.instances[nodeHit.instanceIdx]);
+          return;
         }
 
-        // Start dragging if it's a user instance (not predicted)
+        // No shift: check if node is already selected
+        const alreadySelected = selectedNodes.has(key);
+        if (!alreadySelected) {
+          setSelectedNodes(new Set([key]));
+        }
+
+        if (lf) useAppStore.getState().setInstance(lf.instances[nodeHit.instanceIdx]);
+
+        // Start dragging if it's a user instance
         const inst = instances[nodeHit.instanceIdx];
         if (!inst.isPredicted) {
-          // Take undo snapshot before drag starts
           commandContext.execute(BeginEdit);
           setDragNodeInfo(nodeHit);
           setIsDragging(true);
+          setInteractionMode("dragging");
           lastDragPos.current = { x, y };
         }
         return;
@@ -541,14 +606,31 @@ export function VideoPlayer() {
         const lf = useAppStore.getState().labeledFrame;
         if (lf) {
           useAppStore.getState().setInstance(lf.instances[instHit]);
+          // Select all nodes in this instance
+          const inst = instances[instHit];
+          const keys = new Set<string>();
+          inst.nodes.forEach((n, nIdx) => {
+            if (n.visible) keys.add(makeNodeKey(instHit, nIdx));
+          });
+          if (e.shiftKey) {
+            setSelectedNodes((prev) => new Set([...prev, ...keys]));
+          } else {
+            setSelectedNodes(keys);
+          }
         }
         return;
       }
 
-      // Click on empty space - deselect
-      useAppStore.getState().setInstance(null);
+      // No hit: start marquee or deselect
+      if (!e.shiftKey) {
+        setSelectedNodes(new Set());
+        useAppStore.getState().setInstance(null);
+      }
+      setInteractionMode("marquee");
+      setMarqueeStart({ x, y });
+      setMarqueeEnd({ x, y });
     },
-    [canvasToScene, markerSize, panX, panY, zoom, isSpaceHeld]
+    [canvasToScene, markerSize, panX, panY, zoom, isSpaceHeld, selectedNodes]
   );
 
   const handleMouseMove = useCallback(
@@ -565,54 +647,119 @@ export function VideoPlayer() {
         return;
       }
 
-      if (!isDragging || !dragNodeInfo) return;
+      // Marquee mode: update end point
+      if (interactionMode === "marquee") {
+        const { x, y } = canvasToScene(e.clientX, e.clientY);
+        setMarqueeEnd({ x, y });
+        useAppStore.getState().bumpOverlayVersion();
+        return;
+      }
 
-      const { x, y } = canvasToScene(e.clientX, e.clientY);
-      const lf = useAppStore.getState().labeledFrame;
-      if (!lf) return;
+      // Dragging mode: group drag selected nodes
+      if (interactionMode === "dragging" && isDragging && dragNodeInfo) {
+        const { x, y } = canvasToScene(e.clientX, e.clientY);
+        const lf = useAppStore.getState().labeledFrame;
+        if (!lf) return;
 
-      const instance = lf.instances[dragNodeInfo.instanceIdx];
-      if (!instance) return;
-
-      if (e.altKey) {
-        // Alt+Drag: move the entire instance by delta
         const prev = lastDragPos.current;
-        if (prev) {
-          const dx = x - prev.x;
-          const dy = y - prev.y;
-          for (const point of instance.points) {
-            if (!isNaN(point.xy[0]) && !isNaN(point.xy[1])) {
+        if (!prev) {
+          lastDragPos.current = { x, y };
+          return;
+        }
+
+        const dx = x - prev.x;
+        const dy = y - prev.y;
+
+        if (e.altKey && selectedNodes.size === 0) {
+          // Alt+Drag with no selection: move entire instance
+          const instance = lf.instances[dragNodeInfo.instanceIdx];
+          if (instance) {
+            for (const point of instance.points) {
+              if (!isNaN(point.xy[0]) && !isNaN(point.xy[1])) {
+                point.xy = [point.xy[0] + dx, point.xy[1] + dy];
+              }
+            }
+          }
+        } else if (selectedNodes.size > 1 || e.altKey) {
+          // Group drag: move all selected nodes by delta
+          for (const key of selectedNodes) {
+            const { instanceIdx, nodeIdx } = parseNodeKey(key);
+            const inst = lf.instances[instanceIdx];
+            if (!inst) continue;
+            const point = inst.points[nodeIdx];
+            if (point && !isNaN(point.xy[0]) && !isNaN(point.xy[1])) {
               point.xy = [point.xy[0] + dx, point.xy[1] + dy];
             }
           }
+        } else {
+          // Single node drag
+          const instance = lf.instances[dragNodeInfo.instanceIdx];
+          const point = instance?.points[dragNodeInfo.nodeIdx];
+          if (point) {
+            point.xy = [x, y];
+            point.visible = true;
+          }
         }
+
         lastDragPos.current = { x, y };
-      } else {
-        // Normal drag: move single node
-        const point = instance.points[dragNodeInfo.nodeIdx];
-        if (point) {
-          point.xy = [x, y];
-          point.visible = true;
-        }
-        lastDragPos.current = { x, y };
+        useAppStore.getState().markChanged();
+        useAppStore.getState().bumpOverlayVersion();
+        return;
       }
 
-      useAppStore.getState().markChanged();
-      useAppStore.getState().bumpOverlayVersion();
+      // Idle mode: hover detection
+      const { x, y } = canvasToScene(e.clientX, e.clientY);
+      const instances = renderedInstancesRef.current;
+      const nodeThreshold = (markerSize * 2) / zoom;
+      const hit = hitTestNode(instances, x, y, nodeThreshold);
+
+      if (hit) {
+        const prevInstanceIdx = hoveredNode?.instanceIdx;
+        setHoveredNode({
+          instanceIdx: hit.instanceIdx,
+          nodeIdx: hit.nodeIdx,
+          clientX: e.clientX,
+          clientY: e.clientY,
+        });
+        // Only bump overlay if hovered instance changed (to render/clear bbox)
+        if (prevInstanceIdx !== hit.instanceIdx) {
+          useAppStore.getState().bumpOverlayVersion();
+        }
+      } else if (hoveredNode) {
+        setHoveredNode(null);
+        useAppStore.getState().bumpOverlayVersion();
+      }
     },
-    [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom]
+    [isDragging, isPanning, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom, interactionMode, selectedNodes, markerSize, hoveredNode]
   );
 
   const handleMouseUp = useCallback(() => {
     if (isPanning) {
       setIsPanning(false);
     }
-    if (isDragging) {
+
+    if (interactionMode === "marquee" && marqueeStart && marqueeEnd) {
+      const instances = renderedInstancesRef.current;
+      const newSelection = nodesInRect(instances, marqueeStart.x, marqueeStart.y, marqueeEnd.x, marqueeEnd.y);
+      if (shiftHeldOnMouseDown.current) {
+        setSelectedNodes((prev) => new Set([...prev, ...newSelection]));
+      } else {
+        setSelectedNodes(newSelection);
+      }
+      setMarqueeStart(null);
+      setMarqueeEnd(null);
+      setInteractionMode("idle");
+      useAppStore.getState().bumpOverlayVersion();
+      return;
+    }
+
+    if (interactionMode === "dragging" || isDragging) {
       setIsDragging(false);
       setDragNodeInfo(null);
       lastDragPos.current = null;
+      setInteractionMode("idle");
     }
-  }, [isDragging, isPanning]);
+  }, [isDragging, isPanning, interactionMode, marqueeStart, marqueeEnd]);
 
   // Zoom with mouse wheel (towards pointer), Alt+Scroll for rotation
   // Use native event listener with { passive: false } so preventDefault() works
@@ -806,10 +953,42 @@ export function VideoPlayer() {
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={() => { handleMouseUp(); setHoveredNode(null); }}
           onDoubleClick={handleDoubleClick}
           onContextMenu={handleContextMenu}
         />
+
+        {/* Node hover tooltip */}
+        {hoveredNode && (() => {
+          const instances = renderedInstancesRef.current;
+          const inst = instances[hoveredNode.instanceIdx];
+          const node = inst?.nodes[hoveredNode.nodeIdx];
+          if (!node || !inst) return null;
+          const containerRect = containerRef.current?.getBoundingClientRect();
+          if (!containerRect) return null;
+          const tipX = hoveredNode.clientX - containerRect.left + 16;
+          const tipY = hoveredNode.clientY - containerRect.top - 8;
+          return (
+            <div
+              className="absolute pointer-events-none bg-black/80 text-white text-xs rounded shadow-lg px-2 py-1.5 z-20 leading-relaxed"
+              style={{ left: tipX, top: tipY }}
+            >
+              <div className="font-medium">{node.name}</div>
+              <div className="text-white/70">
+                x: {node.x.toFixed(1)}, y: {node.y.toFixed(1)}
+              </div>
+              {node.score !== undefined && (
+                <div className="text-white/70">conf: {node.score.toFixed(3)}</div>
+              )}
+              {inst.trackName && (
+                <div className="text-white/50 mt-0.5">
+                  {inst.trackName}
+                  {inst.score !== undefined && ` (${inst.score.toFixed(2)})`}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Frame info overlay */}
         <Badge
@@ -872,6 +1051,27 @@ export function VideoPlayer() {
           y={contextMenu.y}
           instanceIdx={contextMenu.instanceIdx}
           nodeIdx={contextMenu.nodeIdx}
+          selectedNodes={selectedNodes}
+          onToggleSelectedNodesVisibility={() => {
+            const lf = useAppStore.getState().labeledFrame;
+            if (!lf) return;
+            commandContext.execute(BeginEdit);
+            // Determine majority visibility to decide toggle direction
+            let visibleCount = 0;
+            for (const key of selectedNodes) {
+              const { instanceIdx, nodeIdx } = parseNodeKey(key);
+              const point = lf.instances[instanceIdx]?.points[nodeIdx];
+              if (point?.visible) visibleCount++;
+            }
+            const makeVisible = visibleCount <= selectedNodes.size / 2;
+            for (const key of selectedNodes) {
+              const { instanceIdx, nodeIdx } = parseNodeKey(key);
+              const point = lf.instances[instanceIdx]?.points[nodeIdx];
+              if (point) point.visible = makeVisible;
+            }
+            useAppStore.getState().markChanged();
+            useAppStore.getState().bumpOverlayVersion();
+          }}
           onClose={() => setContextMenu(null)}
         />
       )}
