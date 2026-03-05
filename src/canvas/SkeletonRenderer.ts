@@ -371,7 +371,8 @@ export function nodesInRect(
   x1: number,
   y1: number,
   x2: number,
-  y2: number
+  y2: number,
+  includeNonVisible: boolean = false
 ): Set<string> {
   const minX = Math.min(x1, x2);
   const maxX = Math.max(x1, x2);
@@ -383,7 +384,8 @@ export function nodesInRect(
     const inst = instances[i];
     for (let j = 0; j < inst.nodes.length; j++) {
       const node = inst.nodes[j];
-      if (!node.visible) continue;
+      if (!node.visible && !includeNonVisible) continue;
+      if (isNaN(node.x)) continue; // truly unplaced
       if (node.x >= minX && node.x <= maxX && node.y >= minY && node.y <= maxY) {
         result.add(makeNodeKey(i, j));
       }
@@ -403,7 +405,6 @@ export function renderSelectedNodeHighlights(
 ): void {
   if (selectedNodes.size === 0) return;
 
-  const radius = (opts.markerSize + 3) / opts.zoom;
   ctx.strokeStyle = "white";
   ctx.lineWidth = 2 / opts.zoom;
   ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
@@ -411,8 +412,11 @@ export function renderSelectedNodeHighlights(
   for (const key of selectedNodes) {
     const { instanceIdx, nodeIdx } = parseNodeKey(key);
     const node = instances[instanceIdx]?.nodes[nodeIdx];
-    if (!node?.visible) continue;
+    if (!node || isNaN(node.x)) continue;
+    if (!node.visible && !opts.showNonVisibleNodes) continue;
 
+    const baseRadius = node.visible ? opts.markerSize : opts.markerSize / 2;
+    const radius = (baseRadius + 3) / opts.zoom;
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
     ctx.fill();

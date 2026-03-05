@@ -389,7 +389,7 @@ export function VideoPlayer() {
     // Compute effective selection (includes live marquee preview)
     let effectiveSelection = selectedNodes;
     if (marqueeStart && marqueeEnd) {
-      const marqueeHits = nodesInRect(instances, marqueeStart.x, marqueeStart.y, marqueeEnd.x, marqueeEnd.y);
+      const marqueeHits = nodesInRect(instances, marqueeStart.x, marqueeStart.y, marqueeEnd.x, marqueeEnd.y, showNonVisibleNodes);
       if (marqueeHits.size > 0 || selectedNodes.size > 0) {
         effectiveSelection = new Set([...selectedNodes, ...marqueeHits]);
       }
@@ -759,7 +759,7 @@ export function VideoPlayer() {
 
     if (interactionMode === "marquee" && marqueeStart && marqueeEnd) {
       const instances = renderedInstancesRef.current;
-      const newSelection = nodesInRect(instances, marqueeStart.x, marqueeStart.y, marqueeEnd.x, marqueeEnd.y);
+      const newSelection = nodesInRect(instances, marqueeStart.x, marqueeStart.y, marqueeEnd.x, marqueeEnd.y, showNonVisibleNodes);
       if (shiftHeldOnMouseDown.current) {
         setSelectedNodes((prev) => new Set([...prev, ...newSelection]));
       } else {
