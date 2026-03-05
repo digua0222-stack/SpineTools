@@ -6,7 +6,7 @@
  */
 
 import type { Labels } from "@talmolab/sleap-io.js";
-import { writeSlpToBytes } from "./slpWriter";
+import { saveSlpToBytes } from "@talmolab/sleap-io.js";
 import { useAppStore } from "../stores/appStore";
 import { toast } from "sonner";
 
@@ -31,7 +31,7 @@ export async function saveProjectAsSlp(
     : "labels.slp";
 
   try {
-    const bytes = await writeSlpToBytes(labels);
+    const bytes = await saveSlpToBytes(labels);
     const blob = new Blob([bytes], { type: "application/octet-stream" });
 
     if ("showSaveFilePicker" in window) {

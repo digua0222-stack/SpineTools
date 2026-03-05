@@ -186,59 +186,16 @@ export async function resolveAllVideoFiles(
 
 /**
  * Create an Mp4BoxVideoBackend from a user-picked File and assign it to a Video.
- *
- * We cannot use `new Mp4BoxVideoBackend(url)` because the constructor immediately
- * calls init() → openSource() → fetch(url, { method: "HEAD" }). For local files
- * (bare filenames, blob: URLs), this fetch either fails or hangs indefinitely
- * (e.g. Vite dev server may not respond to HEAD for nonexistent paths).
- *
- * Instead, we use Object.create() to build the instance without calling the
- * constructor, set fileBlob directly to the File (which extends Blob), override
- * openSource to a no-op, and call init(). The readChunk() fallback path uses
- * fileBlob.slice() when supportsRangeRequests is false, giving us lazy chunk
- * reading from the File without any network fetches.
  */
 export async function assignVideoBackend(video: Video, file: File): Promise<void> {
   try {
-    const filename = Array.isArray(video.filename) ? video.filename[0] ?? "" : video.filename;
-
-    // Create instance without calling constructor (avoids the hanging fetch)
-    const backend: InstanceType<typeof Mp4BoxVideoBackend> = Object.create(
-      Mp4BoxVideoBackend.prototype
-    );
-
-    // Replicate constructor property initialization
-    // (see Mp4BoxVideoBackend constructor in sleap-io.js dist)
-    const b = backend as unknown as Record<string, unknown>;
-    b.filename = filename;
-    b.dataset = null;
-    b.samples = [];
-    b.keyframeIndices = [];
-    b.cache = new Map();
-    b.cacheSize = 120; // DEFAULT_CACHE_SIZE
-    b.lookahead = 60; // DEFAULT_LOOKAHEAD
-    b.decoder = null;
-    b.config = null;
-    b.fileSize = file.size;
-    b.supportsRangeRequests = false;
-    b.fileBlob = file; // File extends Blob — readChunk uses blob.slice()
-    b.isDecoding = false;
-    b.pendingFrame = null;
-
-    // Override openSource on this instance to a no-op (fileBlob already set)
-    (backend as any).openSource = async () => {};
-
-    // Run init() — skips openSource, parses mp4 headers via readChunk/fileBlob
-    b.ready = (backend as any).init();
-    await (b.ready as Promise<void>);
-
+    const backend = new Mp4BoxVideoBackend(file);
     video.backend = backend;
-    if (backend.shape) {
-      (video as any).shape = backend.shape;
-    }
-    if (backend.fps) {
-      (video as any).fps = backend.fps;
-    }
+    // Trigger initialization by requesting a frame, then discard it
+    const frame = await backend.getFrame(0);
+    if (frame && "close" in frame) (frame as ImageBitmap).close();
+    if (backend.shape) video.shape = backend.shape;
+    if (backend.fps) video.fps = backend.fps;
   } catch (err) {
     console.error(`Failed to load video backend for ${file.name}:`, err);
     toast.error(`Failed to load video: ${file.name}`, {

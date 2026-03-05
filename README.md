@@ -145,7 +145,7 @@ src/
 ├── lib/
 │   ├── colorPalettes.ts         #   Palette definitions + color-by-mode logic
 │   ├── loadProject.ts           #   Consolidated SLP loading pipeline
-│   ├── slpWriter.ts             #   Browser SLP writer (h5wasm MEMFS)
+│   ├── saveProject.ts           #   Save SLP via upstream saveSlpToBytes
 │   ├── resolveVideos.ts         #   Video backend resolution for .pkg.slp
 │   └── shortcuts.ts             #   40+ keyboard shortcut definitions
 ├── platform/                    #   Tauri vs browser file I/O abstraction
