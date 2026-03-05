@@ -1008,7 +1008,7 @@ export function VideoPlayer() {
         ref={containerRef}
         className={cn(
           "flex-1 relative overflow-hidden bg-background min-h-0",
-          isPanning ? "cursor-grabbing" : isSpaceHeld ? "cursor-grab" : isDragging ? "cursor-move" : isPlacingNodes ? "cursor-cell" : "cursor-crosshair"
+          isPanning ? "cursor-grabbing" : isSpaceHeld ? "cursor-grab" : isDragging ? "cursor-grabbing" : interactionMode === "marquee" ? "cursor-crosshair" : isPlacingNodes ? "cursor-cell" : hoveredNode ? "cursor-pointer" : "cursor-default"
         )}
         onDoubleClick={handleDoubleClick}
       >
