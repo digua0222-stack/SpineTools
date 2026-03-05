@@ -25,7 +25,7 @@ jobs:
 
       - name: Clone and build sleap-io.js
         run: |
-          git clone --depth 1 https://github.com/talmo/sleap-io.js.git ../sleap-io.js
+          git clone --depth 1 https://github.com/talmolab/sleap-io.js.git ../sleap-io.js
           cd ../sleap-io.js && npm ci && npm run build
 
       - name: Install dependencies
