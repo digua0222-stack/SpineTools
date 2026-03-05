@@ -362,17 +362,24 @@ export function Seekbar() {
 
   return (
     <div className="flex flex-col shrink-0">
-      {/* Instance count header graph */}
-      <div
-        ref={headerContainerRef}
-        className="h-4 bg-card border-t border-border mx-2"
-        style={{ marginLeft: "calc(6rem + 8px)", marginRight: "calc(var(--transport-width, 210px) + 8px)" }}
-      >
-        <canvas
-          ref={headerCanvasRef}
-          className="w-full h-full"
-          style={{ display: "block" }}
-        />
+      {/* Instance count header graph - uses same flex layout as seekbar row for alignment */}
+      <div className="flex items-center h-4 bg-card border-t border-border px-2 gap-2">
+        <div className="w-24 shrink-0" />
+        <div ref={headerContainerRef} className="flex-1 overflow-hidden">
+          <canvas
+            ref={headerCanvasRef}
+            className="w-full h-full"
+            style={{ display: "block" }}
+          />
+        </div>
+        <div className="flex gap-0.5 shrink-0 items-center invisible" aria-hidden="true">
+          <Button variant="subtle" size="icon-xs" tabIndex={-1}><SkipBack /></Button>
+          <Button variant="subtle" size="icon-xs" tabIndex={-1}><ChevronLeft /></Button>
+          <Button variant="subtle" size="icon-xs" tabIndex={-1}><Play /></Button>
+          <Button variant="subtle" size="icon-xs" tabIndex={-1}><ChevronRight /></Button>
+          <Button variant="subtle" size="icon-xs" tabIndex={-1}><SkipForward /></Button>
+          <Button variant="subtle" size="xs" className="w-8 px-0" tabIndex={-1}>1x</Button>
+        </div>
       </div>
 
       <div className="flex items-center h-10 bg-card border-t border-border px-2 gap-2">
