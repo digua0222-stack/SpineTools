@@ -940,7 +940,11 @@ export function VideoPlayer() {
         inst.nodes.forEach((n, nIdx) => {
           if (n.visible || showNonVisibleNodes) keys.add(makeNodeKey(nodeHit.instanceIdx, nIdx));
         });
-        setSelectedNodes(keys);
+        if (e.shiftKey) {
+          setSelectedNodes((prev) => new Set([...prev, ...keys]));
+        } else {
+          setSelectedNodes(keys);
+        }
         const lf = useAppStore.getState().labeledFrame;
         if (lf) useAppStore.getState().setInstance(lf.instances[nodeHit.instanceIdx]);
         useAppStore.getState().bumpOverlayVersion();
