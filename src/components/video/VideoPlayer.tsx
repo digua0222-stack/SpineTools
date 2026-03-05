@@ -11,6 +11,7 @@
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useAppStore } from "../../stores/appStore";
+import { debugFlags } from "../panels/DebugPanel";
 import { Seekbar } from "./Seekbar";
 import { ContextMenu } from "./ContextMenu";
 import {
@@ -123,16 +124,23 @@ export function VideoPlayer() {
     if (!video || !video.backend) return;
 
     let cancelled = false;
+    const t0 = performance.now();
+    if (debugFlags.logSeeking) console.debug(`[seek] requesting frame ${frameIdx}`);
 
     (async () => {
       try {
         const frame = await video.backend!.getFrame(frameIdx);
-        if (cancelled || !frame) return;
+        if (debugFlags.logSeeking) console.debug(`[seek] getFrame(${frameIdx}) returned ${frame?.constructor?.name ?? "null"} in ${(performance.now() - t0).toFixed(1)}ms`);
+        if (cancelled || !frame) {
+          if (debugFlags.logSeeking && cancelled) console.debug(`[seek] frame ${frameIdx} cancelled`);
+          return;
+        }
 
         let bmp: ImageBitmap;
 
         if (frame instanceof ImageBitmap) {
-          bmp = frame;
+          // Clone so we don't close the backend's cached copy
+          bmp = await createImageBitmap(frame);
         } else if (frame instanceof ImageData) {
           bmp = await createImageBitmap(frame);
         } else if (frame instanceof ArrayBuffer || frame instanceof Uint8Array) {
@@ -149,6 +157,7 @@ export function VideoPlayer() {
 
         if (cancelled) {
           bmp.close();
+          if (debugFlags.logSeeking) console.debug(`[seek] frame ${frameIdx} cancelled after decode`);
           return;
         }
 
@@ -156,6 +165,7 @@ export function VideoPlayer() {
         frameBitmapRef.current?.close();
         frameBitmapRef.current = bmp;
         setFrameDims([bmp.width, bmp.height]);
+        if (debugFlags.logSeeking) console.debug(`[seek] frame ${frameIdx} rendered (${bmp.width}x${bmp.height}) total ${(performance.now() - t0).toFixed(1)}ms`);
       } catch (err) {
         console.error("Failed to render frame:", err);
       }

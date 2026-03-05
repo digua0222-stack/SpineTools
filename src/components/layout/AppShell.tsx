@@ -25,6 +25,7 @@ import { VideosPanel } from "../panels/VideosPanel";
 import { SkeletonPanel } from "../panels/SkeletonPanel";
 import { InstancesPanel } from "../panels/InstancesPanel";
 import { SuggestionsPanel } from "../panels/SuggestionsPanel";
+import { DebugPanel } from "../panels/DebugPanel";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { TrainingDialog } from "../dialogs/TrainingDialog";
 import { InferenceDialog } from "../dialogs/InferenceDialog";
@@ -40,6 +41,7 @@ import {
   Bone,
   Users,
   Lightbulb,
+  Terminal,
   PanelRightClose,
   PanelRightOpen,
   GripVertical,
@@ -58,6 +60,7 @@ const PANELS = [
   { id: "skeleton", label: "Skeleton", icon: Bone, component: SkeletonPanel },
   { id: "instances", label: "Instances", icon: Users, component: InstancesPanel },
   { id: "suggestions", label: "Suggestions", icon: Lightbulb, component: SuggestionsPanel },
+  { id: "debug", label: "Debug", icon: Terminal, component: DebugPanel },
 ] as const;
 
 export function AppShell() {
