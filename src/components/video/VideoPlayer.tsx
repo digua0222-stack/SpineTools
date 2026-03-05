@@ -29,6 +29,7 @@ import {
   type RenderedNode,
 } from "../../canvas/SkeletonRenderer";
 import { getPaletteColor, getInstanceColor } from "../../lib/colorPalettes";
+import { COLORMAPS } from "../../lib/colormaps";
 import { renderTrails } from "../../canvas/TrailRenderer";
 import {
   commandContext,
@@ -65,6 +66,10 @@ export function VideoPlayer() {
   const overlayVersion = useAppStore((s) => s.overlayVersion);
   const distinctlyColor = useAppStore((s) => s.distinctlyColor);
   const trailLength = useAppStore((s) => s.trailLength);
+  const lutMin = useAppStore((s) => s.lutMin);
+  const lutMax = useAppStore((s) => s.lutMax);
+  const colormap = useAppStore((s) => s.colormap);
+  const rotation = useAppStore((s) => s.rotation);
 
   // Local zoom/pan state
   const [zoom, setZoom] = useState(1);
@@ -358,9 +363,13 @@ export function VideoPlayer() {
   // Compute fit-to-window base scale and centering offsets
   const [cw, ch] = containerSize;
   const [fw, fh] = frameDims;
-  const baseScale = fw > 0 && fh > 0 ? Math.min(cw / fw, ch / fh) : 1;
-  const offsetX = fw > 0 && fh > 0 ? (cw - fw * baseScale) / 2 : 0;
-  const offsetY = fw > 0 && fh > 0 ? (ch - fh * baseScale) / 2 : 0;
+  // For 90/270 rotation, swap effective dimensions for fitting
+  const isRotated90 = rotation === 90 || rotation === 270;
+  const displayW = isRotated90 ? fh : fw;
+  const displayH = isRotated90 ? fw : fh;
+  const baseScale = displayW > 0 && displayH > 0 ? Math.min(cw / displayW, ch / displayH) : 1;
+  const offsetX = displayW > 0 && displayH > 0 ? (cw - displayW * baseScale) / 2 : 0;
+  const offsetY = displayW > 0 && displayH > 0 ? (ch - displayH * baseScale) / 2 : 0;
 
   // Load the current frame (convert to ImageBitmap, trigger dimension update)
   useEffect(() => {
@@ -404,6 +413,22 @@ export function VideoPlayer() {
           return;
         }
 
+        // Compute histogram from raw frame pixels
+        {
+          const offscreen = new OffscreenCanvas(bmp.width, bmp.height);
+          const offCtx = offscreen.getContext("2d");
+          if (offCtx) {
+            offCtx.drawImage(bmp, 0, 0);
+            const imgData = offCtx.getImageData(0, 0, bmp.width, bmp.height);
+            const hist = new Uint32Array(256);
+            const d = imgData.data;
+            for (let i = 0; i < d.length; i += 4) {
+              hist[d[i + 1]]++;
+            }
+            useAppStore.getState().set("frameHistogram", hist);
+          }
+        }
+
         // Close previous bitmap
         frameBitmapRef.current?.close();
         frameBitmapRef.current = bmp;
@@ -443,14 +468,53 @@ export function VideoPlayer() {
     ctx.save();
     ctx.translate(offsetX + panX, offsetY + panY);
     ctx.scale(baseScale * zoom, baseScale * zoom);
+    // Apply virtual rotation
+    if (rotation === 90) {
+      ctx.translate(fh, 0);
+      ctx.rotate(Math.PI / 2);
+    } else if (rotation === 180) {
+      ctx.translate(fw, fh);
+      ctx.rotate(Math.PI);
+    } else if (rotation === 270) {
+      ctx.translate(0, fw);
+      ctx.rotate((3 * Math.PI) / 2);
+    }
     ctx.imageSmoothingEnabled = baseScale * zoom <= 2;
     try {
-      ctx.drawImage(bmp, 0, 0);
+      const needsLUT = lutMin > 0 || lutMax < 255;
+      const cmapLUT = COLORMAPS[colormap] ?? null;
+      if (needsLUT || cmapLUT) {
+        const offscreen = new OffscreenCanvas(bmp.width, bmp.height);
+        const offCtx = offscreen.getContext("2d")!;
+        offCtx.drawImage(bmp, 0, 0);
+        const imgData = offCtx.getImageData(0, 0, bmp.width, bmp.height);
+        const d = imgData.data;
+        const range = lutMax - lutMin || 1;
+        for (let i = 0; i < d.length; i += 4) {
+          let r = d[i], g = d[i + 1], b = d[i + 2];
+          if (needsLUT) {
+            r = Math.max(0, Math.min(255, ((r - lutMin) / range) * 255));
+            g = Math.max(0, Math.min(255, ((g - lutMin) / range) * 255));
+            b = Math.max(0, Math.min(255, ((b - lutMin) / range) * 255));
+          }
+          if (cmapLUT) {
+            // Use luminance of the (possibly LUT-adjusted) pixel to index colormap
+            const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+            const c = cmapLUT[Math.max(0, Math.min(255, lum))];
+            r = c[0]; g = c[1]; b = c[2];
+          }
+          d[i] = r; d[i + 1] = g; d[i + 2] = b;
+        }
+        offCtx.putImageData(imgData, 0, 0);
+        ctx.drawImage(offscreen, 0, 0);
+      } else {
+        ctx.drawImage(bmp, 0, 0);
+      }
     } catch {
       // Bitmap was closed (detached) by a racing frame load — skip, next frame will redraw
     }
     ctx.restore();
-  }, [frameDims, containerSize, zoom, panX, panY, baseScale, offsetX, offsetY, bitmapVersion]);
+  }, [frameDims, containerSize, zoom, panX, panY, baseScale, offsetX, offsetY, bitmapVersion, lutMin, lutMax, colormap, rotation]);
 
   // Find the current labeled frame and update store
   useEffect(() => {
@@ -552,10 +616,20 @@ export function VideoPlayer() {
 
     renderedInstancesRef.current = instances;
 
-    // Apply fit-to-window base transform + user zoom/pan
+    // Apply fit-to-window base transform + user zoom/pan + rotation
     ctx.save();
     ctx.translate(offsetX + panX, offsetY + panY);
     ctx.scale(baseScale * zoom, baseScale * zoom);
+    if (rotation === 90) {
+      ctx.translate(fh, 0);
+      ctx.rotate(Math.PI / 2);
+    } else if (rotation === 180) {
+      ctx.translate(fw, fh);
+      ctx.rotate(Math.PI);
+    } else if (rotation === 270) {
+      ctx.translate(0, fw);
+      ctx.rotate((3 * Math.PI) / 2);
+    }
 
     // Render motion trails before skeleton instances (behind)
     if (trailLength > 0 && labels && video) {
@@ -641,6 +715,7 @@ export function VideoPlayer() {
     labels,
     video,
     frameIdx,
+    rotation,
   ]);
 
   // Render zoomed inset during node drag
@@ -817,22 +892,31 @@ export function VideoPlayer() {
       const rect = canvas.getBoundingClientRect();
       const cx = clientX - rect.left;
       const cy = clientY - rect.top;
-      return {
-        x: (cx - offsetX - panX) / (baseScale * zoom),
-        y: (cy - offsetY - panY) / (baseScale * zoom),
-      };
+      // Convert to rotated scene coordinates
+      let sx = (cx - offsetX - panX) / (baseScale * zoom);
+      let sy = (cy - offsetY - panY) / (baseScale * zoom);
+      // Apply inverse rotation to get frame coordinates
+      if (rotation === 90) {
+        const fx = sy, fy = fh - sx;
+        sx = fx; sy = fy;
+      } else if (rotation === 180) {
+        sx = fw - sx; sy = fh - sy;
+      } else if (rotation === 270) {
+        const fx = fw - sy, fy = sx;
+        sx = fx; sy = fy;
+      }
+      return { x: sx, y: sy };
     },
-    [zoom, panX, panY, baseScale, offsetX, offsetY]
+    [zoom, panX, panY, baseScale, offsetX, offsetY, rotation, fw, fh]
   );
 
   // Constrain pan so at least 25% of the video remains visible
   const constrainPan = useCallback(
     (px: number, py: number, z: number) => {
       const [cw, ch] = containerSize;
-      const [fw, fh] = frameDims;
-      if (fw === 0 || fh === 0) return { x: px, y: py };
-      const scaledW = fw * baseScale * z;
-      const scaledH = fh * baseScale * z;
+      if (displayW === 0 || displayH === 0) return { x: px, y: py };
+      const scaledW = displayW * baseScale * z;
+      const scaledH = displayH * baseScale * z;
       const minVisible = 0.25;
       const minVisibleX = scaledW * minVisible;
       const minVisibleY = scaledH * minVisible;

@@ -57,6 +57,11 @@ export interface AppState {
   nodeLabelSize: number;
   trailLength: number;
   trailShade: string;
+  lutMin: number;
+  lutMax: number;
+  frameHistogram: Uint32Array | null;
+  colormap: string;
+  rotation: 0 | 90 | 180 | 270;
 
   // === Editing state ===
   instanceInitMethod: InstancePlacementMethod;
@@ -143,7 +148,7 @@ export const useAppStore = create<AppState>()(
       uiScale: 1,
       sidebarCollapsed: false,
       sidebarActivePanel: "videos",
-      panelOrder: ["videos", "skeleton", "instances", "suggestions", "debug"],
+      panelOrder: ["videos", "skeleton", "instances", "view", "suggestions", "debug"],
 
       // View state
       showInstances: true,
@@ -160,6 +165,11 @@ export const useAppStore = create<AppState>()(
       nodeLabelSize: 12,
       trailLength: 0,
       trailShade: "Normal",
+      lutMin: 0,
+      lutMax: 255,
+      frameHistogram: null,
+      colormap: "grayscale",
+      rotation: 0 as 0 | 90 | 180 | 270,
 
       // Editing state
       instanceInitMethod: "best" as InstancePlacementMethod,
