@@ -1,5 +1,10 @@
 # UI Libraries Research for SLEAP Label Web
 
+> **Status (March 2026):** Most library decisions have been made and implemented.
+> Key adoptions: shadcn/ui (UI components + menubar), Zustand + immer (state),
+> tinykeys (shortcuts), Tailwind CSS v4 (styling), raw Canvas 2D (rendering),
+> react-resizable-panels (layout). dockview-react is a dependency but not yet wired up.
+
 Research into React/TypeScript UI libraries for building a desktop-quality annotation
 tool, porting the Qt-based SLEAP GUI to the web.
 
@@ -65,25 +70,25 @@ be resized, rearranged, and toggled. We need a React equivalent.
 - React wrappers exist but feel bolted-on
 - High star count reflects historical popularity, not current momentum
 
-### Recommendation: dockview
+### Current implementation: react-resizable-panels + dockview (planned)
 
-**dockview** is the best fit for SLEAP Label Web because:
+**react-resizable-panels** (`react-resizable-panels@^4.6.5`) is currently used for
+the split-pane layout between the canvas and the side panel. The side panel uses
+`Tabs` from shadcn/ui for Videos, Skeleton, Instances, and Suggestions panels.
 
-1. It provides the full Qt-like docking experience (tabs, drag-and-drop rearrangement,
-   floating panels, toggle visibility) that react-resizable-panels cannot.
+**dockview-react** (`dockview-react@^5.0.0`) is installed as a dependency but not
+yet wired up. It will be used when the full Qt-like docking experience (tabs,
+drag-and-drop rearrangement, floating panels) is needed.
+
+### Original recommendation: dockview
+
+dockview remains the recommended choice for full docking because:
+
+1. It provides the full Qt-like docking experience that react-resizable-panels cannot.
 2. Zero dependencies keeps the bundle lean.
-3. Active development (v5.0.0 released recently) with good momentum.
+3. Active development (v5.0.0) with good momentum.
 4. Layout serialization makes persisting user-customized layouts trivial.
-5. The API is comprehensive and well-documented.
-6. TypeScript-first design.
-
-**Alternative**: flexlayout-react is a strong second choice with more downloads and
-mature features like border tabsets and submodels. Consider it if dockview has
-limitations in practice.
-
-**Fallback strategy**: If full docking proves too complex for the initial release,
-react-resizable-panels provides an excellent simpler split-pane layout that could be
-upgraded later.
+5. TypeScript-first design.
 
 ---
 
@@ -109,26 +114,25 @@ Help) with keyboard shortcuts, checkable items, and submenus.
 - Full control but significant effort to match accessibility and keyboard nav
 - Not recommended when Radix already solves this well
 
-### Recommendation: shadcn/ui Menubar (Radix-based)
+### Decision: shadcn/ui Menubar (Radix-based) -- Adopted
 
-The shadcn/ui Menubar built on Radix primitives is the clear winner:
-- It matches the exact desktop menu bar UX pattern we need
+The shadcn/ui Menubar built on Radix primitives was adopted in commit `dc11308`:
+- Full desktop menu bar with File, Edit, Go, View, Labels, Tracks menus
 - Checkable items, submenus, and shortcut display are built-in
-- Copy-paste ownership model means we can customize freely
-- Tailwind styling integrates with the rest of the UI
+- Implementation: `src/components/layout/MenuBar.tsx`
+- Uses the unified `radix-ui` package (v1.4.3)
 
 **Note on Radix maintenance**: The original Radix team has shifted focus to Base UI
 (which reached v1.0 in December 2025). However, shadcn/ui now supports both Radix and
-Base UI as component primitive sources, and Radix has moved to a unified `radix-ui`
-package. For the menubar specifically, Radix remains the best option as Base UI does not
-yet offer a menubar primitive. The risk is manageable since we own the component code
-via shadcn/ui's copy-paste model.
+Base UI as component primitive sources. For the menubar specifically, Radix remains the
+best option as Base UI does not yet offer a menubar primitive. The risk is manageable
+since we own the component code via shadcn/ui's copy-paste model.
 
 ### Tauri Integration Note
 
 When running as a Tauri app, native OS menus can replace or supplement the web menubar.
-The web menubar should be the primary implementation, conditionally hidden when Tauri
-native menus are active.
+The web menubar is currently the primary implementation. Native Tauri menus are not yet
+implemented.
 
 ---
 
@@ -165,15 +169,13 @@ datasets (thousands of suggestions).
 - Supports vertical, horizontal, and grid virtualization
 - Variable row heights and dynamic measurement
 
-### Recommendation: @tanstack/react-table + @tanstack/react-virtual
+### Decision: @tanstack/react-table -- Adopted
 
-- Use **@tanstack/react-table** for structured tabular data (Videos, Instances) where
-  sorting, selection, and column management are needed.
-- Use **@tanstack/react-virtual** for the Suggestions panel, which may have thousands
-  of items requiring virtualization.
-- For the Skeleton panel (node/edge list), a simple custom list is sufficient given the
-  small data size.
-- Style tables with shadcn/ui's Table components for visual consistency.
+- **@tanstack/react-table** (`@tanstack/react-table@^8.21.0`) is used for the
+  Instances panel and Videos panel. Styled with shadcn/ui Table components.
+- **@tanstack/react-virtual** is not yet installed. Will be added when the Suggestions
+  panel needs to handle large datasets (thousands of items).
+- The Skeleton panel uses a custom list (small data size).
 
 ---
 
@@ -208,19 +210,20 @@ datasets (thousands of suggestions).
 - Accessibility would need to be implemented from scratch
 - Not justified when shadcn/ui provides owned, customizable components
 
-### Recommendation: shadcn/ui
+### Decision: shadcn/ui -- Adopted
 
-shadcn/ui is the clear choice:
+shadcn/ui was adopted in commit `dc11308`. 19 shadcn/ui components are installed in
+`src/components/ui/`:
 
-1. **Ownership model**: Components are copied into your project. No version lock-in,
-   no breaking upstream changes. You can modify any component freely.
-2. **Accessibility**: Built on Radix primitives with full ARIA and keyboard support.
-3. **Tailwind native**: Consistent with our CSS approach (see section 7).
-4. **Comprehensive**: Covers buttons, dialogs, dropdowns, menus, tooltips, tabs,
-   sliders, and more -- everything a desktop-like app needs.
-5. **Active ecosystem**: Huge community, regular updates, extensive examples.
-6. **Desktop-ready components**: Menubar, Command palette (Cmd+K), Context menus,
-   and keyboard shortcut display are all available.
+badge, button, card, command, context-menu, dialog, dropdown-menu, input, menubar,
+popover, resizable, scroll-area, select, separator, sheet, sidebar, skeleton, slider,
+table, tabs, tooltip.
+
+Theme: oklch-based black/orange (zinc-950 bg, orange-500 primary), 13px base font
+for information density. Configuration in `components.json`.
+
+Additional UI deps: `lucide-react` (icons), `class-variance-authority`, `clsx`,
+`tailwind-merge`, `sonner` (toasts), `cmdk` (command palette).
 
 ---
 
@@ -269,9 +272,12 @@ and various UI components subscribe to state changes. We need a React equivalent
 - **Better for**: Highly interconnected, frequently-changing state where minimal
   re-renders are critical
 
-### Recommendation: Zustand (primary) + Jotai (optional, targeted)
+### Decision: Zustand -- Adopted
 
-**Zustand** is the primary recommendation because:
+**Zustand** (`zustand@^5.0.3`) with `immer` (`immer@^10.1.1`) middleware is the
+primary state management solution. The store is implemented at `src/stores/appStore.ts`.
+
+**Zustand** was chosen because:
 
 1. **GuiState mapping**: The `subscribeWithSelector` middleware directly maps to SLEAP's
    pattern of subscribing to state property changes.
@@ -284,19 +290,19 @@ and various UI components subscribe to state changes. We need a React equivalent
 6. **Ecosystem**: 50k+ GitHub stars, by the pmndrs team (also behind react-three-fiber,
    drei, jotai, valtio).
 
-**Jotai** can be used alongside Zustand for specific hot-path UI state where
-atom-level reactivity prevents unnecessary re-renders (e.g., per-instance visibility
-toggles in the canvas).
+**Jotai** has not been needed. Zustand selectors provide sufficient re-render control.
 
-### Proposed Store Structure
+### Store Structure (Implemented)
 
-```
-stores/
-  appStore.ts        # App-level state: theme, layout, active tool
-  projectStore.ts    # Project data: videos, labels, skeletons
-  canvasStore.ts     # Canvas state: zoom, pan, selected instances
-  playerStore.ts     # Playback state: current frame, playing, speed
-```
+A single unified store at `src/stores/appStore.ts` covers all state domains:
+- App-level: theme, layout, active tool, loading state
+- Project data: labels, videos, skeletons, tracks, suggestions
+- Canvas state: zoom, pan, selected instances/nodes
+- Playback: current frame, playing, speed
+- View settings: edge style, node size, color palette, color-by mode
+
+The single-store approach was chosen over multiple stores for simplicity and to make
+undo/redo (frame-level snapshots) easier to implement.
 
 ---
 
@@ -326,38 +332,14 @@ most keyboard shortcut libraries are fundamentally broken:
 **tinykeys** is the only library that defaults to the modern `key` property while also
 supporting `code` for physical key matching when explicitly requested.
 
-### Recommendation: Custom hook built on tinykeys patterns
+### Decision: tinykeys -- Adopted
 
-Given the need for customizable shortcuts (like SLEAP's shortcuts.yaml):
+`tinykeys@^3.0.0` is used as the keyboard shortcut foundation. 40+ keyboard
+shortcuts are implemented, matching SLEAP's `shortcuts.yaml` bindings.
 
-1. **Use tinykeys as the foundation** for its correct `key`-based detection and tiny
-   size (~650 bytes).
-2. **Build a custom `useShortcuts` hook** that:
-   - Reads shortcut mappings from a configuration store (Zustand)
-   - Maps shortcut keys to command IDs (ties into the command system)
-   - Supports context-aware shortcuts (different shortcuts when canvas is focused vs.
-     a panel)
-   - Handles modifier keys correctly (Ctrl/Cmd normalization for cross-platform)
-   - Disables shortcuts when typing in input fields
-3. **Configuration format**: JSON/YAML mapping of command IDs to key combinations,
-   stored in Zustand with persist middleware for user customization.
-
-### Proposed Architecture
-
-```ts
-// shortcuts.ts
-const defaultShortcuts: Record<string, string[]> = {
-  "video.nextFrame": ["ArrowRight"],
-  "video.prevFrame": ["ArrowLeft"],
-  "video.play": ["Space"],
-  "labels.newInstance": ["Control+i"],
-  "labels.deleteInstance": ["Delete"],
-  "file.save": ["Control+s"],
-  // ...
-};
-
-// useShortcuts hook binds these to the command system via tinykeys
-```
+The command system at `src/commands/` uses `CommandContext` objects that bind
+shortcuts to store actions. Shortcuts are registered via tinykeys in component
+`useEffect` hooks and disabled when typing in input fields.
 
 ---
 
@@ -387,81 +369,39 @@ const defaultShortcuts: Record<string, string[]> = {
 - Not compatible with shadcn/ui
 - Poor performance for large component trees
 
-### Recommendation: Tailwind CSS
+### Decision: Tailwind CSS v4 -- Adopted
 
-Tailwind CSS is the clear choice because:
+Tailwind CSS v4 (`tailwindcss@^4.0.0`) is used with the `@tailwindcss/vite` plugin.
+The theme uses oklch-based colors defined in `src/index.css` via CSS custom properties
+(Tailwind v4's CSS-first configuration approach, no `tailwind.config.ts` needed).
 
-1. **Required by shadcn/ui**: Our component library choice mandates Tailwind.
-2. **Desktop precision**: Tailwind's utility classes enable exact pixel-level control
-   needed for desktop-like layouts (precise padding, spacing, sizing).
-3. **No runtime overhead**: Styles are compiled ahead of time. Critical for a
-   performance-sensitive annotation tool.
-4. **Design consistency**: Built-in design tokens ensure consistent spacing, colors,
-   and typography across the entire app.
-5. **Dark mode**: Built-in dark mode support via `dark:` variant, matching SLEAP's
-   dark theme.
-6. **Custom properties**: We can define app-specific design tokens in tailwind.config
-   for panel backgrounds, border colors, canvas overlays, etc.
-
-### Tailwind Configuration Strategy
-
-```ts
-// tailwind.config.ts
-export default {
-  darkMode: "class",
-  theme: {
-    extend: {
-      colors: {
-        // App-specific semantic colors
-        panel: { bg: "...", border: "...", header: "..." },
-        canvas: { bg: "...", overlay: "..." },
-        skeleton: { node: "...", edge: "..." },
-      },
-    },
-  },
-};
-```
+Theme: dark mode (zinc-950 background), orange-500 primary accent.
 
 ---
 
-## Summary of Recommendations
+## Summary of Decisions
 
-| Category | Recommendation | Alternatives |
-|----------|---------------|--------------|
-| Dockable Panels | **dockview** | flexlayout-react, react-resizable-panels (simpler) |
-| Menu Bar | **shadcn/ui Menubar** (Radix-based) | Custom (not recommended) |
-| Data Tables | **@tanstack/react-table** + **@tanstack/react-virtual** | Simple custom tables for small lists |
-| UI Components | **shadcn/ui** | Radix directly, Headless UI |
-| State Management | **Zustand** (primary) | Jotai (targeted use alongside Zustand) |
-| Keyboard Shortcuts | **tinykeys** + custom hook | Custom from scratch |
-| CSS | **Tailwind CSS** | CSS Modules (as supplement if needed) |
+| Category | Decision | Status | Package |
+|----------|----------|--------|---------|
+| Dockable Panels | dockview (planned), react-resizable-panels (current) | Partial | `dockview-react@^5.0.0`, `react-resizable-panels@^4.6.5` |
+| Menu Bar | shadcn/ui Menubar (Radix-based) | Adopted | `radix-ui@^1.4.3` |
+| Data Tables | @tanstack/react-table | Adopted | `@tanstack/react-table@^8.21.0` |
+| UI Components | shadcn/ui (19 components) | Adopted | Copy-paste (not a dep) |
+| State Management | Zustand + immer | Adopted | `zustand@^5.0.3`, `immer@^10.1.1` |
+| Keyboard Shortcuts | tinykeys | Adopted | `tinykeys@^3.0.0` |
+| CSS | Tailwind CSS v4 | Adopted | `tailwindcss@^4.0.0` |
+| Canvas Rendering | Raw Canvas 2D | Adopted | None (built-in API) |
+| Icons | Lucide React | Adopted | `lucide-react@^0.575.0` |
+| Toasts | Sonner | Adopted | `sonner@^2.0.7` |
+| Command Palette | cmdk | Adopted | `cmdk@^1.1.1` |
 
-### Key Package List
+### Architecture (Implemented)
 
-```
-# Core UI
-dockview-react           # Docking panel layout
-shadcn/ui                # UI components (copy-paste, not a dependency)
-tailwindcss              # Utility-first CSS
-
-# State & Logic
-zustand                  # State management
-@tanstack/react-table    # Headless table logic
-@tanstack/react-virtual  # List/table virtualization
-tinykeys                 # Keyboard shortcut detection
-
-# Radix primitives (via shadcn/ui)
-radix-ui                 # Unified Radix package for accessible primitives
-```
-
-### Architecture Alignment
-
-These choices work together cohesively:
-- **shadcn/ui** components are styled with **Tailwind CSS** and built on **Radix**
-  primitives
-- **dockview** handles the overall layout; each dock panel renders shadcn/ui components
-- **Zustand** stores drive all UI state; components subscribe to specific slices
+- **shadcn/ui** components styled with **Tailwind CSS v4**, built on **Radix** primitives
+- **react-resizable-panels** handles the canvas/sidebar split; **Tabs** for panel switching
+- **Zustand + immer** store drives all UI state; components subscribe to specific slices
 - **tinykeys** shortcuts dispatch commands that update Zustand stores
-- **@tanstack/react-table** powers data panels (Videos, Instances, Suggestions)
-  styled with shadcn/ui Table components
-- The entire stack is TypeScript-first with zero/minimal runtime overhead
+- **@tanstack/react-table** powers the Instances and Videos panels
+- **Raw Canvas 2D** for video frame rendering and skeleton overlay
+- Testing: **vitest** (309+ unit tests) + **Playwright** (e2e, scaffolded)
+- CI: `.github/workflows/test.yml` (tests) + `.github/workflows/build.yml` (Tauri builds)

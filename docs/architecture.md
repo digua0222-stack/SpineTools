@@ -2,7 +2,7 @@
 
 ## Overview
 
-Port of the SLEAP Qt labeling GUI to a web-based frontend using React + TypeScript. Initial target: desktop app via Tauri v2. Future: standalone browser app with File System Access API.
+Port of the SLEAP Qt labeling GUI to a web-based frontend using React + TypeScript. Runs as a standalone browser app using the File System Access API for file I/O. Also targets desktop via Tauri v2.
 
 ## Tech Stack
 
@@ -14,7 +14,7 @@ Port of the SLEAP Qt labeling GUI to a web-based frontend using React + TypeScri
 | **State management** | Zustand | Mirrors SLEAP's GuiState pub/sub pattern, minimal boilerplate, excellent devtools |
 | **Canvas rendering** | Canvas 2D API | Sufficient for skeleton overlays (<100 instances), simple compositing with video frames, good text rendering |
 | **Data layer** | @talmolab/sleap-io.js | SLP file loading, HDF5 via Web Worker, video backends |
-| **Panel layout** | react-resizable-panels | Matches Qt dock widget behavior, actively maintained |
+| **Panel layout** | Custom collapsible sidebar | Icon strip + expandable panel, custom ResizeDivider |
 | **UI components** | Radix UI primitives + Tailwind CSS | Accessible, unstyled primitives we can customize to match desktop feel |
 | **Keyboard shortcuts** | tinykeys | Tiny (~400B), supports key sequences, customizable |
 | **Testing** | Vitest + Playwright | Unit + E2E, Playwright for visual testing |
@@ -24,89 +24,85 @@ Port of the SLEAP Qt labeling GUI to a web-based frontend using React + TypeScri
 
 ```
 sleap-label-web/
+├── .github/workflows/
+│   ├── build.yml                # Cross-platform desktop builds (Tauri)
+│   └── test.yml                 # CI: checkout sleap-io.js, build, vitest
 ├── docs/                        # Research docs, architecture, specs
 ├── src/
 │   ├── main.tsx                 # App entry point
 │   ├── App.tsx                  # Root component (layout shell)
 │   ├── components/
 │   │   ├── layout/
-│   │   │   ├── AppShell.tsx     # Main layout: menubar + panels + statusbar
+│   │   │   ├── AppShell.tsx     # Main layout: menubar + sidebar + statusbar
 │   │   │   ├── MenuBar.tsx      # Application menu bar
 │   │   │   ├── StatusBar.tsx    # Bottom status bar
-│   │   │   └── PanelLayout.tsx  # Resizable panel container
+│   │   │   ├── ErrorBoundary.tsx# React error boundary (catches render errors)
+│   │   │   ├── WelcomeScreen.tsx# Landing screen shown when no project loaded
+│   │   │   └── ResizeDivider.tsx# Drag handle for sidebar resize
 │   │   ├── video/
 │   │   │   ├── VideoPlayer.tsx  # Main video + canvas overlay container
-│   │   │   ├── VideoCanvas.tsx  # Canvas element for frame rendering
-│   │   │   ├── OverlayCanvas.tsx# Canvas element for skeleton overlay
-│   │   │   ├── Seekbar.tsx      # Frame navigation seekbar
-│   │   │   └── PlaybackControls.tsx
+│   │   │   ├── Seekbar.tsx      # Frame navigation seekbar with marks/graphs
+│   │   │   ├── ContextMenu.tsx  # Right-click context menu on canvas
+│   │   │   └── TracksLegend.tsx # Ctrl+hold track color legend overlay
 │   │   ├── panels/
-│   │   │   ├── VideosPanel.tsx  # Video list panel
-│   │   │   ├── SkeletonPanel.tsx# Skeleton editor panel
+│   │   │   ├── VideosPanel.tsx  # Video list panel (with video resolve)
+│   │   │   ├── SkeletonPanel.tsx# Skeleton editor (add/delete/rename nodes, templates)
 │   │   │   ├── InstancesPanel.tsx# Instance list panel
-│   │   │   └── SuggestionsPanel.tsx
+│   │   │   └── SuggestionsPanel.tsx # Suggestions with generation + scoring
 │   │   ├── dialogs/
-│   │   │   ├── ImportVideosDialog.tsx
-│   │   │   ├── DeleteDialog.tsx
-│   │   │   ├── MergeDialog.tsx
-│   │   │   ├── ShortcutsDialog.tsx
 │   │   │   ├── GoToFrameDialog.tsx
-│   │   │   └── ExportDialog.tsx
-│   │   └── common/
-│   │       ├── DataTable.tsx    # Generic sortable table
-│   │       ├── ContextMenu.tsx
-│   │       └── ColorSwatch.tsx
+│   │   │   ├── DeletePredictionsDialog.tsx # Score/range/labeled/max-count filters
+│   │   │   ├── ExportDialog.tsx
+│   │   │   ├── ShortcutsDialog.tsx
+│   │   │   ├── HelpDialog.tsx
+│   │   │   ├── TrainingDialog.tsx   # Placeholder (Coming Soon)
+│   │   │   └── InferenceDialog.tsx  # Placeholder (Coming Soon)
+│   │   └── ui/                  # shadcn/ui primitives (Dialog, Button, etc.)
 │   ├── stores/
-│   │   ├── appStore.ts          # Main application state (mirrors GuiState)
-│   │   ├── labelsStore.ts       # Labels data (wraps sleap-io.js Labels)
-│   │   ├── selectionStore.ts    # Current video, frame, instance, node
-│   │   ├── viewStore.ts         # View settings (zoom, pan, show/hide flags)
-│   │   └── preferencesStore.ts  # Persistent user preferences
+│   │   └── appStore.ts          # Single Zustand store (all state + actions)
 │   ├── commands/
 │   │   ├── types.ts             # Command interfaces, UpdateTopic enum
-│   │   ├── CommandContext.ts     # Central command executor
-│   │   ├── fileCommands.ts      # New, Open, Save, Import, Export
+│   │   ├── index.ts             # Re-exports all commands
+│   │   ├── CommandContext.ts    # Central command executor with undo/redo
+│   │   ├── fileCommands.ts      # New, Open, Save, SaveAs, Export, Delete variants
 │   │   ├── navCommands.ts       # Frame navigation commands
-│   │   ├── editCommands.ts      # Instance/skeleton editing commands
-│   │   ├── trackCommands.ts     # Track management commands
-│   │   └── viewCommands.ts      # View toggle commands
+│   │   ├── editCommands.ts      # Instance editing (add, delete, copy, paste, convert)
+│   │   ├── trackCommands.ts     # Track management (set, propagate, transpose)
+│   │   └── skeletonCommands.ts  # Skeleton editing (add/delete/rename nodes, templates)
 │   ├── canvas/
-│   │   ├── FrameRenderer.ts     # Renders video frame to canvas
-│   │   ├── SkeletonRenderer.ts  # Renders skeleton instances
-│   │   ├── NodeRenderer.ts      # Renders individual nodes with interaction
-│   │   ├── EdgeRenderer.ts      # Renders edges (line + wedge styles)
-│   │   ├── TrailRenderer.ts     # Renders track trails
-│   │   ├── SeekbarRenderer.ts   # Renders seekbar marks and tracks
-│   │   ├── HitTester.ts         # Point-in-shape hit testing for selection
-│   │   └── colors.ts            # Color palette management
+│   │   ├── SkeletonRenderer.ts  # Renders skeleton instances (nodes, edges, labels)
+│   │   └── TrailRenderer.ts     # Renders track trails (fading centroid polylines)
 │   ├── hooks/
-│   │   ├── useVideoPlayer.ts    # Video loading and frame access
-│   │   ├── useCanvasInteraction.ts # Mouse/touch handlers for canvas
-│   │   ├── useKeyboardShortcuts.ts # Shortcut registration and dispatch
-│   │   ├── useUndoRedo.ts       # Undo/redo stack
+│   │   ├── useKeyboardShortcuts.ts # 40+ shortcut bindings via tinykeys
 │   │   └── useFileIO.ts         # File open/save via Tauri or File System Access API
 │   ├── lib/
 │   │   ├── shortcuts.ts         # Shortcut definitions (from shortcuts.yaml)
-│   │   ├── colorPalettes.ts     # Color palette definitions
-│   │   └── platform.ts          # Platform detection (Tauri vs browser)
+│   │   ├── colorPalettes.ts     # Color palette definitions + color-by logic
+│   │   ├── loadProject.ts       # Consolidated SLP/project loading
+│   │   ├── saveProject.ts       # SLP save via sleap-io.js saveSlpToBytes()
+│   │   ├── resolveVideos.ts     # External video file resolution
+│   │   ├── exportUtils.ts       # CSV, JSON package, file download helpers
+│   │   ├── skeletonTemplates.ts # Predefined skeleton templates (fly, mouse, human, etc.)
+│   │   ├── utils.ts             # General utilities (cn, etc.)
+│   │   └── stubs/               # Node.js module stubs for browser (skia-canvas, etc.)
+│   ├── platform/
+│   │   └── index.ts             # Platform abstraction (Tauri vs browser)
 │   └── types/
-│       └── index.ts             # Shared TypeScript types
+│       └── index.ts             # Shared TypeScript types + re-exports
 ├── src-tauri/                   # Tauri Rust backend
 │   ├── Cargo.toml
 │   ├── tauri.conf.json
 │   └── src/
-│       ├── main.rs
-│       └── commands.rs          # Rust commands for file I/O
-├── public/
-│   └── index.html
+│       └── main.rs
 ├── tests/
-│   ├── unit/                    # Vitest unit tests
+│   ├── unit/                    # Vitest unit tests (300+ tests)
 │   ├── e2e/                     # Playwright E2E tests
-│   └── fixtures/                # Test SLP files
+│   ├── fixtures/                # Test SLP files
+│   └── setup.ts                 # Test setup (DOM mocks, etc.)
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
-├── tailwind.config.ts
+├── vitest.config.ts
 └── playwright.config.ts
 ```
 
@@ -114,53 +110,63 @@ sleap-label-web/
 
 ### 1. State Management (Zustand — mirrors GuiState)
 
-The Qt app uses `GuiState`, a key-value store with change callbacks. Zustand provides the same pattern natively:
+The Qt app uses `GuiState`, a key-value store with change callbacks. Zustand provides the same pattern natively. The entire app uses a **single store** (`appStore.ts`) with Zustand middleware: `subscribeWithSelector` + `persist` + `immer`.
 
 ```typescript
-// stores/appStore.ts
+// stores/appStore.ts — key state groups (see file for full interface)
 interface AppState {
-  // Selection state
-  video: Video | null;
-  frameIdx: number;
-  instance: Instance | null;
-  labeledFrame: LabeledFrame | null;
-  skeleton: Skeleton | null;
-
-  // View state
-  showInstances: boolean;
-  showLabels: boolean;
-  showEdges: boolean;
-  edgeStyle: 'Line' | 'Wedge';
-  fit: boolean;
-  fitSelection: boolean;
-  colorPredicted: boolean;
-  palette: string;
-  distinctlyColor: 'instances' | 'nodes' | 'edges';
-  markerSize: number;
-  nodeLabelSize: number;
-  trailLength: number;
-  trailShade: string;
-
   // Project state
   labels: Labels | null;
   filename: string | null;
   hasChanges: boolean;
   projectLoaded: boolean;
 
-  // Clipboard
+  // Selection state
+  video: Video | null;
+  frameIdx: number;
+  instance: Instance | null;
+  labeledFrame: LabeledFrame | null;
+  skeleton: Skeleton | null;
+  lastInteractedFrame: number | null;
+
+  // UI layout state
+  uiScale: number;
+  sidebarCollapsed: boolean;
+  sidebarActivePanel: string;
+
+  // View state
+  showInstances: boolean;
+  showLabels: boolean;
+  showEdges: boolean;
+  showNonVisibleNodes: boolean;
+  edgeStyle: EdgeStyle;
+  colorPredicted: boolean;
+  palette: string;
+  distinctlyColor: ColorTarget;
+  markerSize: number;
+  nodeLabelSize: number;
+  trailLength: number;
+
+  // Editing state
+  instanceInitMethod: InstancePlacementMethod;
   clipboardTrack: Track | null;
   clipboardInstance: Instance | null;
 
   // Frame range
   frameRange: [number, number] | null;
-  hasFrameRange: boolean;
 
-  // Actions
-  setVideo: (video: Video) => void;
-  setFrameIdx: (idx: number) => void;
-  incrementFrameIdx: (step: number) => void;
-  toggleShowInstances: () => void;
-  // ... etc
+  // Loading + Dialog state
+  isLoading: boolean;
+  loadingMessage: string;
+  trainingDialogOpen: boolean;
+  inferenceDialogOpen: boolean;
+  goToFrameDialogOpen: boolean;
+  deletePredictionsDialogOpen: boolean;
+  exportDialogOpen: boolean;
+  shortcutsDialogOpen: boolean;
+  helpDialogOpen: boolean;
+
+  // Actions (setLabels, setVideo, setFrameIdx, markChanged, toggle, etc.)
 }
 ```
 
@@ -206,28 +212,21 @@ The overlay canvas handles all mouse interaction. Hit testing uses simple distan
 
 ### 4. File I/O Strategy
 
+**Browser (primary):**
+- Open: File System Access API (`showOpenFilePicker()`) with `<input type="file">` fallback
+- Read: `file.arrayBuffer()` → sleap-io.js `loadSlp()`
+- Save SLP: sleap-io.js `saveSlpToBytes(labels)` → File System Access API `showSaveFilePicker()` with anchor download fallback
+- Save JSON: `labels.toDict()` → JSON.stringify → file picker or download
+- External videos: `resolveVideos.ts` matches user-picked files by basename
+
 **Desktop (Tauri):**
 - File dialog via `@tauri-apps/plugin-dialog`
-- Read file via `@tauri-apps/plugin-fs` → ArrayBuffer → sleap-io.js `loadSlp()`
-- Save: serialize Labels → write via Tauri fs plugin
+- Read/write via `@tauri-apps/plugin-fs`
+- Platform detection via `window.__TAURI__`
 
-**Browser (future):**
-- File dialog via File System Access API (`showOpenFilePicker()`)
-- Read via `FileHandle.getFile()` → `file.arrayBuffer()` → `loadSlp()`
-- Remote files: HTTP Range requests via sleap-io.js streaming
+**Abstraction layer:** `src/platform/index.ts` auto-detects Tauri and provides unified `getPlatform()` API with `isTauri`, `showSaveDialog`, `writeFile`, etc.
 
-**Abstraction layer:**
-```typescript
-// hooks/useFileIO.ts
-function useFileIO() {
-  const isTauri = '__TAURI__' in window;
-
-  return {
-    openFile: isTauri ? openViaTauri : openViaBrowser,
-    saveFile: isTauri ? saveViaTauri : saveViaBrowser,
-  };
-}
-```
+**Consolidated loading:** All file loading paths go through `src/lib/loadProject.ts` which handles unsaved-changes checks, loading state, SLP parsing, and toast notifications.
 
 ### 5. Video Frame Pipeline
 
@@ -280,26 +279,25 @@ const DEFAULT_SHORTCUTS: Record<string, string> = {
 User clicks node on canvas
         │
         ▼
-OverlayCanvas.onMouseDown
+VideoPlayer.onMouseDown (overlay canvas)
         │
         ▼
-HitTester.findNodeAt(x, y) → node
+Hit test: find nearest node within markerSize
         │
         ▼
-selectionStore.setSelectedNode(node)
+appStore.setInstance(parentInstance)
         │
         ▼
 User drags mouse
         │
         ▼
-OverlayCanvas.onMouseMove
+VideoPlayer.onMouseMove
         │
         ▼
-CommandContext.execute(SetPointLocation, { node, x, y })
+Mutate point.xy in-place, appStore.bumpOverlayVersion()
         │
-        ├──→ labelsStore.updatePoint()  (mutate data)
-        ├──→ appStore.setHasChanges(true)
-        └──→ OverlayCanvas re-renders (subscribed to labelsStore)
+        ├──→ appStore.markChanged()
+        └──→ Overlay canvas re-renders (keyed on overlayVersion)
 ```
 
 ## Menu Structure (Complete)
@@ -455,23 +453,25 @@ CommandContext.execute(SetPointLocation, { node, x, y })
 7. ✅ Seekbar with labeled frame marks
 8. ✅ Videos panel
 9. ✅ Instances panel
-10. ✅ Save project
+10. ✅ Save project (SLP via sleap-io.js `saveSlpToBytes` + JSON)
 11. ✅ Add/delete instances
 12. ✅ Keyboard shortcuts (core navigation + editing)
 13. ✅ Zoom and pan
 
 ## Phase 2 Features
 
-- Skeleton editor panel
-- Suggestions panel
-- Track management
-- Import/export (COCO, DLC, NWB, CSV, HDF5)
-- Color palettes and customization
-- Trail overlay
-- Multiple video support
-- Merge projects
-- Custom delete dialogs
-- Shortcut customization
+- ✅ Skeleton editor panel (add/delete/rename nodes/edges, template loading)
+- ✅ Suggestions panel (stride/random generation, score sorting)
+- ✅ Track management (Ctrl+1-9 assignment, propagation, transpose)
+- ✅ Export CSV
+- ✅ Color palettes and customization (color-by instances/nodes/edges)
+- ✅ Trail overlay (fading centroid polylines per track)
+- ✅ Multiple video support (with external video resolution)
+- ✅ Custom delete dialogs (score, range, labeled frames, max count)
+- ✅ Save As .slp (via sleap-io.js `saveSlpToBytes()`)
+- Import formats (COCO, DLC, NWB, HDF5) — not yet implemented
+- Merge projects — not yet implemented
+- Shortcut customization — not yet implemented
 
 ## Phase 3 Features (Future)
 
@@ -567,6 +567,29 @@ Previously, file loading was duplicated across `AppShell.handleDrop`,
 `WelcomeScreen`, `OpenProjectCommand`, and `useFileIO` hook -- each with
 different error handling and UX patterns. The consolidated helper ensures
 consistent behavior everywhere.
+
+### SLP Save (Browser HDF5 Write)
+
+As of sleap-io.js v0.2.0, `saveSlpToBytes(labels)` works in the browser
+via h5wasm. The custom `slpWriter.ts` that was previously in this repo has
+been removed. Save flow:
+
+```
+saveProjectAsSlp(labels, filename?)
+    │
+    ├── saveSlpToBytes(labels) → Uint8Array (HDF5 binary)
+    ├── Blob → showSaveFilePicker() (or anchor download fallback)
+    └── clearChanges() + toast notification
+```
+
+### CI Workflow
+
+`.github/workflows/test.yml` runs on push/PR to main:
+1. Checks out the repo
+2. Clones and builds `sleap-io.js` as a sibling directory
+3. Runs `npm ci`, `npm run build`, `npm test -- --run`
+
+`.github/workflows/build.yml` handles cross-platform Tauri desktop builds.
 
 ### Training/Inference Placeholder Architecture
 
@@ -762,24 +785,22 @@ middleware:
 
 ```typescript
 // In appStore.ts
+const PERSISTED_KEYS: (keyof AppState)[] = [
+  "palette", "edgeStyle", "markerSize", "nodeLabelSize",
+  "showLabels", "showEdges", "showNonVisibleNodes",
+  "colorPredicted", "trailLength",
+];
+
 export const useAppStore = create<AppState>()(
-  persist(
-    (set, get) => ({ /* ... state and actions ... */ }),
-    {
-      name: "sleap-label-web-prefs",
-      partialize: (state) => ({
-        palette: state.palette,
-        edgeStyle: state.edgeStyle,
-        markerSize: state.markerSize,
-        nodeLabelSize: state.nodeLabelSize,
-        trailLength: state.trailLength,
-        colorPredicted: state.colorPredicted,
-        showInstances: state.showInstances,
-        showLabels: state.showLabels,
-        showEdges: state.showEdges,
-        showNonVisibleNodes: state.showNonVisibleNodes,
-      }),
-    }
+  subscribeWithSelector(
+    persist(
+      immer((set, get) => ({ /* ... */ })),
+      {
+        name: "sleap-label-web-prefs",
+        partialize: (state) =>
+          Object.fromEntries(PERSISTED_KEYS.map((k) => [k, state[k]])),
+      }
+    )
   )
 );
 ```

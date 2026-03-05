@@ -4,20 +4,23 @@ Comprehensive comparison of the SLEAP Qt desktop GUI (`sleap/gui/`) against the 
 web implementation (`sleap-label-web/`). Focused on UI/UX features; ML/training features
 are noted but deprioritized.
 
-Last updated: 2026-02-28
+Last updated: 2026-03-04
 
 ---
 
 ## Summary
 
-The web version has a solid foundation: SLP file loading, video playback, skeleton
-rendering, node dragging, instance selection, undo/redo, keyboard shortcuts, menus,
+The web version has a solid foundation: SLP file loading and saving (HDF5),
+video playback with speed control, skeleton rendering with HiDPI canvas support,
+node dragging, instance selection, undo/redo, keyboard shortcuts, menus,
 toast notifications, loading indicators, dialogs, trail rendering, CSV export,
-skeleton templates, prediction conversion, track assignment, and persistent preferences.
+skeleton templates, prediction conversion, track assignment, collapsible sidebar,
+color-by options (node/edge/instance/track), external video resolution,
+error boundary, and persistent preferences.
 
-**Implemented**: ~65% of SLEAP GUI features
-**Missing (feasible for web)**: ~15%
-**Infeasible for web (training/GPU)**: ~20%
+**Implemented**: ~75% of SLEAP GUI features
+**Missing (feasible for web)**: ~10%
+**Infeasible for web (training/GPU)**: ~15%
 
 ---
 
@@ -28,18 +31,18 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 |---------|--------|-------|
 | New Project | Done | Resets state, unsaved changes confirmation |
 | Open Project (.slp) | Done | Consolidated `loadProject.ts` with unsaved changes check, loading indicator, toast |
-| Save (as JSON) | Done | Downloads JSON via blob URL, Tauri native save dialog |
-| Save As (JSON with file picker) | **NEW** | `SaveAsJsonCommand` with `showSaveFilePicker()`, auto-versioned filenames |
-| Export JSON | Done | Same as Save currently |
-| Export Analysis CSV | **NEW** | `ExportCSVCommand` generates CSV with video, frame, track, node, x, y, score, visible |
-| Export Labels Package | **NEW** | `ExportPackageCommand` exports `.pkg.json` with video manifest |
+| Save (to .slp HDF5) | Done | `SaveProjectCommand` via `saveSlpToBytes()` + File System Access API |
+| Save As (.slp with file picker) | Done | `SaveAsProjectCommand` always shows picker, defaults to `labels.slp` |
+| Save As JSON (with file picker) | Done | `SaveAsJsonCommand` with `showSaveFilePicker()`, auto-versioned filenames |
+| Export JSON | Done | `ExportJsonCommand` via `toDict()` serialization |
+| Export Analysis CSV | Done | `ExportCSVCommand` generates CSV with video, frame, track, node, x, y, score, visible |
+| Export Labels Package | Done | `ExportPackageCommand` exports `.pkg.json` with video manifest |
 | Quit | Done | `window.close()` |
 
 ### Missing
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
-| **Save As... (to .slp)** | P0 | Medium | Requires browser-compatible HDF5 writer. Tauri saves JSON to .slp path as interim. |
 | **Import COCO dataset** | P3 | Medium | Need COCO JSON parser |
 | **Import DeepLabCut dataset** | P3 | Medium | DLC CSV/YAML parser needed |
 | **Import NWB dataset** | P3 | Hard | NWB/HDF5 format |
@@ -67,7 +70,7 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 | Select Next Instance | Done |
 | Clear Selection | Done |
 | Go to Frame... (dialog) | Done |
-| Next Track Spawn Frame | **NEW** |
+| Next Track Spawn Frame | Done |
 
 ### Missing
 
@@ -80,30 +83,29 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 ## 3. View Menu
 
 ### Implemented
-| Feature | Status |
-|---------|--------|
-| Fit View to Instances | Done |
-| Color Predicted Instances | Done |
-| Color Palette picker | Done |
-| Show Instances (H) | Done |
-| Show Non-Visible Nodes | Done |
-| Show Node Names | Done |
-| Show Edges | Done |
-| Edge Style (Line/Wedge) | Done |
-| Node Marker Size (slider) | Done |
-| Node Label Size control | **NEW** |
-| Trail Length options | **NEW** |
-| Track trail overlay | **NEW** |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Fit View to Instances | Done | |
+| Color Predicted Instances | Done | |
+| Color Palette picker | Done | |
+| Apply Distinct Colors To | Done | track/instance/node/edge via `distinctlyColor` state + menu |
+| Show Instances (H) | Done | |
+| Show Non-Visible Nodes | Done | |
+| Show Node Names | Done | |
+| Show Edges | Done | |
+| Edge Style (Line/Wedge) | Done | |
+| Node Marker Size (slider) | Done | |
+| Node Label Size control | Done | Menu submenu with size options |
+| Trail Length options | Done | Menu submenu: 0, 10, 50, 100, 250, 500 |
+| Track trail overlay | Done | `TrailRenderer.ts` - centroid polylines with fading opacity |
 
 ### Missing
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
 | **Fit View to Selection** | P2 | Easy | Auto-zoom to selected instance only |
-| **Apply Distinct Colors To** (instances/nodes/edges) | P2 | Easy | State exists but no menu item |
-| **Trail Shade** options | P2 | Medium | Additional trail appearance controls |
+| **Trail Shade** options | P2 | Easy | State exists (`trailShade`), needs menu exposure |
 | **Render Video Clip with Instances** | P3 | Hard | Need canvas-to-video export |
-| **Dock panel visibility toggles** | P2 | Easy | Show/hide individual panels |
 
 ---
 
@@ -117,11 +119,11 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 | Copy/Paste Instance | Done |
 | Delete Predictions on Current Frame | Done |
 | Delete All Predictions | Done |
-| Double-click prediction to convert | **NEW** |
-| Delete Predictions with Low Score | **NEW** |
-| Delete Predictions from Clip (range) | **NEW** |
-| Delete Predictions on User-Labeled Frames | **NEW** |
-| Delete Predictions beyond Max per Frame | **NEW** |
+| Double-click prediction to convert | Done |
+| Delete Predictions with Low Score | Done |
+| Delete Predictions from Clip (range) | Done |
+| Delete Predictions on User-Labeled Frames | Done |
+| Delete Predictions beyond Max per Frame | Done |
 
 ### Missing
 
@@ -143,8 +145,8 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 | New Track (Ctrl+0) | Done |
 | Transpose Instance Tracks | Done |
 | Copy/Paste Instance Track | Done |
-| Set Instance Track (Ctrl+1-9) | **NEW** |
-| Propagate Track Labels | **NEW** |
+| Set Instance Track (Ctrl+1-9) | Done |
+| Propagate Track Labels | Done |
 
 ### Missing
 
@@ -184,14 +186,14 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 
 ---
 
-## 8. Help Menu -- NEW
+## 8. Help Menu
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Keyboard Shortcuts dialog | **NEW** | `ShortcutsDialog.tsx` lists all keyboard shortcuts |
-| About dialog | **NEW** | `HelpDialog.tsx` with version info |
-| GitHub link | **NEW** | Opens repository URL |
-| Documentation link | **NEW** | Opens docs URL |
+| Keyboard Shortcuts dialog | Done | `ShortcutsDialog.tsx` lists all keyboard shortcuts |
+| About dialog | Done | `HelpDialog.tsx` with version info |
+| GitHub link | Done | Opens repository URL |
+| Documentation link | Done | Opens docs URL |
 
 ---
 
@@ -204,6 +206,12 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 | Skeleton Panel | Done | Node/edge editing, **inline rename**, **template loading**, **undo support** |
 | Instances Panel | Done | Instance list with selection |
 | Suggestions Panel | Done | **Method dropdown** (stride/random), **score column**, **sortable headers** |
+
+### Additional Panel Features
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Collapsible sidebar | Done | Icon strip + expandable panel, `sidebarCollapsed` state |
+| External video resolution | Done | `resolveVideos.ts` prompts user to locate missing MP4s |
 
 ### Missing Panel Features
 
@@ -236,13 +244,14 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 | Selection bounding box | Done |
 | Right-click context menu | Done |
 | Playback (play/pause, speed control) | Done |
-| Double-click predicted instance to convert | **NEW** |
-| Alt+drag to move entire instance | **NEW** |
-| Instance rotation (Alt+scroll) | **NEW** |
-| Pinch-to-zoom | **NEW** |
-| Undo for drag and placement (BeginEdit) | **NEW** |
-| Trail rendering overlay | **NEW** |
-| Tracks legend overlay (Ctrl hold) | **NEW** |
+| Double-click predicted instance to convert | Done |
+| Alt+drag to move entire instance | Done |
+| Instance rotation (Alt+scroll) | Done |
+| Pinch-to-zoom | Done |
+| Undo for drag and placement (BeginEdit) | Done |
+| Trail rendering overlay | Done |
+| Tracks legend overlay (Ctrl hold) | Done |
+| HiDPI canvas support | Done | `devicePixelRatio` scaling on both video and seekbar canvases |
 
 ### Missing
 
@@ -263,10 +272,10 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 | Go to Frame | Done | `GoToFrameDialog.tsx` |
 | Training Configuration | Done | `TrainingDialog.tsx` placeholder |
 | Inference Configuration | Done | `InferenceDialog.tsx` placeholder |
-| Delete Predictions dialog | **NEW** | `DeletePredictionsDialog.tsx` - score threshold, frame range, max count, labeled frames |
-| Export dialog | **NEW** | `ExportDialog.tsx` - CSV and package export options |
-| Keyboard Shortcuts | **NEW** | `ShortcutsDialog.tsx` - full shortcut reference table |
-| About / Help | **NEW** | `HelpDialog.tsx` - version info and links |
+| Delete Predictions dialog | Done | `DeletePredictionsDialog.tsx` - score threshold, frame range, max count, labeled frames |
+| Export dialog | Done | `ExportDialog.tsx` - CSV and package export options |
+| Keyboard Shortcuts | Done | `ShortcutsDialog.tsx` - full shortcut reference table |
+| About / Help | Done | `HelpDialog.tsx` - version info and links |
 
 ### Missing
 
@@ -292,19 +301,19 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 | Multi-frame undo | Done | `takeAllFramesSnapshot()` |
 | Store-driven dialog management | Done | Boolean state for each dialog |
 | shadcn/ui component library | Done | Full component set |
-| Global Error Boundary | **NEW** | `ErrorBoundary.tsx` |
-| Persistent preferences | **NEW** | Zustand persist + localStorage |
-| Menu item enable/disable | **NEW** | State-based disabled props |
-| Skeleton undo/redo | **NEW** | `installSkeletonUndoInterceptor` |
-| Context menu viewport clamping | **NEW** | Menu clamped to viewport bounds |
-| Seekbar frame range selection | **NEW** | Shift+drag to select range |
-| Seekbar header graph | **NEW** | Instance count bar chart |
+| Global Error Boundary | Done | `ErrorBoundary.tsx` |
+| `beforeunload` handler | Done | Warns on tab close/refresh with unsaved changes |
+| Persistent preferences | Done | Zustand persist + localStorage |
+| Menu item enable/disable | Done | State-based disabled props |
+| Skeleton undo/redo | Done | `installSkeletonUndoInterceptor` |
+| Context menu viewport clamping | Done | Menu clamped to viewport bounds |
+| Seekbar frame range selection | Done | Shift+drag to select range |
+| Seekbar header graph | Done | Instance count bar chart |
 
 ### Still Missing
 
 | Feature | Priority | Feasibility | Notes |
 |---------|----------|-------------|-------|
-| **`beforeunload` handler** | P1 | Easy | Warn on tab close/refresh with unsaved changes |
 | **Window title with filename** | P2 | Easy | `document.title = filename` |
 | **Accessibility improvements** | P3 | Medium | ARIA labels, keyboard nav |
 | **Responsive design** | P3 | Medium | Adapt layout for small screens |
@@ -322,11 +331,10 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 ## Priority Summary
 
 ### P0 - Critical (blocking core workflows)
-1. **Save As to .slp format** - Users need to save work in native format
+All P0 items are now implemented (SLP save, beforeunload).
 
 ### P1 - Important (significant UX gaps)
-1. `beforeunload` handler for tab close
-2. Add/Remove Videos
+1. Add/Remove Videos
 
 ### P2 - Nice to Have
 1. Import formats (COCO, DLC, NWB, HDF5)
@@ -337,8 +345,7 @@ skeleton templates, prediction conversion, track assignment, and persistent pref
 6. Missing video files dialog
 7. Custom Delete dialog
 8. Fit View to Selection
-9. Distinct Colors To
-10. Dock panel visibility toggles
+9. Trail Shade menu exposure
 
 ### P3 - Future/Aspirational
 1. Size Distribution analysis

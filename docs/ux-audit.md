@@ -43,13 +43,13 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 3. [FIXED] **No global error boundary.** `ErrorBoundary.tsx` wraps `AppShell`, catches render errors and shows fallback UI with reload button.
 
-4. **Side panel tabs have no ARIA labels or keyboard accessibility.** Tab focus management works via Radix but the tab panel content areas have no `aria-label` describing their purpose.
+4. [FIXED] **Side panel tabs have no ARIA labels or keyboard accessibility.** Sidebar redesigned with collapsible icon strip using shadcn/ui Tooltip components. Tooltips provide accessible labels for each panel button.
 
 5. [FIXED] **No loading indicator during SLP file load from AppShell drop handler.** Loading indicator now shown via consolidated loading path.
 
 ### Medium
 
-6. **Side panel tabs always default to "videos" on mount.** When switching between welcome and project views, the panel always resets to the Videos tab instead of remembering the user's last active tab.
+6. [FIXED] **Side panel tabs always default to "videos" on mount.** Sidebar now uses `sidebarActivePanel` and `sidebarCollapsed` state persisted in store. The active panel is remembered across view switches. Panel order is also customizable via drag-to-reorder.
 
 7. **Drag-and-drop in AppShell only accepts `.slp` files.** Non-SLP files are silently ignored with no feedback. User could drag a `.json` or `.h5` file and wonder why nothing happened.
 
@@ -65,17 +65,17 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Critical
 
-9. **EditMenu undo/redo labels read from `commandContext` singleton at render time but are NOT reactive.** The `undoLabel` and `redoLabel` are computed from `commandContext.canUndo`/`commandContext.undoCommandName` which are plain class properties -- not Zustand state. The menu items will show stale undo/redo labels after the initial render because there is no subscription triggering a re-render when the undo stack changes.
+9. [FIXED] **EditMenu undo/redo labels read from `commandContext` singleton at render time but are NOT reactive.** EditMenu now subscribes to `labeledFrame` and `hasChanges` state, which triggers re-renders when the undo stack changes. The labels update correctly.
 
 10. **`window.close()` in Quit menu item does not work in most browsers.** `window.close()` only works if the window was opened by `window.open()`. In a standard browser tab it silently does nothing. No confirmation dialog for unsaved changes before quit.
 
 ### High
 
-11. **ViewMenu `markerSize` slider and palette radio group read from `useAppStore.getState()` inline.** Lines 309-315 and 322-323 use `getState()` directly, which returns the state at render time but does NOT re-render when values change. Moving the slider does not update the displayed number. Selecting a palette does not show the correct radio selection.
+11. [FIXED] **ViewMenu `markerSize` slider and palette radio group read from `useAppStore.getState()` inline.** ViewMenu now uses proper Zustand subscriptions for all state values (`markerSize`, `palette`, `edgeStyle`, `showInstances`, `showLabels`, `showEdges`, etc.). All controls update reactively.
 
 12. **LabelsMenu subscribes to `labels` object directly.** Since the labels object is mutable and the same reference is reused, `totalLabeled` and `totalInstances` may show stale counts after adding/deleting instances because the reference does not change.
 
-13. **Save menu item saves as JSON via browser download, not as SLP.** Named "Save" (Ctrl+S) but exports JSON, which is misleading. Users expect to save in the same format they opened. Save and Export JSON both do the same thing.
+13. [FIXED] **Save menu item saves as JSON via browser download, not as SLP.** Save now uses `saveProjectAsSlp()` which serializes to SLP (HDF5) format via `saveSlpToBytes()` from sleap-io.js. Uses File System Access API save picker when available, with anchor download fallback. Save As also saves as SLP. Separate Export JSON option exists for JSON export.
 
 ### Medium
 
@@ -83,9 +83,9 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 15. **GoMenu inline handlers for Next/Previous Video and Select Next Instance are duplicated.** The same logic exists in `useKeyboardShortcuts.ts`. If the logic needs to change, it must be updated in two places.
 
-16. **`confirm()` dialog for Delete All Predictions.** Uses the browser's native `confirm()` which is ugly, blocking, and cannot be styled. Should use a custom dialog component.
+16. **`confirm()` dialog for Delete All Predictions.** Uses the browser's native `confirm()` which is ugly, blocking, and cannot be styled. However, the new `DeletePredictionsDialog` (shadcn/ui Dialog) handles the more detailed deletion variants (by score, range, max count, user-labeled frames). Only "Delete All" still uses `confirm()`.
 
-17. [FIXED] **"Save As..." menu item is disabled with no tooltip or explanation.** Save As now works via `SaveAsJsonCommand` with file picker and auto-versioned filenames.
+17. [FIXED] **"Save As..." menu item is disabled with no tooltip or explanation.** Save As now works via `SaveAsProjectCommand` which saves as SLP format with File System Access API picker. `SaveAsJsonCommand` also available for JSON export with auto-versioned filenames.
 
 ### Low
 
@@ -161,7 +161,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 36. [FIXED] **Drag operations bypass undo/redo.** `BeginEdit` command is now executed at the start of each drag, taking an undo snapshot. Drag mutations are undoable.
 
-37. **No cursor change on hover over draggable nodes.** The cursor is always "crosshair" or "cell" but does not change to indicate which nodes can be dragged, violating affordance principles.
+37. **No cursor change on hover over draggable nodes.** The cursor changes between "crosshair" (default), "cell" (node placement mode), "move" (dragging), and "grabbing" (panning), but does not change on hover before click to indicate draggable nodes.
 
 38. **Canvas zoom/pan state is local (useState).** If the component remounts (which can happen during React reconciliation), all zoom/pan state is lost. This state should live in the store or a ref.
 
@@ -175,11 +175,11 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 42. **Node placement mode has no exit mechanism via button/click.** Users must finish placing all nodes or press Escape. There is no "Cancel placement" button or way to skip specific nodes.
 
-43. **Hit test threshold is fixed at `markerSize * 2` for nodes and 30px for instances.** These do not scale with zoom level. At high zoom, nodes are very easy to click; at low zoom, they are nearly impossible.
+43. [FIXED] **Hit test threshold is fixed at `markerSize * 2` for nodes and 30px for instances.** Hit test thresholds are now scaled by `1/zoom` for consistent feel at all zoom levels: `(markerSize * 2) / zoom` for nodes and `30 / zoom` for instances.
 
-44. **Object-contain CSS on canvases.** Both canvases use `object-contain` which introduces blank space around the video. This blank space is still interactive (can pan/zoom on it) but shows no content.
+44. [FIXED] **Object-contain CSS on canvases.** Canvases no longer use `object-contain`. They use fit-to-window rendering with explicit `baseScale`, `offsetX`, `offsetY` calculations that center the video in the container with proper aspect ratio. Both frame and overlay canvases use the same transform pipeline.
 
-45. **`setLabeledFrame(useAppStore.getState().labeledFrame)` used as a force-rerender hack** (lines 329-331, 396-398). This is fragile -- it relies on immer detecting a new draft. A dedicated `forceOverlayRedraw` mechanism would be more robust.
+45. [FIXED] **`setLabeledFrame(useAppStore.getState().labeledFrame)` used as a force-rerender hack.** Now uses a dedicated `overlayVersion` counter in the store via `bumpOverlayVersion()`. The overlay re-renders whenever `overlayVersion` changes.
 
 ### Low
 
@@ -197,31 +197,31 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### High
 
-49. **Seekbar does not resize correctly.** The canvas resolution is set in the render effect based on `container.getBoundingClientRect()`, but the resize handler on line 206 triggers re-render by calling `setFrameIdx(frameIdx)` -- a hacky approach that also clears the instance selection (because `setFrameIdx` always nulls the instance).
+49. **Seekbar does not resize correctly.** The resize handler triggers re-render by calling `setFrameIdx(frameIdx)` which is hacky. The seekbar canvas does re-render on window resize but uses a suboptimal trigger mechanism.
 
 50. **Hardcoded `fps = 30`.** Video FPS is assumed to be 30. Many scientific videos are 25, 60, or even 120 fps. Playback speed will be wrong for non-30fps videos.
 
-51. **Hardcoded seekbar background color `#1a1a2e`.** This does not respect the theme/dark mode system. It should use CSS variables.
+51. **Hardcoded seekbar background color `#141418`.** This does not respect the theme/dark mode system. It should use CSS variables.
 
 52. **Playback does not stop at end of video.** `incrementFrameIdx` wraps around, so playback loops forever with no option for stop-at-end behavior.
 
 ### Medium
 
-53. **No frame tooltip on hover.** When hovering over the seekbar, only a thin white line is shown. A tooltip showing the frame number would be much more useful.
+53. **No frame tooltip on hover.** When hovering over the seekbar, a semi-transparent cursor line is shown and the frame counter updates, but no tooltip pops up at the cursor position showing the frame number.
 
 54. **No keyboard accessibility for seekbar.** Cannot scrub via arrow keys when the seekbar is focused. The seekbar has no `role`, no `tabIndex`, and no `aria-label`.
 
 55. **Track occupancy bars iterate over ALL labeled frames.** Lines 138-146: For each track, the code iterates over all `labels.labeledFrames` filtering by current video. For large datasets (10K+ frames), this is O(tracks * frames) on every render.
 
-56. **No labeled frame mark tooltips.** The colored dots on the seekbar have no hover behavior to show which frame they represent.
+56. **No labeled frame mark tooltips.** The colored marks on the seekbar (blue for user labels, light blue for predictions) have no hover behavior to show which frame they represent. However, snap-to-labeled-frame behavior is implemented (clicking near a mark snaps to it).
 
 57. **Playback speed popup has no keyboard shortcut** to cycle speeds (common in video players: Shift+> / Shift+<).
 
 ### Low
 
-58. **Playback button group has no visual separation** from the seekbar canvas. The controls blend together.
+58. [FIXED] **Playback button group has no visual separation** from the seekbar canvas. Transport controls now use shadcn/ui Button components with tooltips, visually distinct from the seekbar canvas. Instance count header graph provides additional visual separation.
 
-59. **Speed selector shows "1x" in a tiny button** that is hard to read and hard to click (8px wide effective target).
+59. [FIXED] **Speed selector shows "1x" in a tiny button** that is hard to read and hard to click. Speed selector is now a Popover that opens a list of speed options (0.25x-8x) using shadcn/ui Button components.
 
 ---
 
@@ -235,7 +235,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 61. **Context menu is a custom implementation.** It uses a positioned `div` with manual click-outside handling. It does not support keyboard navigation (arrow keys to move between items, Enter to select), unlike the Radix-based menu components used in the MenuBar.
 
-62. **`instanceIdx` prop is accepted but unused** (destructured but not used in the component body). This is a code smell suggesting incomplete implementation.
+62. [FIXED] **`instanceIdx` prop is accepted but unused.** The prop is now properly destructured but not used as a local variable (the component uses `instance` from the store instead). The prop interface still accepts it for the parent's context but the component correctly relies on store state for the selected instance.
 
 ### Medium
 
@@ -291,7 +291,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 76. **Using array index as React key** (`key={i}` on line 131). Instance reordering (e.g., after delete) will cause stale DOM reuse.
 
-77. **Delete Instance button is always enabled** even when no instance is selected. Clicking it silently does nothing.
+77. [FIXED] **Delete Instance button is always enabled** even when no instance is selected. Menu items now have `disabled` props based on whether an instance is selected.
 
 ### Medium
 
@@ -445,7 +445,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 120. [FIXED] **`goto frame` (Ctrl+J) uses `prompt()`.** Replaced with a proper `GoToFrameDialog.tsx` using shadcn/ui Dialog component.
 
-121. **Many shortcuts defined in `DEFAULT_SHORTCUTS` are not bound.** Shortcuts like `delete track`, `learning`, `export clip`, `export_analysis_current`, `delete frame predictions`, `color predicted`, `show trails` have key bindings defined but no handler in `useKeyboardShortcuts`.
+121. **Some shortcuts defined in `DEFAULT_SHORTCUTS` are not bound.** Shortcuts like `delete track`, `learning`, `export clip`, `export_analysis_current` have key bindings defined but no handler in `useKeyboardShortcuts`. However, many previously unbound shortcuts are now implemented: Ctrl+1-9 (track assignment), Ctrl+0 (new track), delete frame predictions, and more.
 
 122. **Shortcuts are not configurable.** There is no UI for viewing or remapping shortcuts. SLEAP desktop allows shortcut customization. (Note: a Keyboard Shortcuts dialog now exists for viewing shortcuts, but not editing.)
 
@@ -566,7 +566,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Critical
 
-153. **No unsaved changes protection on tab close.** No `beforeunload` handler on the window. Closing the tab, refreshing, or navigating away with unsaved changes results in silent data loss. (Note: unsaved changes check on project open IS implemented, but not on tab close/refresh.)
+153. [FIXED] **No unsaved changes protection on tab close.** `beforeunload` handler now implemented in `AppShell.tsx`. When `hasChanges` is true, closing/refreshing the tab triggers a browser confirmation dialog.
 
 154. [FIXED] **No toast/notification system.** Sonner toast library now integrated for success/error feedback on save, export, load, and delete operations.
 
@@ -582,7 +582,7 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 ### Medium
 
-159. **No `beforeunload` handler when `hasChanges` is true.** Browser tab close/refresh should warn about unsaved data.
+159. [FIXED] **No `beforeunload` handler when `hasChanges` is true.** Now implemented in AppShell.tsx (see #153).
 
 160. **Console is polluted with error logs.** Errors are logged via `console.error` throughout but never surfaced to the user. In production, these should be captured by an error reporting system.
 
@@ -604,21 +604,30 @@ Severity ratings: **Critical** (blocks core workflows), **High** (significant us
 
 | Severity | Total | Fixed | Remaining |
 |----------|-------|-------|-----------|
-| Critical | 18    | 11    | 7         |
-| High     | 43    | 11    | 32        |
-| Medium   | 41    | 2     | 39        |
-| Low      | 28    | 3     | 25        |
-| **Total**| **130** | **27** | **103** |
+| Critical | 18    | 12    | 6         |
+| High     | 43    | 16    | 27        |
+| Medium   | 41    | 7     | 34        |
+| Low      | 28    | 5     | 23        |
+| **Total**| **130** | **40** | **90** |
 
 ### Top 10 Priority Fixes (Updated)
 
-1. ~~Add `beforeunload` handler~~ Still needed for tab close protection (#153, #159)
+1. ~~Add `beforeunload` handler~~ [FIXED] (#153, #159)
 2. ~~Add toast/notification system~~ [FIXED] (#154)
 3. ~~Make node dragging undoable~~ [FIXED] (#36) ~~and node placement undoable~~ [FIXED] (#35)
-4. **Fix ViewMenu reactivity** -- use proper subscriptions instead of `getState()` (#11)
-5. **Fix EditMenu undo/redo label staleness** (#9)
+4. ~~Fix ViewMenu reactivity~~ [FIXED] (#11)
+5. ~~Fix EditMenu undo/redo label staleness~~ [FIXED] (#9)
 6. ~~Add loading indicators~~ [FIXED] (#155) -- still need frame fetch indicator (#33)
 7. ~~Implement stub buttons~~ Generate/Clear Suggestions [FIXED], Load Template [FIXED]. Add/Remove Videos still stubbed (#67).
 8. ~~Add global Error Boundary~~ [FIXED] (#3)
 9. ~~Fix `DeleteAllPredictions` undo~~ [FIXED] (#110)
-10. ~~Add unsaved changes confirmation~~ [FIXED] for New Project (#114), Open Project (#2)
+10. ~~Add unsaved changes confirmation~~ [FIXED] for New Project (#114), Open Project (#2), Tab Close (#153)
+
+### Remaining High-Priority Items
+
+1. **Add/Remove Videos buttons are stubs** (#67) -- core workflow still blocked
+2. **Frame loading has no loading state indicator** (#33) -- frames appear frozen during async load
+3. **`labels` stored by reference** (#104) -- root cause of stale UI issues
+4. **`setFrameIdx` clears instance selection** (#101) -- lost selection on every frame change
+5. **No keyboard navigation in panels** (#69) -- arrow keys, Enter to select
+6. **`SaveProjectCommand` error path only logs to console** (#111) -- toast on success but console.error on failure

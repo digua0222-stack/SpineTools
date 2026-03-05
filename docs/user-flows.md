@@ -3,7 +3,7 @@
 All currently supported user workflows in SLEAP Label Web. For each flow,
 documents what works, known limitations, and keyboard shortcuts.
 
-Last updated: 2026-02-28
+Last updated: 2026-03-04
 
 ---
 
@@ -32,7 +32,7 @@ Last updated: 2026-02-28
 - **Drag-and-drop silently ignores non-.slp files** (no error message)
 - **No "Recent Projects" list** for quick re-open
 - **Opening replaces current project** -- no multi-window support
-- **Missing video files** produce no user-facing warning (only console error)
+- **Missing video files** show a placeholder with "Locate Video" button to resolve manually
 
 ### Shortcuts
 
@@ -83,6 +83,15 @@ Last updated: 2026-02-28
 - **Playback wraps around** at end of video (no stop-at-end option)
 - **Hardcoded 30 fps** for playback timing
 - **`setFrameIdx` clears instance selection** -- selection lost on every frame change
+
+### Seekbar Features
+
+- **Frame range selection**: Shift+click-drag on seekbar to select a range (used by Delete Predictions from Clip)
+- **Instance count header graph**: Bar chart above seekbar showing instance count per frame
+- **Labeled frame marks**: Blue marks for user labels, light blue for predictions
+- **Track occupancy bars**: Colored horizontal bars showing which frames each track occupies
+- **Snap-to-labeled-frame**: Clicking near a labeled frame mark snaps to it (12px threshold)
+- **Hover indicator**: Semi-transparent line follows cursor position
 
 ### Shortcuts
 
@@ -171,7 +180,6 @@ Last updated: 2026-02-28
 
 - **No instance duplication** (Ctrl+click)
 - **Instance placement method is always "empty"** -- no Best, Average, Copy Prior options
-- **Hit test threshold doesn't scale with zoom** -- hard to click nodes at low zoom
 
 ### Shortcuts
 
@@ -297,10 +305,21 @@ Last updated: 2026-02-28
 5. Propagation stops when the old track is no longer found in a frame
 6. Multi-frame undo snapshot ensures the entire propagation can be undone
 
+### Propagating Track Labels
+
+1. Fix a track assignment on one frame (e.g., via Ctrl+1-9)
+2. Tracks > Propagate Track Labels from menu bar
+3. The `PropagateTrackLabels` command iterates forward through frames
+4. All instances with the old track are swapped to the new track
+5. Bidirectional swap: instances with the new track get the old track
+6. Propagation stops when the old track is no longer found in a frame
+7. Multi-frame undo snapshot ensures the entire propagation can be undone
+
 ### Known Limitations
 
 - **No track deletion** (individual or bulk)
 - **No track rename**
+- **Propagate Track Labels** requires manual invocation from menu (no auto-propagate toggle)
 
 ### Shortcuts
 
@@ -312,6 +331,7 @@ Last updated: 2026-02-28
 | Ctrl+Shift+C | Copy Instance Track |
 | Ctrl+Shift+V | Paste Instance Track |
 | Ctrl+E | Next Track Spawn Frame |
+| Ctrl (hold) | Show Tracks Legend overlay |
 
 ---
 
@@ -407,6 +427,7 @@ Last updated: 2026-02-28
 | Method | How | Status |
 |--------|-----|--------|
 | Middle-click drag | Hold middle button and drag | Works |
+| Alt+left-click drag | Hold Alt and left-click drag | Works |
 
 ### Display Options
 
@@ -418,16 +439,18 @@ Last updated: 2026-02-28
 | Show edges | Ctrl+Shift+Tab or View menu | Works |
 | Edge style (Line/Wedge) | View > Edge Style | Works |
 | Node marker size | View > Node Marker Size slider | Works |
-| Node label size | View > Node Label Size | Works |
+| Node label size | View > Node Label Size (Small/Medium/Large/XL) | Works |
 | Color predicted instances | View menu checkbox | Works |
 | Color palette | View > Color Palette picker | Works |
 | Trail length | View > Trail Length (0/10/50/100/250/500) | Works |
+| Apply Distinct Colors To | View > Apply Distinct Colors To (Tracks/Instances/Nodes/Edges) | Works |
+| Text Size | View > Text Size (Increase/Decrease/Reset) | Works |
+| Side Panel toggle | View > Side Panel checkbox | Works |
 
 ### Known Limitations
 
-- **Pan requires middle-click** -- many laptops have no middle button
+- ~~Pan requires middle-click~~ Alt+left-click pan now also supported
 - **No Fit View to Selection** (selected instance only)
-- **No Distinct Colors To option** (instances/nodes/edges)
 
 ### Shortcuts
 
@@ -440,22 +463,29 @@ Last updated: 2026-02-28
 
 ---
 
-## 9. Export
+## 9. Save and Export
+
+### Save Project (SLP)
+
+1. File > Save (Ctrl+S)
+2. Labels are serialized to SLP (HDF5) format via `saveSlpToBytes()`
+3. File System Access API save picker shown when available (otherwise anchor download)
+4. Toast notification confirms success
+5. `hasChanges` flag is cleared
+
+### Save As (SLP)
+
+1. File > Save As... (Ctrl+Shift+S)
+2. Always shows file picker (even if filename is known)
+3. Suggested filename defaults to "labels.slp"
+4. Saves in native SLP format
 
 ### Export JSON
 
-1. File > Export JSON (or File > Save with Ctrl+S)
+1. File > Export JSON...
 2. Labels data is serialized to JSON via `labels.toDict()`
 3. Browser downloads the JSON file
 4. Toast notification confirms success
-
-### Save As JSON
-
-1. File > Save As... (Ctrl+Shift+S)
-2. A file picker dialog opens (File System Access API or Tauri dialog)
-3. Filename is auto-suggested with version increment (e.g., `project.v002.json`)
-4. Choose location and save
-5. Toast notification confirms success
 
 ### Export Analysis CSV
 
@@ -473,7 +503,7 @@ Last updated: 2026-02-28
 
 ### Known Limitations
 
-- **Cannot save as .slp** -- only JSON/CSV export works in browser
+- ~~Cannot save as .slp~~ SLP save now works via `saveSlpToBytes()` from sleap-io.js
 - **No Export HDF5** or Export NWB
 - **JSON export cannot be re-imported** by SLEAP desktop
 
@@ -499,10 +529,11 @@ Last updated: 2026-02-28
 
 ### Seekbar Marks
 
-- Black vertical lines for labeled frames
-- Colored horizontal bars showing track occupancy
-- Gray tick marks for frame indicators
-- Blue marks for user labels
+- Blue vertical lines for user-labeled frames
+- Light blue vertical lines for prediction-only frames
+- Colored horizontal bars showing track occupancy (one row per track)
+- White vertical line for current frame position
+- Blue highlight region for frame range selection (Shift+drag)
 
 ---
 
@@ -570,22 +601,30 @@ Last updated: 2026-02-28
 
 ### Training Dialog
 
-1. Predict > Run Training... (or menu item)
-2. Dialog opens with "Coming Soon" badge
-3. Configuration options visible but non-functional
-4. Info box explains alternatives: SLEAP desktop, CLI, Colab
+1. Predict > Training... from menu bar
+2. `TrainingDialog` opens (shadcn/ui Dialog component)
+3. Shows configuration options (non-functional, placeholder)
+4. Info explains alternatives: SLEAP desktop, CLI, Colab
 5. "Start Training" button is disabled
 
 ### Inference Dialog
 
-1. Predict > Run Inference... (or menu item)
-2. Dialog opens with "Coming Soon" badge
-3. Configuration options visible but non-functional
+1. Predict > Inference / Run Prediction... from menu bar
+2. `InferenceDialog` opens (shadcn/ui Dialog component)
+3. Shows configuration options (non-functional, placeholder)
 4. "Run Inference" button is disabled
+
+### Other Predict Menu Items
+
+- **Export Training Package...** -- shows alert explaining future functionality
+- **Import Predictions...** -- shows alert directing to File > Open Project
+- **Visualize Model Outputs...** -- disabled with "Coming Soon" label
 
 ---
 
 ## 14. Side Panels
+
+The sidebar uses a collapsible icon strip on the right edge with expandable panel content. Panel icons can be drag-reordered. The sidebar width is resizable (220-600px) via a drag handle.
 
 ### Videos Panel
 
@@ -636,6 +675,19 @@ Last updated: 2026-02-28
 1. Help > About SLEAP Label Web
 2. Shows application name, version, and description
 3. Links to GitHub repository and documentation
+
+---
+
+## 16. Delete Prediction Variants Dialog
+
+The `DeletePredictionsDialog` (Labels > Delete Predictions...) provides a shadcn/ui Dialog with tabs for different deletion methods:
+
+- **By Score Threshold**: Enter minimum score; predictions below are deleted
+- **By Frame Range**: Uses seekbar range selection (Shift+drag); deletes predictions in range
+- **On User-Labeled Frames**: Removes predictions from frames that also have user instances
+- **By Max Count**: Keep only top N predictions per frame by score
+
+All variants use multi-frame undo snapshots and show toast notifications with count of deleted predictions.
 
 ---
 

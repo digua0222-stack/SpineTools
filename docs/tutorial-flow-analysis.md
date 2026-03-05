@@ -62,7 +62,7 @@ and what needs to be added.
 |----------------|---------|------------|-----|
 | Click Skeleton tab | Side panel tab | DONE | `SkeletonPanel` tab exists |
 | Click "New Node" button | Button in panel | DONE | "New Node" button opens dialog |
-| Double-click node name to edit inline | Inline edit in table | **PARTIAL** | Dialog-based add with name input; no inline rename after creation |
+| Double-click node name to edit inline | Inline edit in table | DONE | Double-click on node name enables inline rename with duplicate validation |
 | Press Enter to save name | Inline edit commit | N/A | Dialog has "Add" button |
 | Create 3 nodes (head, torso, tail_base) | Repeat node creation | DONE | Works via repeated dialog use |
 | Switch to Edges tab | Tab within Skeleton panel | DONE | Nodes/Edges tabs exist |
@@ -71,11 +71,11 @@ and what needs to be added.
 | See final skeleton structure | Node/edge tables | DONE | Tables show nodes and edges |
 
 **Gaps**:
-- **Inline node rename**: Desktop allows double-click to rename in-place; web requires delete + re-add
-- **Load skeleton template**: Dropdown exists in SkeletonPanel but `console.log`s only -- not wired to real template data
+- ~~Inline node rename~~: DONE -- Double-click to rename in-place with validation
+- ~~Load skeleton template~~: DONE -- Dropdown loads Fly, Mouse, Human, C. elegans, Custom templates
 - Tutorial tip mentions View > Edge Style > Wedge: **DONE** (View menu has edge style radio)
 - Tutorial tip mentions View > Node Marker Size > 12: **DONE** (View menu has slider)
-- Tutorial tip mentions View > Node Label Size > 18: **PARTIAL** - State exists (`nodeLabelSize`) but no menu control in ViewMenu
+- Tutorial tip mentions View > Node Label Size > 18: **DONE** -- View > Node Label Size submenu with Small/Medium/Large/XL options
 
 ---
 
@@ -88,18 +88,12 @@ and what needs to be added.
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
 | Switch to Labeling Suggestions tab | Side panel tab | DONE | `SuggestionsPanel` tab exists |
-| Set Method dropdown to "sample" | Dropdown in panel | **MISSING** | No method dropdown; panel only shows existing suggestions |
-| Set "Samples Per Video" to 50 | Number input | **MISSING** | No sample count input |
-| Click "Generate Suggestions" | Button triggers generation | **STUB** | Button exists but `console.log`s only |
+| Set Method dropdown to "sample" | Dropdown in panel | DONE | Method dropdown with "Stride" and "Random" options |
+| Set "Samples Per Video" to 50 | Number input | DONE | Count input field in panel |
+| Click "Generate Suggestions" | Button triggers generation | DONE | Generate button creates suggestions distributed across videos |
 | See populated suggestion list | Table of frame suggestions | DONE | SuggestionsPanel renders suggestion rows when data exists |
 
-**Critical gaps**:
-- **Generate Suggestions** is completely unimplemented -- the button is a stub
-- No method selection (sample, stride, image features, etc.)
-- No sample count input
-- The "sample" method (random frame sampling) is trivially implementable in the browser
-- The "stride" method (evenly spaced) is also trivial
-- Advanced methods (image_features, prediction_score, velocity) require ML -- need placeholder
+**Status**: Generate Suggestions is now fully functional with "Stride" (evenly spaced) and "Random" sampling methods. Advanced methods (image_features, prediction_score, velocity) still require ML -- need placeholder.
 
 ### 3b. Labeling the First Frame
 
@@ -113,18 +107,17 @@ and what needs to be added.
 | Drag nodes to correct positions | Mouse drag on canvas | DONE | Node dragging works in VideoPlayer |
 | Node placement mode (click to place NaN nodes) | Click canvas to place | DONE | `isPlacingNodes` mode with visual indicator badge |
 | Zoom with scroll wheel | Mouse wheel zoom | DONE | `handleWheel` in VideoPlayer |
-| Pinch-to-zoom | Touch gesture | **MISSING** | P2: No touch gesture support |
+| Pinch-to-zoom | Touch gesture | DONE | Trackpad pinch via Ctrl+scroll detection |
 | Add second instance (right-click > Default) | Same as first | DONE | Works |
 | Drag nodes for second animal | Same as first | DONE | Works |
-| Alt+drag to move entire instance | Alt modifier + drag | **MISSING** | P1: No whole-instance drag |
-| Alt+scroll to rotate instance | Alt + scroll wheel | **MISSING** | P2: No instance rotation |
+| Alt+drag to move entire instance | Alt modifier + drag | DONE | Alt+drag moves all visible nodes by delta |
+| Alt+scroll to rotate instance | Alt + scroll wheel | DONE | Alt+scroll rotates around centroid (5 deg/tick) |
 | Cmd/Win+click to duplicate instance | Modifier + click | **MISSING** | P2: No click-to-duplicate |
 
 **Gaps**:
-- **Alt+drag whole instance**: Tutorial recommends this as a tip -- not implemented
-- **Alt+scroll rotate**: Tutorial recommends -- not implemented
+- ~~Alt+drag whole instance~~: DONE
+- ~~Alt+scroll rotate~~: DONE
 - **Cmd+click duplicate**: Tutorial recommends -- not implemented
-- These are all P1-P2 quality-of-life features
 
 ### 3c. Save the Project
 
@@ -132,15 +125,12 @@ and what needs to be added.
 
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
-| File > Save | Menu item | **PARTIAL** | `SaveProjectCommand` exists but saves as JSON blob download, not .slp |
-| Save dialog with path | Native file dialog | **MISSING** | No File System Access API save picker |
+| File > Save | Menu item | DONE | `SaveProjectCommand` saves as SLP via `saveSlpToBytes()` |
+| Save dialog with path | Native file dialog | DONE | File System Access API save picker (with anchor download fallback) |
 | Cmd+S shortcut | Keyboard shortcut | DONE | Shortcut defined and wired |
-| File saved as `.slp` | Native SLP format | **MISSING** | Cannot write .slp from browser (sleap-io.js `saveSlp` is Node-only) |
+| File saved as `.slp` | Native SLP format | DONE | `saveSlpToBytes()` from sleap-io.js serializes to HDF5/SLP |
 
-**Critical gap**:
-- **Save as .slp is not possible in browser** -- this is a P0 blocker documented in missing-features-audit
-- Current save downloads a JSON file, which cannot be re-opened in SLEAP desktop
-- Tauri path could enable .slp save via Node.js-compatible backend
+**Status**: Save as .slp is now fully functional. `saveSlpToBytes()` from sleap-io.js v0.2.0+ enables browser-side SLP serialization. File System Access API provides native save picker. Save As also works for saving to a new location.
 
 ---
 
@@ -150,8 +140,8 @@ and what needs to be added.
 
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
-| Predict menu > Run Training... | Opens training dialog | **MISSING** | No Predict menu exists at all |
-| Training Pipeline tab | Tab in training dialog | **MISSING** | No training dialog |
+| Predict menu > Run Training... | Opens training dialog | DONE (placeholder) | Predict > Training... opens TrainingDialog with "Coming Soon" badge |
+| Training Pipeline tab | Tab in training dialog | **MISSING** | Dialog exists but no tabbed configuration UI |
 | Set Sigma for Centroids = 3 | Slider/input | **MISSING** | N/A for web (training is server-side) |
 | Set Anchor Part = torso | Dropdown | **MISSING** | N/A for web |
 | Centroid Model Configuration tab | Tab in training dialog | **MISSING** | N/A |
@@ -167,14 +157,12 @@ and what needs to be added.
 
 **Status**: Training/inference is fundamentally infeasible in the browser -- requires GPU, Python, and the sleap-nn backend.
 
-**What to add**:
-- **Placeholder Predict menu** with "Run Training..." and "Run Inference..." items
-- These should show an informational dialog explaining that training requires:
-  - SLEAP desktop app, OR
-  - Command-line `sleap-nn train` / `sleap-nn track`, OR
-  - Google Colab notebook
-- **Export Labels Package** command to prepare data for training elsewhere
-- Link to Colab training notebook
+**Status**: Predict menu now exists with placeholder dialogs:
+- **Predict > Training...** opens `TrainingDialog` with informational content
+- **Predict > Inference / Run Prediction...** opens `InferenceDialog` with informational content
+- **Predict > Export Training Package...** shows alert (implementation pending)
+- **Predict > Import Predictions...** directs to File > Open Project
+- **Predict > Visualize Model Outputs...** disabled with "Coming Soon" label
 
 ---
 
@@ -186,13 +174,11 @@ and what needs to be added.
 
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
-| File > Save As... | Menu item | **DISABLED** | Menu item exists but is `disabled` |
-| Auto-increment version (v001 -> v002) | Auto in dialog | **MISSING** | No version incrementing logic |
-| Cmd+Shift+S shortcut | Keyboard shortcut | DEFINED but NO-OP | Shortcut in `shortcuts.ts` but no command wired |
+| File > Save As... | Menu item | DONE | `SaveAsProjectCommand` saves as SLP with file picker |
+| Auto-increment version (v001 -> v002) | Auto in dialog | DONE (for JSON) | `suggestSaveFilename()` auto-increments version for JSON exports |
+| Cmd+Shift+S shortcut | Keyboard shortcut | DONE | Wired to `SaveAsProjectCommand` |
 
-**Gaps**:
-- **Save As** is disabled -- needs implementation (at minimum for JSON, ideally for .slp)
-- Version auto-increment is a nice-to-have
+**Status**: Save As now works for both SLP and JSON formats.
 
 ### 5b. Labeling from Predictions
 
@@ -202,17 +188,17 @@ and what needs to be added.
 |----------------|---------|------------|-----|
 | Navigate between suggestions (Space/Shift+Space) | Keyboard shortcuts | DONE | `GoNextSuggestion`/`GoPrevSuggestion` commands work |
 | See predicted instances (yellow, immovable) | Rendered differently | DONE | Predicted instances render in gray (or colored if `colorPredicted`) |
-| Double-click predicted instance to convert to user instance | Creates editable copy | **MISSING** | P1: No double-click-to-convert handler |
+| Double-click predicted instance to convert to user instance | Creates editable copy | DONE | `ConvertPredictionToInstance` command via double-click on node or centroid |
 | Move nodes to correct positions | Drag | DONE (for user instances) | Node dragging works |
 | Red/green node colors (moved vs unmoved from prediction) | Visual feedback | **MISSING** | P2: No red/green distinction for corrected vs uncorrected nodes |
 | Shift+left-click to mark all nodes as complete | Shortcut | **MISSING** | P2: No bulk mark-complete |
 | Right-click node to mark as non-visible | Context menu | DONE | ContextMenu has "Mark Node Non-Visible" |
-| Sort suggestions by mean score | Column sort | **MISSING** | P1: SuggestionsPanel has no score column or sort |
+| Sort suggestions by mean score | Column sort | DONE | SuggestionsPanel has Score column and clickable headers for sorting |
 | Label 15-20 frames | Iterative workflow | Supported | All labeling primitives work |
 
-**Critical gaps**:
-- **Double-click prediction to convert**: This is the core human-in-the-loop workflow -- not implemented
-- **Sort suggestions by score**: Important for efficient labeling -- not in panel
+**Status**: Core prediction correction workflow is now functional:
+- ~~Double-click prediction to convert~~: DONE
+- ~~Sort suggestions by score~~: DONE
 - **Red/green node colors**: Nice visual feedback -- not implemented
 
 ### 5c. Re-training
@@ -243,7 +229,7 @@ Same gaps as Tutorial 4 -- no training UI exists.
 | See new project with video | Video renders | DONE | Works |
 | New SLEAP window opens | Multi-window | **MISSING** | Web app is single-window; opening a new project replaces current |
 
-**Gap**: No multi-window support. Opening a new project replaces the current one without warning if unsaved changes exist.
+**Gap**: No multi-window support. Opening a new project replaces the current one (with unsaved changes warning if `hasChanges` is true).
 
 ### 6b. Run Inference
 
@@ -277,12 +263,12 @@ Same gaps as Tutorial 4 -- no training UI exists.
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
 | View > Color Predicted Instances | Toggle | DONE | Checkbox in ViewMenu |
-| View > Trail Length > 50 | Submenu with options | **MISSING** | State exists (`trailLength`) but no menu control and no trail rendering |
-| Tracks > Seekbar Header > Min Centroid Proximity | Submenu | **MISSING** | No seekbar header graph at all |
+| View > Trail Length > 50 | Submenu with options | DONE | View > Trail Length submenu with 0/10/50/100/250/500 options |
+| Tracks > Seekbar Header > Min Centroid Proximity | Submenu | **PARTIAL** | Instance count header graph exists; no centroid proximity metric |
 
-**Gaps**:
-- **Trail rendering**: State exists but no canvas trail drawing or menu control (P1)
-- **Seekbar header graph**: Complex feature showing proximity/displacement metrics (P2)
+**Status**:
+- ~~Trail rendering~~: DONE -- `TrailRenderer.ts` draws colored polylines connecting centroids across frames with opacity fade. Menu control in View > Trail Length.
+- **Seekbar header graph**: Instance count bar chart exists, but not the centroid proximity/displacement metrics from SLEAP desktop.
 
 ### 7b. Navigate to Track Switch
 
@@ -290,13 +276,12 @@ Same gaps as Tutorial 4 -- no training UI exists.
 
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
-| Go > Go to Frame... (Ctrl+J) | Dialog with number input | **MISSING** | Shortcut defined (`goto frame: $mod+KeyJ`) but no dialog |
-| Type frame number and Enter | Input in dialog | **MISSING** | No dialog exists |
+| Go > Go to Frame... (Ctrl+J) | Dialog with number input | DONE | `GoToFrameDialog` with shadcn/ui Dialog |
+| Type frame number and Enter | Input in dialog | DONE | Input with valid range shown, Enter or "Go" button |
 | See track switch visually | Color-coded instances | DONE | Instance colors from palette |
 | Navigate frame-by-frame to compare | Arrow keys | DONE | Frame stepping works |
 
-**Critical gap**:
-- **Go to Frame dialog**: Shortcut is defined but no command is wired to it. This is a basic navigation feature (P1).
+**Status**: Go to Frame dialog is fully functional. Ctrl+J opens the dialog, type frame number, Enter or click "Go".
 
 ### 7c. Correct Track Assignment
 
@@ -305,19 +290,20 @@ Same gaps as Tutorial 4 -- no training UI exists.
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
 | Click on instance to select | Canvas click | DONE | Instance selection via node/centroid click |
-| Press Ctrl+1 to assign to track_0 | Keyboard shortcut | **MISSING** | P0: No Ctrl+digit shortcuts for track assignment |
-| Tracks > Set Instance Track > track_0 | Menu submenu | **MISSING** | P0: No "Set Instance Track" submenu in TracksMenu |
-| Track correction propagates to future frames | Automatic propagation | **MISSING** | P1: No track propagation logic |
+| Press Ctrl+1 to assign to track_0 | Keyboard shortcut | DONE | Ctrl+1-9 track assignment via `useKeyboardShortcuts` |
+| Tracks > Set Instance Track > track_0 | Menu submenu | **PARTIAL** | Context menu has track assignment; Tracks menu has Propagate but no per-track submenu |
+| Track correction propagates to future frames | Automatic propagation | DONE | `PropagateTrackLabels` command with multi-frame undo |
 | Right-click > Assign Track | Context menu | DONE | ContextMenu has track assignment section |
 
-**Critical gaps**:
-- **Ctrl+1-9 track assignment shortcuts**: This is THE core proofreading interaction -- P0
-- **Set Instance Track submenu in Tracks menu**: Desktop has a dynamic submenu listing all tracks
-- **Track propagation to future frames**: When you reassign a track, SLEAP desktop propagates the change to all subsequent frames with the same track. This is not implemented.
+**Status**: Core proofreading interactions are now functional:
+- ~~Ctrl+1-9 track assignment shortcuts~~: DONE
+- **Set Instance Track submenu in Tracks menu**: Not yet -- context menu has track assignment, but Tracks menu doesn't have per-track submenu
+- ~~Track propagation~~: DONE via `PropagateTrackLabels` command (Tracks menu)
+- **Ctrl+hold Tracks Legend**: DONE -- `TracksLegend` component shows overlay when Ctrl held
 
 ### 7d. Save New Version
 
-Same gaps as 5a -- Save As is disabled.
+Save As now works -- see section 5a.
 
 ---
 
@@ -328,16 +314,17 @@ Same gaps as 5a -- Save As is disabled.
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
 | File > Export Analysis HDF5... | Menu item opens dialog | **MISSING** | No HDF5 export |
-| File > Export Analysis CSV... | Menu item opens dialog | **DISABLED** | Menu item exists but is disabled (`disabled` prop) |
+| File > Export Analysis CSV... | Menu item opens dialog | DONE | `ExportCSVCommand` generates CSV with video, frame, track, node data |
 | File > Export NWB... | Menu item opens dialog | **MISSING** | No NWB export |
 | Export for "Current Video" | Option in export dialog | **MISSING** | No export dialog with video selection |
 | Choose output file location | Save dialog | **MISSING** | Would need File System Access API save picker |
 
-**Gaps**:
-- **Export CSV**: Menu item exists but is disabled -- needs implementation (P1, feasible)
+**Status**:
+- ~~Export CSV~~: DONE -- `ExportCSVCommand` with columns: video_filename, frame_idx, track_name, instance_type, node_name, x, y, score, visible
 - **Export HDF5**: Requires h5wasm write support (P2)
 - **Export NWB**: Specialized format, hard to implement (P2)
-- **Export JSON**: Currently works via `ExportJsonCommand` -- this is functional but not a standard SLEAP export format
+- **Export JSON**: Works via `ExportJsonCommand`
+- **Export Labels Package**: DONE -- `ExportPackageCommand` generates `.pkg.json` with labels data and video manifest
 
 ---
 
@@ -347,11 +334,15 @@ This is informational/reference content. No UI actions needed.
 
 | Tutorial Action | Desktop | Web Status | Gap |
 |----------------|---------|------------|-----|
-| Link to Colab notebooks | External links | **MISSING** | Could add Help menu with links |
-| Link to integrations | External links | **MISSING** | Help menu |
-| Link to sleap-io docs | External links | **MISSING** | Help menu |
+| Link to Colab notebooks | External links | **MISSING** | Could add to Help menu |
+| Link to integrations | External links | **MISSING** | Could add to Help menu |
+| Link to sleap-io docs | External links | DONE | Help > Documentation links to sleap.ai |
 
-**Gap**: No Help menu exists in the web app.
+**Status**: Help menu now exists with:
+- Keyboard Shortcuts... (opens `ShortcutsDialog`)
+- Documentation (links to sleap.ai)
+- Report Issue (links to GitHub issues)
+- About SLEAP Label (opens `HelpDialog`)
 
 ---
 
@@ -361,21 +352,26 @@ This is informational/reference content. No UI actions needed.
 
 | Feature | Tutorials | Web Status | Priority |
 |---------|-----------|------------|----------|
-| File > Save / Save As | 3, 5, 7 | Save=PARTIAL (JSON only), Save As=DISABLED | P0 |
+| File > Save / Save As | 3, 5, 7 | DONE (SLP format) | -- |
 | Suggestion navigation (Space/Shift+Space) | 3, 5 | DONE | -- |
 | Right-click > Add Instance | 3, 5 | DONE | -- |
 | Node dragging | 3, 5 | DONE | -- |
 | Zoom (scroll wheel) | 3, 5, 7 | DONE | -- |
-| Track assignment (Ctrl+1-9) | 7 | MISSING | P0 |
-| Go to Frame dialog (Ctrl+J) | 7 | MISSING | P1 |
+| Track assignment (Ctrl+1-9) | 7 | DONE | -- |
+| Go to Frame dialog (Ctrl+J) | 7 | DONE | -- |
 | Color Predicted Instances | 5, 7 | DONE | -- |
-| Trail Length / Trail rendering | 7 | MISSING | P1 |
-| Double-click prediction to convert | 5 | MISSING | P1 |
-| Training/Inference UI | 4, 5, 6 | MISSING | Placeholder needed |
-| Export formats (CSV, HDF5, NWB) | 8 | MISSING/DISABLED | P1-P2 |
+| Trail Length / Trail rendering | 7 | DONE | -- |
+| Double-click prediction to convert | 5 | DONE | -- |
+| Training/Inference UI | 4, 5, 6 | DONE (placeholder dialogs) | -- |
+| Export formats (CSV, HDF5, NWB) | 8 | CSV=DONE, HDF5/NWB=MISSING | P2 |
 | Skeleton configuration | 2 | DONE | -- |
-| Generate Suggestions | 3 | STUB | P1 |
-| Alt+drag whole instance | 3, 5 | MISSING | P1 |
+| Generate Suggestions | 3 | DONE (Stride/Random) | -- |
+| Alt+drag whole instance | 3, 5 | DONE | -- |
+| Alt+scroll rotate instance | 3, 5 | DONE | -- |
+| Track propagation | 7 | DONE | -- |
+| Ctrl+hold Tracks Legend | 7 | DONE | -- |
+| Seekbar track colors | 7 | DONE | -- |
+| Help menu | 9 | DONE | -- |
 
 ---
 
@@ -387,89 +383,95 @@ This is informational/reference content. No UI actions needed.
 |----------|-------------|----------|
 | 1. Setup | YES | None (web is zero-install) |
 | 2. Importing Data | PARTIAL | Add Videos button is stub; no video import dialog |
-| 2. Configure Skeleton | YES | Works (minor: no inline rename) |
-| 3. Generate Suggestions | NO | Generate Suggestions button is stub |
-| 3. Initial Labeling | YES | All core labeling works (minor: no Alt+drag) |
-| 3. Save Project | PARTIAL | Saves as JSON only, not .slp |
-| 4. Training a Model | NO | No training UI (infeasible for browser) |
-| 5. Save New Version | NO | Save As is disabled |
-| 5. Correcting Predictions | PARTIAL | No double-click-to-convert; no score sort |
+| 2. Configure Skeleton | YES | Works (inline rename, templates) |
+| 3. Generate Suggestions | YES | Stride and Random methods work |
+| 3. Initial Labeling | YES | All core labeling works (Alt+drag, Alt+scroll) |
+| 3. Save Project | YES | Saves as .slp via `saveSlpToBytes()` |
+| 4. Training a Model | NO | No training UI (infeasible for browser); placeholder dialog exists |
+| 5. Save New Version | YES | Save As works for SLP |
+| 5. Correcting Predictions | YES | Double-click-to-convert, score sort both work |
 | 5. Re-training | NO | Same as Tutorial 4 |
-| 6. Open New Project | YES | Works (no unsaved changes warning) |
-| 6. Run Inference | NO | No inference UI (infeasible for browser) |
-| 7. Configure Proofreading View | PARTIAL | Color predicted=YES, trails=NO, seekbar header=NO |
-| 7. Navigate to Track Switch | PARTIAL | No Go to Frame dialog |
-| 7. Correct Track Assignment | PARTIAL | No Ctrl+1-9; context menu track assignment works |
-| 7. Save New Version | NO | Save As disabled |
-| 8. Export Results | PARTIAL | Only JSON export works; CSV/HDF5/NWB missing |
-| 9. Next Steps | N/A | Informational only |
+| 6. Open New Project | YES | Works (with unsaved changes warning) |
+| 6. Run Inference | NO | No inference UI (infeasible for browser); placeholder dialog exists |
+| 7. Configure Proofreading View | YES | Color predicted, trails, seekbar marks all work |
+| 7. Navigate to Track Switch | YES | Go to Frame dialog works |
+| 7. Correct Track Assignment | YES | Ctrl+1-9, context menu, propagation all work |
+| 7. Save New Version | YES | Save As works |
+| 8. Export Results | PARTIAL | CSV works; HDF5/NWB missing |
+| 9. Next Steps | N/A | Informational only; Help menu has links |
 
 ---
 
-## Priority Action Items (Tutorial-Driven)
+## Priority Action Items (Tutorial-Driven) -- Updated 2026-03-04
 
-### P0 -- Required for core tutorial workflows
+### Completed (formerly P0/P1)
 
-1. **Save As .slp format** (Tutorials 3, 5, 7) -- Blocked on sleap-io.js browser save
-2. **Ctrl+1-9 track assignment** (Tutorial 7) -- Core proofreading interaction
-3. **Set Instance Track submenu in Tracks menu** (Tutorial 7) -- Menu-based alternative
+The following items have been implemented:
 
-### P1 -- Needed for tutorial completeness
+1. ~~Save As .slp format~~ -- DONE via `saveSlpToBytes()`
+2. ~~Ctrl+1-9 track assignment~~ -- DONE
+3. ~~Generate Suggestions~~ -- DONE (Stride/Random)
+4. ~~Double-click predicted instance to convert~~ -- DONE
+5. ~~Go to Frame dialog~~ -- DONE
+6. ~~Save As with file picker~~ -- DONE (SLP and JSON)
+7. ~~Export Analysis CSV~~ -- DONE
+8. ~~Alt+drag to move entire instance~~ -- DONE
+9. ~~Trail rendering + menu control~~ -- DONE
+10. ~~Track propagation~~ -- DONE
+11. ~~Suggestion score column + sorting~~ -- DONE
+12. ~~Unsaved changes warning~~ -- DONE (beforeunload + project open/new)
+13. ~~Training/Inference placeholder UI~~ -- DONE
+14. ~~Inline node rename~~ -- DONE
+15. ~~Node Label Size menu control~~ -- DONE
+16. ~~Alt+scroll to rotate instance~~ -- DONE
+17. ~~Help menu with documentation links~~ -- DONE
+18. ~~Seekbar header graph~~ -- DONE (instance count)
+19. ~~Skeleton template loading~~ -- DONE
 
-4. **Generate Suggestions (sample method)** (Tutorial 3) -- Random frame sampling is trivially implementable
-5. **Double-click predicted instance to convert** (Tutorial 5) -- Core prediction correction workflow
-6. **Go to Frame dialog** (Tutorial 7) -- Basic navigation, shortcut already defined
-7. **Add Videos button** (Tutorial 2) -- Wire to file picker
-8. **Save As (at least JSON with file picker)** (Tutorials 5, 7) -- Enable versioned saves
-9. **Export Analysis CSV** (Tutorial 8) -- Enable data export
-10. **Alt+drag to move entire instance** (Tutorial 3) -- Important labeling efficiency
-11. **Trail rendering + menu control** (Tutorial 7) -- Needed for proofreading
-12. **Track propagation** (Tutorial 7) -- Track changes should propagate forward
-13. **Suggestion score column + sorting** (Tutorial 5) -- Efficient labeling guidance
-14. **Unsaved changes warning** (Tutorial 6) -- Prevent data loss when opening new project
+### Remaining Items
 
-### P2 -- Nice-to-have for full tutorial parity
+#### P1 -- Needed for full tutorial parity
 
-15. **Training/Inference placeholder UI** (Tutorials 4, 5, 6) -- Info dialogs with alternatives
-16. **Inline node rename** (Tutorial 2) -- Double-click to rename in skeleton table
-17. **Node Label Size menu control** (Tutorial 3) -- State exists, needs menu item
-18. **Red/green node coloring** (Tutorial 5) -- Visual feedback for corrected nodes
-19. **Alt+scroll to rotate instance** (Tutorial 3) -- Advanced manipulation
-20. **Cmd+click to duplicate instance** (Tutorial 3) -- Quick duplication
-21. **Export HDF5/NWB** (Tutorial 8) -- Advanced export formats
-22. **Help menu with documentation links** (Tutorial 9) -- Reference links
-23. **Seekbar header graph** (Tutorial 7) -- Proximity/displacement visualization
-24. **Skeleton template loading** (Tutorial 2) -- Wire dropdown to real templates
-25. **Shift+left-click mark all nodes complete** (Tutorial 5) -- Bulk completion
+1. **Add Videos button** (Tutorial 2) -- Wire to file picker (currently stub)
+2. **Set Instance Track submenu in Tracks menu** (Tutorial 7) -- Menu-based alternative to Ctrl+1-9
+
+#### P2 -- Nice-to-have
+
+3. **Red/green node coloring** (Tutorial 5) -- Visual feedback for corrected nodes
+4. **Cmd+click to duplicate instance** (Tutorial 3) -- Quick duplication
+5. **Export HDF5/NWB** (Tutorial 8) -- Advanced export formats
+6. **Seekbar header proximity/displacement metrics** (Tutorial 7) -- Beyond instance count
+7. **Shift+left-click mark all nodes complete** (Tutorial 5) -- Bulk completion
 
 ---
 
-## Recommended Implementation Order
+## Implementation Status
 
-For users to be able to follow the basic tutorial flow in the web app:
+All five originally planned phases are now substantially complete:
 
-**Phase 1: Core labeling loop** (Tutorials 2-3)
-- Wire Add Videos button to file picker
-- Implement Generate Suggestions (sample + stride methods)
-- Implement Go to Frame dialog (Ctrl+J)
+**Phase 1: Core labeling loop** (Tutorials 2-3) -- DONE
+- ~~Generate Suggestions~~ DONE (stride + random)
+- ~~Go to Frame dialog~~ DONE
+- Add Videos button still a stub (only remaining gap)
 
-**Phase 2: Prediction correction loop** (Tutorial 5)
-- Double-click predicted instance to convert
-- Alt+drag whole instance
-- Suggestion score column + sorting
+**Phase 2: Prediction correction loop** (Tutorial 5) -- DONE
+- ~~Double-click predicted instance to convert~~ DONE
+- ~~Alt+drag whole instance~~ DONE
+- ~~Suggestion score column + sorting~~ DONE
 
-**Phase 3: Proofreading** (Tutorial 7)
-- Ctrl+1-9 track assignment shortcuts
-- Set Instance Track submenu in Tracks menu
-- Track propagation to future frames
-- Trail rendering
+**Phase 3: Proofreading** (Tutorial 7) -- DONE
+- ~~Ctrl+1-9 track assignment~~ DONE
+- ~~Track propagation~~ DONE
+- ~~Trail rendering~~ DONE
+- ~~Ctrl+hold Tracks Legend~~ DONE
+- Set Instance Track submenu still not in Tracks menu (context menu works)
 
-**Phase 4: Save/Export** (Tutorials 3, 5, 7, 8)
-- Save As with file picker (JSON initially)
-- Export Analysis CSV
-- Unsaved changes warning on close/new project
+**Phase 4: Save/Export** (Tutorials 3, 5, 7, 8) -- DONE
+- ~~Save / Save As (SLP)~~ DONE
+- ~~Export Analysis CSV~~ DONE
+- ~~Export Labels Package~~ DONE
+- ~~Unsaved changes warning~~ DONE
 
-**Phase 5: Training/Inference placeholders** (Tutorials 4, 5, 6)
-- Predict menu with placeholder dialogs
-- Export Labels Package for external training
-- Links to Colab notebooks and CLI instructions
+**Phase 5: Training/Inference placeholders** (Tutorials 4, 5, 6) -- DONE
+- ~~Predict menu with placeholder dialogs~~ DONE
+- ~~Help menu with links~~ DONE

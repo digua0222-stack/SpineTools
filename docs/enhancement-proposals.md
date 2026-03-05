@@ -3,7 +3,7 @@
 Prioritized list of proposed enhancements based on tutorial flow analysis,
 guides/learnings analysis, UX audit, and missing features audit.
 
-Last updated: 2026-02-28
+Last updated: 2026-03-04
 
 ---
 
@@ -24,6 +24,7 @@ The following enhancements have been implemented and are available in the curren
 
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
+| P0-1 | Save As .slp Format | **DONE** | `saveSlpToBytes()` from sleap-io.js v0.2.0 works in browser via h5wasm. `saveProject.ts` uses File System Access API with anchor fallback. Custom `slpWriter.ts` removed. |
 | P0-2 | Set Instance Track (Ctrl+1-9) | **DONE** | Dynamic track assignment via Ctrl+1-9 shortcuts. `SetInstanceTrack` command in `trackCommands.ts`. |
 | P0-3 | Double-click Prediction to Convert | **DONE** | `ConvertPredictionToInstance` command. Double-click handler in `VideoPlayer.tsx` converts predicted instances to user instances via the command system with undo support. |
 
@@ -62,19 +63,6 @@ The following enhancements have been implemented and are available in the curren
 ---
 
 ## Remaining Items
-
-### P0 - Blocks Core Tutorial Workflows
-
-#### P0-1: Save As .slp Format
-
-| Field | Value |
-|-------|-------|
-| **Description** | Users cannot save their work in the native .slp format. Current "Save" downloads JSON, which is incompatible with SLEAP desktop. This blocks Tutorials 3, 5, and 7 (every save point). |
-| **Complexity** | L |
-| **Tutorials** | 3 (Save), 5 (Save New Version), 7 (Save Corrected) |
-| **Technical notes** | `sleap-io.js` `saveSlp` is Node-only. Options: (1) port HDF5 write to browser via h5wasm, (2) Tauri-only save via Node-compatible backend, (3) implement minimal SLP writer in JS. Tauri `SaveProjectCommand` now saves JSON to `.slp` path as an interim solution; true HDF5 write still needed. |
-
----
 
 ### P1 - Significantly Improves Usability
 
@@ -186,9 +174,9 @@ The following enhancements have been implemented and are available in the curren
 - ~~P0-3: Double-click prediction to convert~~ DONE
 - ~~P1-4: Alt+drag whole instance~~ DONE
 
-### Phase 2: Save/Export (Tutorials 3, 5, 7, 8) -- MOSTLY COMPLETE
+### Phase 2: Save/Export (Tutorials 3, 5, 7, 8) -- COMPLETE
 - ~~P1-9: Save As (JSON with file picker)~~ DONE
-- P0-1: Save As .slp format (still needed)
+- ~~P0-1: Save As .slp format~~ DONE (sleap-io.js v0.2.0 `saveSlpToBytes`)
 - ~~P1-7: Export Analysis CSV~~ DONE
 - P1-6: `beforeunload` handler (still needed)
 
@@ -211,11 +199,11 @@ The following enhancements have been implemented and are available in the curren
 
 | Priority | Total | Completed | Remaining |
 |----------|-------|-----------|-----------|
-| P0       | 3     | 2         | 1 (Save .slp) |
+| P0       | 3     | 3         | 0 |
 | P1       | 14    | 12        | 2 (Add Videos, beforeunload) |
 | P2       | 12    | 10        | 2 (Red/Green nodes, Merge dialog) |
 | P3       | 8     | 0         | 8 |
-| **Total**| **37**| **24**    | **13** |
+| **Total**| **37**| **25**    | **12** |
 
 ---
 

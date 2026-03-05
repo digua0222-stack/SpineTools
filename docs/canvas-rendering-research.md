@@ -1,5 +1,7 @@
 # Canvas Rendering Research for SLEAP Label Web
 
+> **Decision (March 2026):** Raw Canvas 2D API was adopted (not Konva/PixiJS). The implementation uses two stacked canvases (frame layer + skeleton overlay) with HiDPI support. See `src/canvas/SkeletonRenderer.ts` and `src/canvas/TrailRenderer.ts`.
+
 ## Requirements Summary
 
 The SLEAP annotation canvas needs to:
@@ -8,7 +10,7 @@ The SLEAP annotation canvas needs to:
 - Support interactive editing: click-select, drag-reposition, hover highlights
 - Support zoom/pan (mouse wheel, click-drag)
 - Draw track trails (movement lines across frames)
-- Color instances with configurable palettes
+- Color instances with configurable palettes (color-by instance, track, or node)
 - Handle 10-100+ instances per frame (each with ~20-30 nodes + edges)
 
 Worst case per frame: ~3000 nodes + ~3000 edges + text labels + trail lines + 1 large background image.
@@ -278,81 +280,61 @@ useEffect(() => {
 
 ---
 
-## Recommendation
+## Decision: Raw Canvas 2D API
 
-### Primary: **Konva + react-konva** with layered canvases
+### What was chosen and why
 
-**Justification:**
+**Raw Canvas 2D** was selected over Konva and PixiJS. The original recommendation was Konva, but in practice raw Canvas 2D proved to be the better choice:
 
-1. **Proven in production annotation tools.** Label Studio uses exactly this stack. This validates that Konva handles annotation workloads well.
+1. **Zero dependencies.** No Konva (~140KB) or react-konva needed. The rendering code is self-contained.
+2. **Full control.** Custom hit testing, drag handling, and coordinate transforms were straightforward to implement and gave better control over interaction semantics specific to pose annotation.
+3. **Performance.** Direct `drawImage()` + imperative shape drawing has minimal overhead. No scene graph reconciliation.
+4. **HiDPI support.** Scaling the canvas by `devicePixelRatio` is trivial with raw Canvas 2D.
+5. **Two-layer architecture.** The layered canvas approach (frame + overlay) works naturally without needing Konva's layer abstraction.
 
-2. **Right level of abstraction.** Raw Canvas 2D requires too much boilerplate for interaction (hit testing, drag-and-drop, hover effects, cursor changes). WebGL/PixiJS is overkill for our shape count. Konva sits in the sweet spot.
-
-3. **Declarative React integration.** react-konva lets us express annotations as React components, which aligns with our React + TypeScript architecture. State changes naturally trigger re-renders of affected shapes.
-
-4. **Built-in interaction model.** Node dragging, selection, hover highlighting -- these are Konva's core strengths. We get `onClick`, `onDragMove`, `onMouseEnter` etc. for free on every shape.
-
-5. **Good enough performance.** Our worst case (~3000 nodes + ~3000 edges) is well within Konva's comfortable range. With optimizations (layer separation, `listening={false}` on static elements, `transformsEnabled="position"`), 60fps is achievable.
-
-6. **Text rendering quality.** Since Konva uses Canvas 2D under the hood, text labels render with native quality -- important for node/edge labels in scientific annotation.
-
-7. **Zoom/pan is trivial.** Stage-level scale and position transforms handle zoom/pan with one-line configuration.
-
-### Architecture:
+### Implemented architecture:
 
 ```
 +------------------------------------------+
 |            React Component Tree          |
 |                                          |
-|  <AnnotationCanvas>                      |
+|  <VideoPlayer>                           |
 |    +-- <canvas ref> (video frame layer)  |  Raw Canvas 2D
 |    |     drawImage(ImageBitmap)           |  (redraws on frame change only)
+|    |     HiDPI: scaled by devicePixelRatio|
 |    |                                     |
-|    +-- <Stage> (Konva annotation layer)  |  react-konva
-|          +-- <Layer> (trails, static)    |  listening={false}
-|          |     <Line> track trails       |
-|          |                               |
-|          +-- <Layer> (annotations)       |  interactive
-|                <Group> per instance      |
-|                  <Line> edges            |
-|                  <Circle> nodes          |
-|                  <Text> labels           |
+|    +-- <canvas ref> (skeleton overlay)   |  Raw Canvas 2D
+|          SkeletonRenderer.render()       |  (redraws on annotation change)
+|          TrailRenderer.render()          |  (track movement trails)
+|          Hit testing via distance math   |
 +------------------------------------------+
 ```
 
-### When to escalate to PixiJS:
+### Key implementation files:
 
-If profiling reveals Konva is too slow (unlikely at our scale), the migration path would be:
-- Replace react-konva with `@pixi/react`
-- Use `pixi-viewport` for zoom/pan
-- Implement custom hit testing (PixiJS has basic event support but less mature than Konva)
-- This should only be considered if we consistently have >10K interactive shapes
+- `src/canvas/SkeletonRenderer.ts` - Nodes, edges (line/wedge), labels, selection boxes, per-node colors
+- `src/canvas/TrailRenderer.ts` - Track trail polylines with fading opacity
+- `src/components/video/VideoPlayer.tsx` - Two-layer canvas, zoom/pan, hit testing, drag handling
+- `src/lib/colorPalettes.ts` - Color palettes and color-by options (instance, track, node)
 
-### Dependencies to add:
+### When to reconsider:
 
-```json
-{
-  "konva": "^9.3",
-  "react-konva": "^18.2"
-}
-```
-
-Size: ~140KB minified (konva) + ~10KB (react-konva). Reasonable for a desktop app.
+If the app needs >10K interactive shapes per frame (unlikely for pose annotation), WebGL via PixiJS would be the escalation path. The current raw Canvas 2D handles our worst case (~6000 shapes) comfortably.
 
 ---
 
 ## Key Implementation Notes
 
-1. **Video frame on a separate raw canvas** -- do NOT put the video frame in a Konva `Image` node. A raw `drawImage()` call is faster and avoids Konva's overhead for the largest single draw operation.
+1. **Video frame on a separate raw canvas** -- the frame layer only redraws on frame change, not on annotation interaction. This avoids re-drawing the (potentially large) video frame on every mouse move.
 
-2. **Memoize annotation components** -- use `React.memo` on instance groups, node circles, and edge lines to prevent unnecessary Konva redraws.
+2. **HiDPI rendering** -- both canvases are scaled by `devicePixelRatio`. The canvas element size is set to `width * dpr` / `height * dpr` while the CSS size stays at logical pixels. This ensures crisp rendering on Retina/HiDPI displays.
 
-3. **Use `listening={false}`** on trail lines, grid lines, and any decorative elements that don't need mouse interaction.
+3. **Coordinate transforms** -- a single zoom/pan state in the Zustand store is applied to both canvases via `ctx.setTransform()`. Mouse coordinates are converted from screen space to canvas space accounting for both zoom/pan and devicePixelRatio.
 
-4. **Coordinate transforms** -- maintain a single source of truth for zoom/pan state in React. Apply it to both the raw canvas (via `ctx.setTransform()`) and the Konva stage (via `scaleX/Y`, `x/y`).
+4. **Hit testing** -- uses geometric distance checks (point-to-node distance, point-to-line-segment distance) rather than a hit canvas. Nodes take priority over edges.
 
-5. **Node selection UX** -- increase hit region radius beyond visual radius (e.g., visual=5px, hit=12px) for easier clicking, especially on small nodes.
+5. **Node dragging** -- position updates are applied directly during drag for visual feedback, with the final position committed to the data model on mouse up.
 
-6. **Batch state updates** -- when dragging a node, use `onDragMove` for visual feedback but only commit the position change to the data model on `onDragEnd` to avoid excessive state updates.
+6. **Edge styles** -- supports both line and wedge (tapered) edge rendering, configurable via the View menu.
 
-7. **Viewport culling** -- for zoomed-in views with many off-screen instances, skip rendering instances whose bounding box is entirely outside the viewport.
+7. **Color-by options** -- instances can be colored by instance index, track assignment, or per-node, using configurable palettes from `src/lib/colorPalettes.ts`.

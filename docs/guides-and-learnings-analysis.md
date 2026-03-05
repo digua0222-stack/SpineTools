@@ -20,13 +20,11 @@ The central SLEAP workflow is an iterative cycle:
 | Label frames manually | Implemented | Node placement, instance add/delete work |
 | Train model | N/A (server-side) | Need placeholder UI or server delegation |
 | Predict on frames | N/A (server-side) | Need to load prediction results from SLP |
-| Convert prediction to user instance | **Missing** | Double-click on predicted instance should convert it |
+| Convert prediction to user instance | DONE | Double-click on predicted instance converts via `ConvertPredictionToInstance` |
 | Correct converted instances | Implemented | Node dragging works |
 | See which nodes were adjusted vs unchanged | **Missing** | Red vs green node coloring after conversion |
 
-**Priority**: The prediction-to-user-instance conversion (double-click) is critical.
-This is the single most important labeling efficiency feature and is called out in
-both the prediction-assisted labeling guide and the GUI learnings doc.
+**Status**: The prediction-to-user-instance conversion is now implemented. Double-click on a predicted instance (node or centroid) converts it to a user instance. The conversion is undoable.
 
 ### 1.2 Tracking Workflows (tracking-and-proofreading.md)
 
@@ -54,32 +52,28 @@ Two error types to fix:
 |---------|---------------|-----|
 | Color Predicted Instances toggle | Implemented | Works in View menu |
 | Color palettes (five+, alphabet) | Implemented | Palette picker works |
-| Trail Length > 0 | **State exists, rendering missing** | No trail rendering on canvas |
-| Seekbar track colors | **Missing** | No track color bars on seekbar |
+| Trail Length > 0 | DONE | `TrailRenderer.ts` draws colored polylines; View > Trail Length menu |
+| Seekbar track colors | DONE | Colored horizontal bars showing track occupancy on seekbar |
 | Wedge edge style for orientation | Implemented | Line/Wedge toggle works |
 
 ### 1.4 Fixing Lost Identities
 
 **Required workflow (currently broken):**
 
-1. **Go > Next Track Spawn Frame** -- **Missing command**. The shortcut exists but the
-   command to find the next frame where a new track begins is not implemented.
+1. **Go > Next Track Spawn Frame** -- DONE. `GoNextTrackSpawnFrame` command implemented with Ctrl+E shortcut.
 2. Select the instance with the new track -- Implemented (click selection).
-3. View trail to determine correct track -- **Missing** (no trail rendering).
-4. **Hold Ctrl to show tracks legend** -- **Missing**. No overlay showing numbered
-   track list with colors.
-5. **While holding Ctrl, press 1-9 to assign track** -- **Missing**. Set Instance Track
-   via digit shortcut (Ctrl+1-9) is not implemented. This is flagged as P0 in the
-   missing features audit but still not done.
+3. View trail to determine correct track -- DONE. `TrailRenderer.ts` draws colored polylines.
+4. **Hold Ctrl to show tracks legend** -- DONE. `TracksLegend` component shows overlay with track numbers, colors, and names.
+5. **While holding Ctrl, press 1-9 to assign track** -- DONE. Ctrl+1-9 shortcuts in `useKeyboardShortcuts.ts` via `SetInstanceTrack` command.
 
-**This is the single most critical gap for multi-animal workflows.**
+**Status**: The complete proofreading workflow for fixing lost identities is now functional.
 
 ### 1.5 Fixing Identity Swaps
 
 **Strategy 1: Visual inspection with trails**
-- Set trail length ~50 frames -- **Missing** (no trail rendering)
+- Set trail length ~50 frames -- DONE (View > Trail Length > Medium (50))
 - Use large frame step to scan -- Implemented (Ctrl+Alt+Arrow)
-- Look for crossed/tangled trails -- **Missing** (no trails)
+- Look for crossed/tangled trails -- DONE (trail rendering shows colored polylines)
 - Find exact swap frame, use Transpose -- Implemented (Ctrl+T)
 - **Labels > Transpose Instance Tracks** -- Implemented
 
@@ -90,9 +84,7 @@ Two error types to fix:
 - Step through suggestions -- Implemented (Space/Shift+Space)
 
 **Propagating fixes:**
-- **Propagate Track Labels** toggle -- **Missing**. When enabled, a track assignment
-  change should automatically apply to all subsequent frames. This is critical for
-  efficient proofreading -- without it, users must fix each frame individually.
+- **Propagate Track Labels** -- DONE. `PropagateTrackLabels` command in Tracks menu iterates forward through frames, performing bidirectional track swaps. Multi-frame undo snapshot ensures the entire propagation can be undone. Note: this is a manual "propagate once" action rather than an auto-propagate toggle.
 
 ### 1.6 Label Quality Control (label-quality-control.md)
 
@@ -169,9 +161,7 @@ Describes the workflow for merging corrected predictions back into the training 
 
 **Critical missing features:**
 
-1. **Double-click predicted instance to convert** -- Not implemented. This is how users
-   "accept" a prediction for training. Currently no way to convert predictions to
-   editable instances in the web app.
+1. ~~Double-click predicted instance to convert~~ -- DONE. `ConvertPredictionToInstance` command converts predicted to user instance, retaining positions and track.
 
 2. **Merge Data From...** -- File > Merge Data From menu item. Opens a merge dialog
    showing conflicts (frames with both user and predicted instances). User resolves
@@ -179,7 +169,7 @@ Describes the workflow for merging corrected predictions back into the training 
 
 3. **Delete All Predictions** -- Implemented (in Labels menu).
 
-4. **Save As...** -- Partially implemented (JSON only, no .slp save).
+4. ~~Save As...~~ -- DONE (SLP and JSON formats).
 
 ---
 
@@ -197,17 +187,17 @@ Several mouse interactions are documented but not implemented:
 | Add instance (right-click elsewhere) | Partially -- context menu exists | -- |
 | Zoom to region (Alt+left-click drag) | **Missing** | P2 |
 | Zoom out (Alt+double-click) | **Missing** | P2 |
-| Move entire instance (Alt+drag on node) | **Missing** | P1 |
-| Rotate entire instance (Alt+mouse wheel on node) | **Missing** | P2 |
-| Create instance from prediction (double-click) | **Missing** | P0 |
+| Move entire instance (Alt+drag on node) | DONE | -- |
+| Rotate entire instance (Alt+mouse wheel on node) | DONE | -- |
+| Create instance from prediction (double-click) | DONE | -- |
 | Add missing nodes to instance (double-click editable) | **Missing** | P1 |
 | Select instance (click) | Implemented | -- |
 | Clear selection (click elsewhere) | Implemented | -- |
 | Duplicate instance (Ctrl+drag) | **Missing** | P2 |
 
 **Key insight**: The SLEAP desktop GUI uses **left-click drag for pan** and modifier
-keys (Alt, Ctrl) for alternative actions. The web app uses middle-click for pan.
-This is a significant ergonomic difference -- many laptop users have no middle button.
+keys (Alt, Ctrl) for alternative actions. The web app supports both middle-click
+and **Alt+left-click for pan**, addressing the laptop ergonomic issue.
 
 ### 2.2 Keyboard Navigation (gui.md)
 
@@ -219,20 +209,21 @@ This is a significant ergonomic difference -- many laptop users have no middle b
 | Home/End for first/last | Implemented | -- |
 | Shift+navigation for selection | **Missing** | P1 |
 | 1-9 to select instance by number | Partially (shortcuts exist) | Verify |
-| **Ctrl (hold) show tracks legend** | **Missing** | P1 |
+| **Ctrl (hold) show tracks legend** | DONE | -- |
 | Escape to deselect | Implemented | -- |
 
 ### 2.3 Seekbar Controls (gui.md)
 
 | Action | Status |
 |--------|--------|
-| Select frame range (Shift+drag) | **Missing** |
-| Clear selection (Shift+click) | **Missing** |
+| Select frame range (Shift+drag) | DONE |
+| Clear selection (click without Shift) | DONE |
 | Zoom to range (Alt+drag) | **Missing** |
 | Zoom out / show all (Alt+click) | **Missing** |
 
-The seekbar is currently a basic slider with no marks, no range selection, no zoom.
-This significantly limits navigation efficiency.
+The seekbar now has labeled frame marks, track occupancy bars, instance count header
+graph, frame range selection, hover indicator, and snap-to-labeled-frame. Seekbar zoom
+is the main remaining gap.
 
 ### 2.4 Labeling Suggestions Methods (gui.md)
 
@@ -251,31 +242,34 @@ methods could work if the score/tracking data is already in the loaded SLP file.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Apply Distinct Colors To (tracks/nodes/edges) | State exists, not wired | Need menu + renderer |
+| Apply Distinct Colors To (tracks/nodes/edges) | DONE | View > Apply Distinct Colors To submenu |
 | Custom color palette file (~/.sleap/colors.yaml) | Not applicable | Use localStorage |
 | "+" palettes that don't cycle | Check if implemented | Useful for proofreading |
-| Trail Length for proofreading | State exists, no rendering | Canvas trail lines needed |
-| Seekbar Header metric options | Not implemented | Time-series graph |
+| Trail Length for proofreading | DONE | TrailRenderer.ts + View > Trail Length menu |
+| Seekbar Header metric options | PARTIAL | Instance count graph done; no proximity/displacement |
 | Crop Size Overlay | Not implemented | Shows training crop region |
 
 ### 2.6 Menus Comparison (gui.md vs MenuBar.tsx)
 
-**Menus present in SLEAP GUI but missing from web app:**
+**Menus present in SLEAP GUI -- web app status:**
 
-1. **Predict menu** -- Entirely absent. Even without training/inference, should have:
-   - Add Instances from All Predictions on Current Frame
-   - Delete predictions variants (clip, area, low score, frame limit, user-labeled frames)
-   - Export Video with Visual Annotations
-   - (placeholder) Run Training / Run Inference
+1. **Predict menu** -- DONE. Includes:
+   - Training... (placeholder dialog)
+   - Inference / Run Prediction... (placeholder dialog)
+   - Export Training Package... (alert/stub)
+   - Import Predictions... (redirects to Open Project)
+   - Visualize Model Outputs... (disabled, "Coming Soon")
+   - Missing: Add Instances from All Predictions, Export Video with Annotations
 
-2. **Analyze menu** -- Entirely absent. Should have:
+2. **Analyze menu** -- Still absent. Should have:
    - Instance Size Distribution
    - Label QC
 
-3. **Help menu** -- Entirely absent. Should have:
-   - Keyboard Shortcuts
-   - Documentation link
-   - About dialog
+3. **Help menu** -- DONE. Includes:
+   - Keyboard Shortcuts... (ShortcutsDialog)
+   - Documentation (links to sleap.ai)
+   - Report Issue (links to GitHub)
+   - About SLEAP Label (HelpDialog)
 
 ---
 
@@ -290,61 +284,61 @@ Phase 1: Setup
   [x] Load SLP with predictions and tracks
   [x] Color Predicted Instances toggle
   [x] Choose color palette
-  [ ] Set Trail Length > 0            <-- NO TRAIL RENDERING
-  [ ] Seekbar shows track colors      <-- NO SEEKBAR MARKS
+  [x] Set Trail Length > 0            <-- TrailRenderer.ts + View > Trail Length
+  [x] Seekbar shows track colors      <-- Track occupancy bars on seekbar
 
 Phase 2: Find Lost Identities
-  [ ] Go > Next Track Spawn Frame     <-- COMMAND NOT IMPLEMENTED
+  [x] Go > Next Track Spawn Frame     <-- GoNextTrackSpawnFrame (Ctrl+E)
   [x] Select instance
-  [ ] View trail to see where it came from  <-- NO TRAILS
-  [ ] Hold Ctrl for tracks legend     <-- NO OVERLAY
-  [ ] Press digit to assign track     <-- Ctrl+1-9 NOT IMPLEMENTED
+  [x] View trail to see where it came from  <-- TrailRenderer draws polylines
+  [x] Hold Ctrl for tracks legend     <-- TracksLegend component
+  [x] Press digit to assign track     <-- Ctrl+1-9 via useKeyboardShortcuts
 
 Phase 3: Find Identity Swaps
-  [ ] Set long trail length           <-- NO TRAILS
+  [x] Set long trail length           <-- View > Trail Length > Very Long (250)
   [x] Large frame step navigation
-  [ ] Visual inspection for crossed trails  <-- NO TRAILS
+  [x] Visual inspection for crossed trails  <-- Trail rendering
   [x] Transpose Instance Tracks (Ctrl+T)
-  [ ] Velocity-based suggestions      <-- NO SUGGESTION GENERATION
+  [ ] Velocity-based suggestions      <-- Advanced suggestion method not implemented
 
 Phase 4: Propagate Fixes
-  [ ] Propagate Track Labels toggle   <-- NOT IMPLEMENTED
-  [ ] Track changes apply to subsequent frames  <-- NOT IMPLEMENTED
+  [x] Propagate Track Labels          <-- PropagateTrackLabels command in Tracks menu
+  [x] Track changes apply to subsequent frames  <-- Bidirectional swap propagation
 ```
 
-**Conclusion**: The proofreading workflow is almost entirely non-functional due to
-three missing capabilities: trail rendering, track spawn navigation, and track
-assignment shortcuts.
+**Conclusion**: The proofreading workflow is now fully functional. The only remaining
+gap is the velocity-based suggestion generation method, which is an advanced feature
+that requires per-frame tracking data analysis.
 
-### 3.2 Track Management Commands Missing
+### 3.2 Track Management Commands
 
-| Command | Description | Priority |
-|---------|-------------|----------|
-| Next Track Spawn Frame | Navigate to frame where new track starts | P0 |
-| Set Instance Track (Ctrl+1-9) | Quick track assignment via keyboard | P0 |
-| Propagate Track Labels | Apply changes to subsequent frames | P1 |
-| Delete Instance and Track | Remove instance + all same-track instances | P1 |
-| Delete Track | Remove track from all instances | P1 |
-| Delete Multiple Tracks | Clean up unused/all tracks | P1 |
-| Set Track Name | Rename tracks for clarity | P1 |
-| Connect Single Track Breaks | Auto-merge single lost+gained track pairs | P2 |
+| Command | Description | Status |
+|---------|-------------|--------|
+| Next Track Spawn Frame | Navigate to frame where new track starts | DONE (Ctrl+E) |
+| Set Instance Track (Ctrl+1-9) | Quick track assignment via keyboard | DONE |
+| Propagate Track Labels | Apply changes to subsequent frames | DONE |
+| Add Track (Ctrl+0) | Create new track and assign | DONE |
+| Copy/Paste Track | Copy and paste track assignments | DONE (Ctrl+Shift+C/V) |
+| Transpose Instance Tracks | Swap tracks between instances | DONE (Ctrl+T) |
+| Delete Instance and Track | Remove instance + all same-track instances | **MISSING** (P1) |
+| Delete Track | Remove track from all instances | **MISSING** (P1) |
+| Delete Multiple Tracks | Clean up unused/all tracks | **MISSING** (P1) |
+| Set Track Name | Rename tracks for clarity | **MISSING** (P1) |
+| Connect Single Track Breaks | Auto-merge single lost+gained track pairs | **MISSING** (P2) |
 
-### 3.3 Trail Rendering
+### 3.3 Trail Rendering -- IMPLEMENTED
 
-The trail overlay shows colored lines tracing where each instance was in prior frames.
-This is essential for:
-- Detecting identity swaps (crossed trails)
-- Verifying tracking continuity
-- Understanding movement patterns
+The trail overlay is now implemented in `src/canvas/TrailRenderer.ts`:
 
-**Implementation approach:**
-1. For each visible instance, look back `trailLength` frames
-2. Find same-track instances in those frames
-3. Draw lines connecting the centroid positions, colored by track
-4. Fade opacity with distance from current frame
+- **`renderTrails()`** draws colored polylines connecting centroids across frames
+- Looks back `trailLength` frames from current position
+- Finds same-track instances in those frames
+- Draws lines connecting centroid positions, colored by track
+- Opacity fades from current (solid) to oldest (near-transparent)
+- Small dots mark centroid positions at each frame
+- Trail rendering is invoked in `VideoPlayer.tsx` before skeleton rendering (drawn behind)
 
-The `trailLength` state already exists in the app store (default 0). The renderer
-needs to be added to SkeletonRenderer.ts or a dedicated trail layer.
+The `trailLength` state is controlled via View > Trail Length menu with options: Off, Short (10), Medium (50), Long (100), Very Long (250), Maximum (500). Setting persists across sessions via localStorage.
 
 ---
 
@@ -418,9 +412,9 @@ The web app should prompt users to review quality before exporting training pack
 
 | Format | Purpose | Priority | Feasibility |
 |--------|---------|----------|-------------|
-| SLP (native) | Save work | P0 | Blocked on sleap-io.js browser save |
+| SLP (native) | Save work | DONE | `saveSlpToBytes()` from sleap-io.js |
 | JSON (dict) | Data exchange | Done | Implemented |
-| Analysis CSV | Downstream analysis | P1 | Easy -- tabular data generation |
+| Analysis CSV | Downstream analysis | DONE | `ExportCSVCommand` |
 | Analysis HDF5 | MATLAB/Python analysis | P1 | Medium -- h5wasm writing |
 | Training Job Package (.pkg.slp) | Remote training | P1 | Medium -- bundle labels + video frames |
 | Training Job ZIP | Remote training | P1 | Easy -- if .pkg.slp works |
@@ -473,13 +467,12 @@ should help users avoid:
 | Ambiguous landmarks | Tooltip guidance when adding nodes |
 | Symmetric naming confusion | Suggest L_/R_ prefix convention |
 
-### 6.2 Skeleton Templates
+### 6.2 Skeleton Templates -- IMPLEMENTED
 
-The SkeletonPanel has a template selector but it's not wired up (logs to console).
-Templates mentioned: Fly (32 nodes), Mouse top-down (12), Mouse side-view (8),
-Human (17), Hand (21).
-
-**Action**: Wire up template loading with actual skeleton definitions.
+The SkeletonPanel template selector is now functional via `LoadSkeletonTemplateCommand`.
+Available templates: Fly (32 nodes), Mouse top-down (12 nodes), Human (17 nodes),
+C. elegans (2 nodes), Custom (empty). Template loading is undoable and resets
+all instance point arrays to NaN positions matching the new node count.
 
 ### 6.3 Modifying Existing Skeletons
 
@@ -488,8 +481,10 @@ When users modify a skeleton (add/remove nodes), all existing instances need upd
 - Removing a node: node data removed from all instances, connected edges removed
 - Edge changes: visualization only (unless using bottom-up inference)
 
-The current SkeletonPanel handles add/remove of nodes and edges, but does not
-propagate changes to existing instances.
+The SkeletonPanel handles add/remove of nodes and edges with full propagation to
+existing instances. `DeleteNodeCommand` removes the corresponding point from every
+instance. Adding a node adds a NaN point to every instance. All operations are
+undoable via `installSkeletonUndoInterceptor`.
 
 ---
 
@@ -510,59 +505,52 @@ The web app maps to:
 
 | Stage | Sub-step | Web App Status |
 |-------|----------|---------------|
-| Data Prep | Import videos | Partial (via SLP only) |
-| Data Prep | Create skeleton | Implemented |
-| Data Prep | Label frames | Implemented |
+| Data Prep | Import videos | Partial (via SLP only, Add Videos is stub) |
+| Data Prep | Create skeleton | DONE (add/remove/rename nodes/edges, templates) |
+| Data Prep | Label frames | DONE (all core labeling features) |
 | Data Prep | Import existing labels | Missing |
-| Training | Configure model | Missing |
+| Training | Configure model | Placeholder (TrainingDialog) |
 | Training | Train | N/A (server) |
 | Training | Monitor | N/A (could show pre-computed) |
 | Training | Evaluate | Missing |
-| Inference | Run inference | N/A (server) |
+| Inference | Run inference | Placeholder (InferenceDialog) |
 | Inference | Track identities | N/A (server) |
-| Inference | Proofread | **Mostly missing** |
-| Inference | Export | Partial (JSON only) |
+| Inference | Proofread | **DONE** (trails, Ctrl+1-9, propagation, Ctrl+hold legend) |
+| Inference | Export | DONE (SLP, JSON, CSV, Package) |
 
 ---
 
 ## 8. Priority Recommendations
 
-### Highest Priority (Blocks Core Workflows)
+### Completed (formerly Highest/High Priority)
 
-1. **Double-click prediction to convert to user instance** -- Blocks the entire
-   prediction-assisted labeling loop. Without this, users cannot correct predictions.
+All items from the original "Highest Priority" and most "High Priority" lists are now implemented:
 
-2. **Set Instance Track via Ctrl+1-9** -- Blocks all track editing. Users cannot
-   efficiently assign tracks during proofreading.
+1. ~~Double-click prediction to convert~~ -- DONE
+2. ~~Set Instance Track via Ctrl+1-9~~ -- DONE
+3. ~~Next Track Spawn Frame navigation~~ -- DONE
+4. ~~Trail rendering~~ -- DONE
+5. ~~Seekbar frame marks~~ -- DONE
+6. ~~Propagate Track Labels~~ -- DONE
+7. ~~Move entire instance (Alt+drag)~~ -- DONE
+8. ~~Ctrl+hold tracks legend overlay~~ -- DONE
+9. ~~Suggestion generation~~ -- DONE (Stride/Random)
+10. ~~Seekbar frame range selection~~ -- DONE
+11. ~~Delete prediction variants~~ -- DONE (score, range, max count, user-labeled)
 
-3. **Next Track Spawn Frame navigation** -- Blocks lost identity proofreading.
-   Users cannot find where new tracks appear.
+### Remaining High Priority (Major UX Gaps)
 
-4. **Trail rendering** -- Blocks visual proofreading. Users cannot see movement
-   paths to detect swaps.
-
-5. **Seekbar frame marks** -- Blocks efficient navigation. Users cannot see where
-   labels and predictions exist.
-
-### High Priority (Major UX Gaps)
-
-6. **Propagate Track Labels** -- Without this, track fixes must be applied frame-by-frame.
-
-7. **Move entire instance (Alt+drag)** -- Common editing action, missing modifier.
-
-8. **Ctrl+hold tracks legend overlay** -- Visual reference during track assignment.
-
-9. **Suggestion generation (Sample method)** -- Enable frame sampling for initial labeling.
-
-10. **Merge Data From...** -- Enable merging predictions from separate files.
+1. **Merge Data From...** -- Enable merging predictions from separate files
+2. **Add Videos button** -- Wire to file picker (currently stub)
+3. **Analyze menu** -- Label QC panel, Instance Size Distribution
 
 ### Medium Priority (Important but Workaroundable)
 
-11. Export Training Job Package
-12. Label QC panel (at least Tier 1)
-13. Instance Size Distribution
-14. Seekbar frame range selection
-15. Delete prediction variants (clip, score, area)
+4. Export Training Job Package (real implementation, not alert)
+5. Label QC panel (at least Tier 1)
+6. Instance Size Distribution
+7. Track deletion and renaming
+8. Set Instance Track submenu in Tracks menu
 
 ---
 

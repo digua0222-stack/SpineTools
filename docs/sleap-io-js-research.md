@@ -1,9 +1,13 @@
 # sleap-io.js Research
 
-**Package:** `@talmolab/sleap-io.js` v0.1.9
+**Package:** `@talmolab/sleap-io.js` v0.2.0 (file-linked from `../sleap-io.js`)
 **Source:** `/home/talmo/code/sleap-io.js/`
 **License:** Not specified in package.json
 **Dependencies:** h5wasm, jsfive, mp4box, skia-canvas, yaml
+
+> **Status (March 2026):** All upstream issues from v0.1.x have been resolved in v0.2.0.
+> Local workarounds (slpWriter.ts, type casts, constructor hacks) have been removed.
+> See `sleap-io-upstream-issues.md` for the full resolution log.
 
 ---
 
@@ -40,6 +44,7 @@ Two entry points are exposed:
 **IO functions:**
 - `loadSlp(source, options?)` - Load SLP file (auto-selects browser Worker or Node.js path)
 - `saveSlp(labels, filename, options?)` - Save SLP file (**Node.js only**)
+- `saveSlpToBytes(labels)` - Save SLP to `Uint8Array` (**browser-compatible**, added in v0.2.0)
 - `loadVideo(filename, options?)` - Load video file into Video object
 
 **Video backends:**
@@ -382,7 +387,7 @@ Auto-selects backend based on filename and environment:
 
 ## 5. Write/Save Capabilities
 
-### `saveSlp(labels, filename, options?)`
+### `saveSlp(labels, filename, options?)` (Node.js only)
 
 ```typescript
 async function saveSlp(
@@ -394,7 +399,15 @@ async function saveSlp(
 
 **NODE.JS ONLY.** Throws error in browser.
 
-**What it writes:**
+### `saveSlpToBytes(labels)` (Browser-compatible, v0.2.0+)
+
+```typescript
+async function saveSlpToBytes(labels: Labels): Promise<Uint8Array>
+```
+
+Returns an SLP file as a `Uint8Array` suitable for browser download or File System Access API write. This is what `sleap-label-web` uses in `src/lib/saveProject.ts`.
+
+**What both save functions write:**
 - `/metadata` group with `format_id` (1.4) and `json` attribute (skeletons, nodes, version, provenance)
 - `/videos_json` dataset - serialized video metadata
 - `/tracks_json` dataset - serialized track names
@@ -406,9 +419,8 @@ async function saveSlp(
 - `/pred_points` dataset - predicted point coordinates (x, y, visible, complete, score)
 
 **Limitations:**
-- Does NOT support embedding video frames (`embed: true` throws error, only `embed: "source"` or `false`)
-- Requires Node.js (uses h5wasm native File constructor)
-- No browser save support (would need IndexedDB or Blob download)
+- `saveSlp`: Does NOT support embedding video frames (`embed: true` throws error, only `embed: "source"` or `false`). Requires Node.js.
+- `saveSlpToBytes`: No embedding support. Returns raw bytes only.
 
 ### Dictionary Serialization (Browser-compatible)
 
@@ -585,13 +597,13 @@ User drags a node
   -> Re-draw canvas overlay (image stays cached)
 ```
 
-### Save Pipeline (Current Limitations)
+### Save Pipeline (Implemented)
 
-Browser save is NOT directly supported by `saveSlp()`. Options:
-1. **JSON export:** Use `toDict()` to serialize, download as `.json`
-2. **Future:** Implement browser HDF5 writing (h5wasm supports `File` creation in MEMFS)
-3. **Tauri:** Use Tauri's file system API to invoke Node.js-like save on desktop
-4. **Server:** POST `toDict()` output to a server endpoint that converts to SLP
+Browser save is now supported via `saveSlpToBytes()` (added in sleap-io.js v0.2.0):
+1. Call `saveSlpToBytes(labels)` to get a `Uint8Array`
+2. Use the File System Access API (`showSaveFilePicker`) for native save dialog (Chromium)
+3. Fall back to anchor-based download for other browsers
+4. Implementation: `src/lib/saveProject.ts`
 
 ### What We Get "For Free"
 
@@ -606,13 +618,22 @@ Browser save is NOT directly supported by `saveSlp()`. Options:
 - YAML skeleton import/export
 - Lite metadata-only reading for file previews
 
-### What We Need to Build
+### What Has Been Built
 
-- State management layer (Zustand store wrapping Labels)
-- Canvas rendering engine (the existing rendering module uses skia-canvas which is Node.js only)
-- Undo/redo system
-- Instance creation/deletion operations
-- Track assignment UI operations
-- Browser-compatible save (JSON download, or Tauri filesystem)
-- Frame navigation and caching strategy
-- Skeleton editor (if needed)
+- State management layer (Zustand + immer store in `src/stores/appStore.ts`)
+- Canvas 2D rendering engine (`src/canvas/SkeletonRenderer.ts`, `src/canvas/TrailRenderer.ts`)
+- HiDPI canvas support (`devicePixelRatio` scaling)
+- Color-by options (instance, track, node)
+- Undo/redo system (frame-level snapshots)
+- Instance creation/deletion, track assignment
+- Browser SLP save via `saveSlpToBytes()` (`src/lib/saveProject.ts`)
+- Frame navigation, caching, and video playback
+- Skeleton editor (node/edge editing in SkeletonPanel)
+- 309+ passing tests (vitest)
+
+### What Still Needs to Be Built
+
+- Dockable panel layout (dockview-react is a dependency but not yet wired up)
+- Tauri filesystem integration for native save (Tauri is scaffolded but not connected)
+- Python sidecar for ML inference
+- Multi-camera session support in the UI

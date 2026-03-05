@@ -2,9 +2,13 @@
 
 ## Executive Summary
 
-**Recommendation: Tauri v2** is the best choice for SLEAP's desktop shell. It provides native file system access, tiny bundle sizes (~8 MB vs ~244 MB for Electron), low memory footprint, native menus, sidecar support for Python ML inference, and uses the same web frontend code that can also run standalone in a browser.
+**Decision: Tauri v2** has been adopted as the desktop shell. It provides native file system access, tiny bundle sizes (~8 MB vs ~244 MB for Electron), low memory footprint, native menus, sidecar support for Python ML inference, and uses the same web frontend code that also runs standalone in a browser.
 
-For the **web-only fallback path**, the File System Access API is viable in Chromium browsers but has critical limitations (no Firefox/Safari support for full API, no persistent permissions). The recommended architecture is to build the frontend as a standard React SPA that works in both contexts, with an abstraction layer that routes file I/O through Tauri APIs when running in the desktop shell and through browser APIs when running standalone.
+> **Status (March 2026):** Tauri v2 is scaffolded in `src-tauri/` with plugins for filesystem, dialog, shell, and log. The platform abstraction layer at `src/platform/index.ts` auto-detects Tauri via `window.__TAURI__` and routes to real APIs when available. Build scripts: `npm run tauri:dev`, `npm run tauri:build`. System dev packages required for Rust compilation on Ubuntu: `libwebkit2gtk-4.1-dev libgtk-3-dev libjavascriptcoregtk-4.1-dev librsvg2-dev patchelf libglib2.0-dev libayatana-appindicator3-dev`. A GitHub Actions workflow for cross-platform desktop builds exists at `.github/workflows/build.yml`.
+>
+> The browser-only path is fully functional: SLP loading (File System Access API + `<input>` fallback), SLP saving via `saveSlpToBytes()`, and all editing features work in Chromium browsers without Tauri.
+
+For the **web-only fallback path**, the File System Access API is viable in Chromium browsers but has critical limitations (no Firefox/Safari support for full API, no persistent permissions). The architecture uses a platform abstraction layer (`src/platform/index.ts`) that routes file I/O through Tauri APIs when running in the desktop shell and through browser APIs when running standalone.
 
 ---
 
@@ -532,29 +536,17 @@ Tauri supports code signing on all platforms:
 
 A key requirement is that the same frontend code should also run as a standalone web app (no desktop shell). Here is the evaluation of this path.
 
-### Architecture: Abstraction Layer
+### Architecture: Abstraction Layer (Implemented)
+
+The platform abstraction layer is implemented at `src/platform/index.ts`:
 
 ```typescript
-// src/platform/index.ts
-export interface PlatformAPI {
-  readFile(path: string): Promise<Uint8Array>;
-  writeFile(path: string, data: Uint8Array): Promise<void>;
-  showOpenDialog(options: OpenDialogOptions): Promise<string | null>;
-  showSaveDialog(options: SaveDialogOptions): Promise<string | null>;
-}
-
-// src/platform/tauri.ts -- used when window.__TAURI__ is defined
-import { readFile, writeFile } from '@tauri-apps/plugin-fs';
-import { open, save } from '@tauri-apps/plugin-dialog';
-export const tauriPlatform: PlatformAPI = { readFile, writeFile, ... };
-
-// src/platform/web.ts -- used in standalone browser mode
-export const webPlatform: PlatformAPI = { /* File System Access API or fallback */ };
-
-// Runtime detection
-export const platform: PlatformAPI =
-  window.__TAURI__ ? tauriPlatform : webPlatform;
+// Runtime detection via window.__TAURI__
+// When Tauri is detected, uses real Tauri plugin APIs
+// When in browser, uses File System Access API + fallbacks
 ```
+
+The Tauri plugin stubs are applied only in browser mode (Vite config checks `TAURI_ENV_PLATFORM`), allowing the same codebase to build for both targets.
 
 ### File System Access API (Browser)
 
@@ -656,18 +648,22 @@ sleap-label-web/
 
 ---
 
-## 13. Getting Started Checklist
+## 13. Implementation Checklist
 
-1. Install prerequisites: Rust toolchain, Node.js, platform-specific deps
-2. Scaffold project: `npm create vite@latest` + `npx tauri init`
-3. Install plugins: `@tauri-apps/plugin-fs`, `@tauri-apps/plugin-dialog`, `@tauri-apps/plugin-shell`
-4. Set up capabilities/permissions in `src-tauri/capabilities/default.json`
-5. Implement platform abstraction layer
-6. Build Canvas rendering engine (shared)
-7. Implement file I/O commands (Rust) and connect to frontend
-8. Set up native menus with keyboard shortcuts
-9. Test on all three platforms (especially Linux/WebKit2GTK)
-10. Later: Add Python sidecar for ML inference
+| Step | Status |
+|------|--------|
+| Install prerequisites (Rust, Node.js, system deps) | Done |
+| Scaffold project (`src-tauri/`) with tauri-cli 2.10.0 | Done |
+| Install plugins (fs, dialog, shell, log) | Done |
+| Set up capabilities/permissions | Done |
+| Implement platform abstraction layer (`src/platform/index.ts`) | Done |
+| Build Canvas rendering engine (shared Canvas 2D) | Done |
+| Implement browser file I/O (File System Access API + fallback) | Done |
+| Implement Tauri-native file I/O commands | Not started |
+| Set up native menus with keyboard shortcuts | Web menus done; native Tauri menus not started |
+| CI workflow for cross-platform builds | Done (`.github/workflows/build.yml`) |
+| Test on all three platforms (especially Linux/WebKit2GTK) | Not started |
+| Add Python sidecar for ML inference | Not started |
 
 ---
 
