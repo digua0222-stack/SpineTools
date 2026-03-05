@@ -960,13 +960,15 @@ export function VideoPlayer() {
         return;
       }
 
-      // No prediction hit - reset zoom/pan
-      viewRef.current = { zoom: 1, panX: 0, panY: 0 };
-      setZoom(1);
-      setPanX(0);
-      setPanY(0);
+      // No prediction hit - reset zoom/pan only in pan mode (Space held)
+      if (isSpaceHeld) {
+        viewRef.current = { zoom: 1, panX: 0, panY: 0 };
+        setZoom(1);
+        setPanX(0);
+        setPanY(0);
+      }
     },
-    [canvasToScene, markerSize, zoom]
+    [canvasToScene, markerSize, zoom, isSpaceHeld]
   );
 
   // Right-click context menu
