@@ -104,6 +104,8 @@ export function VideoPlayer() {
 
   // Track frame canvas dimensions so overlay can sync after async frame load
   const [frameDims, setFrameDims] = useState<[number, number]>([0, 0]);
+  // Counter to trigger frame canvas re-render when a new bitmap is loaded (even same dims)
+  const [bitmapVersion, setBitmapVersion] = useState(0);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -256,6 +258,7 @@ export function VideoPlayer() {
         frameBitmapRef.current?.close();
         frameBitmapRef.current = bmp;
         setFrameDims((prev) => (prev[0] === bmp.width && prev[1] === bmp.height ? prev : [bmp.width, bmp.height]));
+        setBitmapVersion((v) => v + 1);
         if (debugFlags.logSeeking) console.debug(`[seek] frame ${frameIdx} rendered (${bmp.width}x${bmp.height}) total ${(performance.now() - t0).toFixed(1)}ms`);
       } catch (err) {
         console.error("Failed to render frame:", err);
@@ -297,7 +300,7 @@ export function VideoPlayer() {
       // Bitmap was closed (detached) by a racing frame load — skip, next frame will redraw
     }
     ctx.restore();
-  }, [frameDims, containerSize, zoom, panX, panY, baseScale, offsetX, offsetY]);
+  }, [frameDims, containerSize, zoom, panX, panY, baseScale, offsetX, offsetY, bitmapVersion]);
 
   // Find the current labeled frame and update store
   useEffect(() => {
