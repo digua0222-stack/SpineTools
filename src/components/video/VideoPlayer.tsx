@@ -385,9 +385,18 @@ export function VideoPlayer() {
 
     renderInstances(ctx, instances, renderOpts);
 
+    // Compute effective selection (includes live marquee preview)
+    let effectiveSelection = selectedNodes;
+    if (marqueeStart && marqueeEnd) {
+      const marqueeHits = nodesInRect(instances, marqueeStart.x, marqueeStart.y, marqueeEnd.x, marqueeEnd.y);
+      if (marqueeHits.size > 0 || selectedNodes.size > 0) {
+        effectiveSelection = new Set([...selectedNodes, ...marqueeHits]);
+      }
+    }
+
     // Render multi-node selection highlights
-    if (selectedNodes.size > 0) {
-      renderSelectedNodeHighlights(ctx, instances, selectedNodes, renderOpts);
+    if (effectiveSelection.size > 0) {
+      renderSelectedNodeHighlights(ctx, instances, effectiveSelection, renderOpts);
     }
 
     // Render hover instance bbox
@@ -701,6 +710,14 @@ export function VideoPlayer() {
           }
         }
 
+        // Update hover tooltip to track dragged node position
+        setHoveredNode({
+          instanceIdx: dragNodeInfo.instanceIdx,
+          nodeIdx: dragNodeInfo.nodeIdx,
+          clientX: e.clientX,
+          clientY: e.clientY,
+        });
+
         lastDragPos.current = { x, y };
         useAppStore.getState().markChanged();
         useAppStore.getState().bumpOverlayVersion();
@@ -959,31 +976,38 @@ export function VideoPlayer() {
         />
 
         {/* Node hover tooltip */}
-        {hoveredNode && (() => {
-          const instances = renderedInstancesRef.current;
-          const inst = instances[hoveredNode.instanceIdx];
-          const node = inst?.nodes[hoveredNode.nodeIdx];
-          if (!node || !inst) return null;
+        {hoveredNode && labeledFrame && (() => {
+          const lfInst = labeledFrame.instances[hoveredNode.instanceIdx];
+          if (!lfInst) return null;
+          const point = lfInst.points[hoveredNode.nodeIdx];
+          if (!point) return null;
+          const nodeName = lfInst.skeleton.nodes[hoveredNode.nodeIdx]?.name ?? `node_${hoveredNode.nodeIdx}`;
           const containerRect = containerRef.current?.getBoundingClientRect();
           if (!containerRect) return null;
           const tipX = hoveredNode.clientX - containerRect.left + 16;
           const tipY = hoveredNode.clientY - containerRect.top - 8;
+          const nodeScore = "score" in point ? (point as unknown as { score: number }).score : undefined;
+          const instScore = "score" in lfInst ? (lfInst as unknown as { score: number }).score : undefined;
+          const isDragActive = interactionMode === "dragging" && selectedNodes.size > 1;
           return (
             <div
               className="absolute pointer-events-none bg-black/80 text-white text-xs rounded shadow-lg px-2 py-1.5 z-20 leading-relaxed"
               style={{ left: tipX, top: tipY }}
             >
-              <div className="font-medium">{node.name}</div>
+              <div className="font-medium">{nodeName}</div>
               <div className="text-white/70">
-                x: {node.x.toFixed(1)}, y: {node.y.toFixed(1)}
+                x: {point.xy[0].toFixed(1)}, y: {point.xy[1].toFixed(1)}
               </div>
-              {node.score !== undefined && (
-                <div className="text-white/70">conf: {node.score.toFixed(3)}</div>
+              {nodeScore !== undefined && (
+                <div className="text-white/70">conf: {nodeScore.toFixed(3)}</div>
               )}
-              {inst.trackName && (
+              {isDragActive && (
+                <div className="text-blue-300 mt-0.5">moving {selectedNodes.size} nodes</div>
+              )}
+              {lfInst.track?.name && (
                 <div className="text-white/50 mt-0.5">
-                  {inst.trackName}
-                  {inst.score !== undefined && ` (${inst.score.toFixed(2)})`}
+                  {lfInst.track.name}
+                  {instScore !== undefined && ` (${instScore.toFixed(2)})`}
                 </div>
               )}
             </div>
@@ -1014,6 +1038,16 @@ export function VideoPlayer() {
               ]?.name ?? "node"
             }
             {" "}({selectedInstance.points.filter((p) => !isNaN(p.xy[0])).length}/{selectedInstance.points.length})
+          </Badge>
+        )}
+
+        {/* Selection count indicator */}
+        {selectedNodes.size > 0 && !isPlacingNodes && (
+          <Badge
+            variant="secondary"
+            className="absolute bottom-2 right-2 pointer-events-none rounded-md bg-black/60 text-white/80 border-none"
+          >
+            {selectedNodes.size} node{selectedNodes.size !== 1 ? "s" : ""} selected
           </Badge>
         )}
 
