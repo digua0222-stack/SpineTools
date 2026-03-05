@@ -240,11 +240,7 @@ export function VideoPlayer() {
       return;
     }
 
-    // Use reference equality (===) to avoid basename fallback in labels.find()
-    // which incorrectly matches videos sharing a container filename in .pkg.slp.
-    const frames = labels.labeledFrames.filter(
-      (lf) => lf.video === video && lf.frameIdx === frameIdx
-    );
+    const frames = labels.find({ video, frameIdx });
     const lf = frames.length > 0 ? frames[0] : null;
     useAppStore.getState().setLabeledFrame(lf);
   }, [labels, video, frameIdx]);

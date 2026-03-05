@@ -23,7 +23,7 @@
 
 **Status**: ✅ Fixed in PR #44. `Labels.find()` now uses strict matching by default. `matchesPath` splits on both `/` and `\\`.
 
-**Note**: sleap-label-web still uses manual `labels.labeledFrames.filter()` with reference equality in most places. This is equivalent and arguably more explicit — no need to change.
+**Workaround removed**: All `labels.labeledFrames.filter()` video+frameIdx lookups have been replaced with `labels.find({ video, frameIdx })`.
 
 ---
 

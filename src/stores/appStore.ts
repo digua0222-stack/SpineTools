@@ -230,9 +230,7 @@ export const useAppStore = create<AppState>()(
           state.instance = null;
           // Compute labeledFrame synchronously to avoid race condition during fast scrubbing
           if (state.labels && state.video) {
-            const frames = state.labels.labeledFrames.filter(
-              (lf) => lf.video === state.video && lf.frameIdx === state.frameIdx
-            );
+            const frames = state.labels.find({ video: state.video as Video, frameIdx: state.frameIdx });
             state.labeledFrame = frames.length > 0 ? frames[0] : null;
           } else {
             state.labeledFrame = null;

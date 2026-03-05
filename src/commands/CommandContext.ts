@@ -95,11 +95,7 @@ export class CommandContext {
     let selectedIdx = -1;
 
     if (labels && video) {
-      // Use reference equality (===) to avoid basename fallback in labels.find()
-      // which incorrectly matches videos sharing a container filename in .pkg.slp.
-      const frames = labels.labeledFrames.filter(
-        (lf) => lf.video === video && lf.frameIdx === frameIdx
-      );
+      const frames = labels.find({ video, frameIdx });
       if (frames.length > 0) {
         const lf = frames[0];
         frame = {
@@ -139,9 +135,7 @@ export class CommandContext {
         });
       }
       if (video && instance) {
-        const frames = labels.labeledFrames.filter(
-          (lf) => lf.video === video && lf.frameIdx === frameIdx
-        );
+        const frames = labels.find({ video, frameIdx });
         if (frames.length > 0) {
           selectedIdx = frames[0].instances.indexOf(instance);
         }
@@ -198,9 +192,7 @@ export class CommandContext {
 
       // Restore view to the active frame
       if (snapshot.activeVideo) {
-        const currentFrames = labels.labeledFrames.filter(
-          (lf) => lf.video === snapshot.activeVideo && lf.frameIdx === snapshot.activeFrameIdx
-        );
+        const currentFrames = labels.find({ video: snapshot.activeVideo!, frameIdx: snapshot.activeFrameIdx });
         const currentLf = currentFrames.length > 0 ? currentFrames[0] : null;
         this.state.setLabeledFrame(currentLf);
 
@@ -218,9 +210,7 @@ export class CommandContext {
       const video = snapshot.frame.videoRef;
 
       // Find the labeled frame
-      const frames = labels.labeledFrames.filter(
-        (lf) => lf.video === video && lf.frameIdx === snapshot.frame!.frameIdx
-      );
+      const frames = labels.find({ video, frameIdx: snapshot.frame!.frameIdx });
 
       if (frames.length > 0) {
         // Restore instances on existing frame
@@ -252,9 +242,7 @@ export class CommandContext {
       // Null frame snapshot = no LabeledFrame should exist
       const video = snapshot.activeVideo;
       if (video) {
-        const frames = labels.labeledFrames.filter(
-          (lf) => lf.video === video && lf.frameIdx === snapshot.activeFrameIdx
-        );
+        const frames = labels.find({ video, frameIdx: snapshot.activeFrameIdx });
         if (frames.length > 0) {
           const idx = labels.labeledFrames.indexOf(frames[0]);
           if (idx !== -1) labels.labeledFrames.splice(idx, 1);

@@ -18,11 +18,7 @@ export const GoNextLabeledFrame: Command = {
     if (!labels || !video) return;
 
     // Get all labeled frame indices for the current video, sorted.
-    // Use reference equality (===) instead of labels.find() which falls back
-    // to basename matching and incorrectly matches embedded videos that share
-    // the container filename (e.g. all videos in a .pkg.slp).
-    const frameIndices = labels.labeledFrames
-      .filter((lf) => lf.video === video)
+    const frameIndices = labels.find({ video })
       .map((lf) => lf.frameIdx)
       .sort((a, b) => a - b);
 
@@ -47,8 +43,7 @@ export const GoPrevLabeledFrame: Command = {
     const { labels, video, frameIdx } = ctx.state;
     if (!labels || !video) return;
 
-    const frameIndices = labels.labeledFrames
-      .filter((lf) => lf.video === video)
+    const frameIndices = labels.find({ video })
       .map((lf) => lf.frameIdx)
       .sort((a, b) => a - b);
 
@@ -145,8 +140,7 @@ export const GoNextUserFrame: Command = {
     const { labels, video, frameIdx } = ctx.state;
     if (!labels || !video) return;
 
-    const userFrames = labels.labeledFrames
-      .filter((lf) => lf.video === video)
+    const userFrames = labels.find({ video })
       .filter((lf) => lf.instances.some((i) => !("score" in i)))
       .map((lf) => lf.frameIdx)
       .sort((a, b) => a - b);

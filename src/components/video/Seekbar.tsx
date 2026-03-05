@@ -72,7 +72,7 @@ export function Seekbar() {
   // Use video shape if available, otherwise infer from labeled frames
   const shapeFrames = video?.shape?.[0] ?? null;
   const inferredFrames = labels && video
-    ? Math.max(0, ...labels.labeledFrames.filter((lf) => lf.video === video).map((lf) => lf.frameIdx)) + 1
+    ? Math.max(0, ...labels.find({ video }).map((lf) => lf.frameIdx)) + 1
     : 0;
   const totalFrames = shapeFrames ?? (inferredFrames > 0 ? inferredFrames : 0);
 

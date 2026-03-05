@@ -111,14 +111,8 @@ export function InstancesPanel() {
   const colorPredicted = useAppStore((s) => s.colorPredicted);
 
   // Find the labeled frame for current video + frame
-  // Use reference equality (===) to avoid basename fallback in labels.find()
-  // which incorrectly matches videos sharing a container filename in .pkg.slp.
   const labeledFrames =
-    labels && video
-      ? labels.labeledFrames.filter(
-          (lf) => lf.video === video && lf.frameIdx === frameIdx
-        )
-      : [];
+    labels && video ? labels.find({ video, frameIdx }) : [];
   const labeledFrame = labeledFrames.length > 0 ? labeledFrames[0] : null;
   const instances = labeledFrame?.instances ?? [];
 
