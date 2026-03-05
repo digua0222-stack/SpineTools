@@ -18,21 +18,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Checkout sleap-io.js
-        uses: actions/checkout@v4
-        with:
-          repository: talmo/sleap-io.js
-          path: ../sleap-io.js
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - name: Build sleap-io.js
-        working-directory: ../sleap-io.js
-        run: npm ci && npm run build
+      - name: Clone and build sleap-io.js
+        run: |
+          git clone --depth 1 https://github.com/talmo/sleap-io.js.git ../sleap-io.js
+          cd ../sleap-io.js && npm ci && npm run build
 
       - name: Install dependencies
         run: npm ci
