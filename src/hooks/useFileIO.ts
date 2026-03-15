@@ -27,7 +27,7 @@ export function useFileIO() {
       if (typeof result === "string") {
         // Tauri path
         await loadProjectFromPath(result, platform.readFile, platform.exists);
-      } else {
+      } else if (result instanceof File) {
         // Browser File object
         await loadProjectFromFile(result);
       }

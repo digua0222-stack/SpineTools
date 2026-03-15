@@ -1,7 +1,6 @@
 /** Quick platform detection utilities. */
 
-export const isTauri =
-  typeof window !== "undefined" && "__TAURI__" in window;
+export { isTauri } from "../platform/index";
 
 export const isMac =
   typeof navigator !== "undefined" &&

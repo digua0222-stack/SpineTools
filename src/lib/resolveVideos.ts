@@ -9,6 +9,7 @@
 import { Mp4BoxVideoBackend } from "@talmolab/sleap-io.js";
 import { toast } from "@/lib/notify";
 import type { Labels, Video } from "../types";
+import { getPlatform } from "../platform/index";
 
 /** Extract just the basename from a path or filename. */
 export function getBasename(filename: string | string[]): string {
@@ -203,44 +204,43 @@ export async function resolveExternalVideos(
  * Returns true if a video was successfully loaded.
  */
 export async function resolveVideoFile(video: Video): Promise<boolean> {
-  let pickedFiles: File[];
+  const platform = await getPlatform();
+  console.log(`[video] Picking video file via ${platform.isTauri ? "Tauri" : "browser"} dialog`);
 
-  try {
-    if ("showOpenFilePicker" in window) {
-      const handles = await (window as any).showOpenFilePicker({
-        multiple: false,
-        types: [
-          {
-            description: "Video files",
-            accept: { "video/*": [".mp4", ".avi", ".mov", ".mkv", ".webm"] },
-          },
-        ],
-      });
-      pickedFiles = await Promise.all(
-        handles.map((h: any) => h.getFile() as Promise<File>)
-      );
-    } else {
-      pickedFiles = await new Promise<File[]>((resolve) => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = "video/*";
-        input.onchange = () => {
-          const files = input.files ? Array.from(input.files) : [];
-          resolve(files);
-        };
-        input.addEventListener("cancel", () => resolve([]));
-        input.click();
-      });
+  const result = await platform.showOpenDialog({
+    filters: [
+      { name: "Video files", extensions: ["mp4", "avi", "mov", "mkv", "webm"] },
+    ],
+  });
+
+  if (!result) return false;
+
+  if (typeof result === "string") {
+    // Tauri: got a file path — read bytes and create a File object
+    console.log(`[video] Loading video from path: ${result}`);
+    try {
+      const bytes = await platform.readFile(result);
+      const name = getBasename(result);
+      console.log(`[video] Read ${bytes.byteLength} bytes for "${name}"`);
+      const file = new File([bytes], name, { type: "video/mp4" });
+      await assignVideoBackend(video, file);
+      // Update the video's filename to the resolved absolute path
+      video.filename = result;
+      toast.success(`Loaded video: ${name}`);
+      return true;
+    } catch (err) {
+      console.error(`[video] Failed to read video file "${result}":`, err);
+      return false;
     }
-  } catch {
-    return false;
+  } else if (result instanceof File) {
+    // Browser: got a File object
+    console.log(`[video] Loading video from File object: ${result.name} (${result.size} bytes)`);
+    await assignVideoBackend(video, result);
+    toast.success(`Loaded video: ${result.name}`);
+    return true;
   }
 
-  if (pickedFiles.length === 0) return false;
-
-  await assignVideoBackend(video, pickedFiles[0]);
-  toast.success(`Loaded video: ${pickedFiles[0].name}`);
-  return true;
+  return false;
 }
 
 /**
@@ -254,42 +254,63 @@ export async function resolveAllVideoFiles(
   const unresolvedVideos = videos.filter(isVideoMissing);
   if (unresolvedVideos.length === 0) return 0;
 
-  let pickedFiles: File[];
+  const platform = await getPlatform();
+  console.log(`[video] Batch-resolving ${unresolvedVideos.length} video(s) via ${platform.isTauri ? "Tauri" : "browser"} dialog`);
+  const videoFilters = [
+    { name: "Video files", extensions: ["mp4", "avi", "mov", "mkv", "webm"] },
+  ];
 
-  try {
-    if ("showOpenFilePicker" in window) {
-      const handles = await (window as any).showOpenFilePicker({
-        multiple: true,
-        types: [
-          {
-            description: "Video files",
-            accept: { "video/*": [".mp4", ".avi", ".mov", ".mkv", ".webm"] },
-          },
-        ],
-      });
-      pickedFiles = await Promise.all(
-        handles.map((h: any) => h.getFile() as Promise<File>)
-      );
-    } else {
-      pickedFiles = await new Promise<File[]>((resolve) => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.multiple = true;
-        input.accept = "video/*";
-        input.onchange = () => {
-          const files = input.files ? Array.from(input.files) : [];
-          resolve(files);
-        };
-        input.addEventListener("cancel", () => resolve([]));
-        input.click();
-      });
-    }
-  } catch {
-    toast.warning("Video file selection cancelled");
+  const result = await platform.showOpenDialog({
+    filters: videoFilters,
+    multiple: true,
+  });
+
+  if (!result) {
+    toast.warning("No video files selected");
     return 0;
   }
 
-  if (pickedFiles.length === 0) {
+  // Normalize to arrays of {name, path?, getFile} for unified matching
+  interface PickedVideo {
+    name: string;
+    path?: string;
+    getFile: () => Promise<File>;
+  }
+  let picked: PickedVideo[];
+
+  if (Array.isArray(result) && result.length > 0 && typeof result[0] === "string") {
+    // Tauri: got string[] of file paths
+    picked = (result as string[]).map((path) => ({
+      name: getBasename(path),
+      path,
+      getFile: async () => {
+        const bytes = await platform.readFile(path);
+        return new File([bytes], getBasename(path), { type: "video/mp4" });
+      },
+    }));
+  } else if (Array.isArray(result)) {
+    // Browser: got File[]
+    picked = (result as File[]).map((f) => ({
+      name: f.name,
+      getFile: async () => f,
+    }));
+  } else if (typeof result === "string") {
+    // Tauri: single path (shouldn't happen with multiple:true but handle it)
+    picked = [{
+      name: getBasename(result),
+      path: result,
+      getFile: async () => {
+        const bytes = await platform.readFile(result);
+        return new File([bytes], getBasename(result), { type: "video/mp4" });
+      },
+    }];
+  } else if (result instanceof File) {
+    picked = [{ name: result.name, getFile: async () => result }];
+  } else {
+    return 0;
+  }
+
+  if (picked.length === 0) {
     toast.warning("No video files selected");
     return 0;
   }
@@ -298,12 +319,15 @@ export async function resolveAllVideoFiles(
 
   for (const video of unresolvedVideos) {
     const expectedName = getBasename(video.filename).toLowerCase();
-    const matchedFile = pickedFiles.find(
-      (f) => f.name.toLowerCase() === expectedName
+    const match = picked.find(
+      (p) => p.name.toLowerCase() === expectedName
     );
 
-    if (matchedFile) {
-      await assignVideoBackend(video, matchedFile);
+    if (match) {
+      const file = await match.getFile();
+      await assignVideoBackend(video, file);
+      // Update filename to resolved path for Tauri
+      if (match.path) video.filename = match.path;
       matchCount++;
     }
   }
@@ -312,9 +336,10 @@ export async function resolveAllVideoFiles(
   if (
     matchCount === 0 &&
     unresolvedVideos.length === 1 &&
-    pickedFiles.length === 1
+    picked.length === 1
   ) {
-    await assignVideoBackend(unresolvedVideos[0], pickedFiles[0]);
+    const file = await picked[0].getFile();
+    await assignVideoBackend(unresolvedVideos[0], file);
     matchCount = 1;
   }
 
@@ -341,12 +366,14 @@ export async function resolveAllVideoFiles(
  */
 export async function assignVideoBackend(video: Video, file: File): Promise<void> {
   try {
+    console.log(`[video] Creating Mp4BoxVideoBackend for "${file.name}" (${file.size} bytes)`);
     const backend = new Mp4BoxVideoBackend(file);
     video.backend = backend;
     // Trigger initialization by requesting frame 0 (stays in cache for later use)
     await backend.getFrame(0);
     if (backend.shape) video.shape = backend.shape;
     if (backend.fps) video.fps = backend.fps;
+    console.log(`[video] Backend ready: ${video.shape?.[1]}x${video.shape?.[2]} @ ${video.fps}fps, ${video.shape?.[0]} frames`);
   } catch (err) {
     console.error(`Failed to load video backend for ${file.name}:`, err);
     toast.error(`Failed to load video: ${file.name}`, {

@@ -15,6 +15,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Hand, Minus, MousePointer2, Plus } from "lucide-react";
+import { isTauri } from "../../platform/index";
 
 export function StatusBar() {
   const filename = useAppStore((s) => s.filename);
@@ -27,6 +28,8 @@ export function StatusBar() {
   const uiScale = useAppStore((s) => s.uiScale);
   const frameRange = useAppStore((s) => s.frameRange);
   const defaultToPan = useAppStore((s) => s.defaultToPan);
+
+  const platformLabel = isTauri ? "Tauri FS" : "Browser";
 
   const totalFrames = video?.shape?.[0] ?? null;
   const totalLabeledFrames = labels?.labeledFrames.length ?? 0;
@@ -107,9 +110,23 @@ export function StatusBar() {
         )}
       </div>
 
-      {/* Right: interaction mode + UI scale controls */}
+      {/* Right: platform indicator, interaction mode + UI scale controls */}
       <TooltipProvider delayDuration={300}>
         <div className="flex items-center gap-0.5 shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-4 rounded-sm font-normal cursor-default"
+              >
+                {platformLabel}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p>File I/O backend: {platformLabel === "Tauri FS" ? "Native filesystem (Tauri plugins)" : "Browser APIs (File System Access / download)"}</p>
+            </TooltipContent>
+          </Tooltip>
+          <Separator orientation="vertical" className="h-3.5 mx-0.5" />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
