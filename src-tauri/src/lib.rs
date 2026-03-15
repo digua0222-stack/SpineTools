@@ -1,3 +1,5 @@
+mod environment;
+
 use std::path::{Component, PathBuf};
 use std::sync::Mutex;
 
@@ -56,7 +58,19 @@ pub fn run() {
 
   tauri::Builder::default()
     .manage(InitialFile(Mutex::new(file_arg)))
-    .invoke_handler(tauri::generate_handler![get_initial_file])
+    .invoke_handler(tauri::generate_handler![
+        get_initial_file,
+        environment::detect_uv,
+        environment::list_uv_tools,
+        environment::list_python_interpreters,
+        environment::list_downloadable_pythons,
+        environment::check_python,
+        environment::install_python,
+        environment::install_uv_tool,
+        environment::upgrade_uv_tool,
+        environment::update_uv,
+        environment::install_uv,
+    ])
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_shell::init())
