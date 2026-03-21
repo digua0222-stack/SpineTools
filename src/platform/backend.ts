@@ -6,6 +6,8 @@
  */
 
 import { isTauri } from "./index";
+import { saveSlpToBytes } from "@talmolab/sleap-io.js";
+import type { InferenceConfig } from "@/stores/inferenceStore";
 
 // === Types matching Rust structs ===
 
@@ -36,7 +38,7 @@ export interface PythonInfo {
   sleapVersion: string | null;
 }
 
-export type InstallEvent =
+export type ProcessEvent =
   | { event: "stdout"; data: { line: string } }
   | { event: "stderr"; data: { line: string } }
   | { event: "finished"; data: { success: boolean; code: number | null } };
@@ -94,24 +96,29 @@ export async function checkPython(pythonPath: string): Promise<PythonInfo> {
 
 // === Install commands (streaming via Channel) ===
 
-async function streamingInvoke(
+async function streamingInvoke<T = void>(
   cmd: string,
   args: Record<string, unknown>,
-  onEvent: (event: InstallEvent) => void
-): Promise<void> {
+  onEvent: (event: ProcessEvent) => void
+): Promise<T> {
   const { invoke, Channel } = await import("@tauri-apps/api/core");
-  const channel = new Channel<InstallEvent>();
+  const channel = new Channel<ProcessEvent>();
   channel.onmessage = onEvent;
-  await invoke(cmd, { ...args, onEvent: channel });
+  return invoke<T>(cmd, { ...args, onEvent: channel });
 }
 
 /** Install a Python version via `uv python install`. */
 export async function installPython(
   version: string,
-  onEvent: (event: InstallEvent) => void
+  onEvent: (event: ProcessEvent) => void
 ): Promise<void> {
   if (!isTauri) return;
   await streamingInvoke("install_python", { version }, onEvent);
+}
+
+/** Detect GPU type: "cuda", "mps", or "cpu". */
+export async function detectGpu(): Promise<string> {
+  return invokeCmd<string>("detect_gpu", {});
 }
 
 /** Install a uv tool (e.g., sleap-nn). */
@@ -119,12 +126,13 @@ export async function installUvTool(
   pkg: string,
   pythonPath: string | null,
   force: boolean,
-  onEvent: (event: InstallEvent) => void
+  onEvent: (event: ProcessEvent) => void,
+  extraArgs?: string[]
 ): Promise<void> {
   if (!isTauri) return;
   await streamingInvoke(
     "install_uv_tool",
-    { package: pkg, pythonPath, force },
+    { package: pkg, pythonPath, force, extraArgs: extraArgs ?? null },
     onEvent
   );
 }
@@ -132,7 +140,7 @@ export async function installUvTool(
 /** Upgrade a uv tool to its latest version. */
 export async function upgradeUvTool(
   pkg: string,
-  onEvent: (event: InstallEvent) => void
+  onEvent: (event: ProcessEvent) => void
 ): Promise<void> {
   if (!isTauri) return;
   await streamingInvoke("upgrade_uv_tool", { package: pkg }, onEvent);
@@ -140,7 +148,7 @@ export async function upgradeUvTool(
 
 /** Update uv itself via `uv self update`. */
 export async function updateUv(
-  onEvent: (event: InstallEvent) => void
+  onEvent: (event: ProcessEvent) => void
 ): Promise<void> {
   if (!isTauri) return;
   await streamingInvoke("update_uv", {}, onEvent);
@@ -148,8 +156,146 @@ export async function updateUv(
 
 /** Install uv via the official install script. */
 export async function installUv(
-  onEvent: (event: InstallEvent) => void
+  onEvent: (event: ProcessEvent) => void
 ): Promise<void> {
   if (!isTauri) return;
   await streamingInvoke("install_uv", {}, onEvent);
+}
+
+/**
+ * Spawn a long-running command and stream stdout/stderr via Channel.
+ * Returns true if the process exited successfully.
+ */
+export async function runPythonCommand(
+  program: string,
+  args: string[],
+  onEvent: (event: ProcessEvent) => void
+): Promise<boolean> {
+  if (!isTauri) {
+    console.warn("runPythonCommand is only available in Tauri");
+    return false;
+  }
+  return streamingInvoke<boolean>("run_python_command", { program, args }, onEvent);
+}
+
+/**
+ * Cancel the currently running subprocess.
+ */
+export async function cancelCommand(): Promise<void> {
+  if (!isTauri) return;
+  return invokeCmd<void>("cancel_command");
+}
+
+/**
+ * Run sleap-nn inference. Orchestrates the full pipeline:
+ * 1. Serialize current Labels to a temp .slp file
+ * 2. Build CLI args with data path, output path, and config
+ * 3. Spawn process with streaming
+ */
+export async function runInference(
+  config: InferenceConfig,
+  projectPath: string | null,
+  onEvent: (event: ProcessEvent) => void
+): Promise<{ success: boolean; outputPath: string | null; command: string }> {
+  if (!isTauri) {
+    console.warn("Inference is only available in Tauri desktop mode");
+    return { success: false, outputPath: null, command: "" };
+  }
+
+  const { tempDir } = await import("@tauri-apps/api/path");
+
+  const tmp = await tempDir();
+  const ts = Date.now();
+  const outputPath = `${tmp}sleap_inference_output_${ts}.slp`;
+
+  // Use original project file if available, otherwise serialize
+  let dataPath: string;
+  if (projectPath) {
+    dataPath = projectPath;
+    console.log("[inference] Using project file:", dataPath);
+  } else {
+    const { writeFile } = await import("@tauri-apps/plugin-fs");
+    // Lazy import to avoid pulling in saveSlpToBytes when not needed
+    const { useAppStore } = await import("@/stores/appStore");
+    const labels = useAppStore.getState().labels;
+    if (!labels) throw new Error("No project loaded");
+    dataPath = `${tmp}sleap_inference_input_${ts}.slp`;
+    console.log("[inference] Serializing project to temp file:", dataPath);
+    const bytes = await saveSlpToBytes(labels);
+    await writeFile(dataPath, bytes);
+    console.log("[inference] Wrote %d bytes to %s", bytes.byteLength, dataPath);
+  }
+
+  // Build CLI args for sleap-nn track
+  const program = "sleap-nn";
+  const args = ["track", "--gui"];
+
+  // Core I/O
+  args.push("--data_path", dataPath);
+  for (const mp of config.modelPaths) {
+    args.push("--model_paths", mp);
+  }
+  args.push("--output_path", outputPath);
+
+  // Data selection
+  if (config.videoIndex !== "all") {
+    args.push("--video_index", String(config.videoIndex));
+  }
+  if (typeof config.frameRange === "object") {
+    args.push(
+      "--frame_range",
+      `${config.frameRange.start},${config.frameRange.end}`
+    );
+  } else if (config.frameRange === "labeled") {
+    args.push("--only_labeled_frames");
+  } else if (config.frameRange === "suggested") {
+    args.push("--only_suggested_frames");
+  }
+  if (config.excludeUserLabeled) {
+    args.push("--exclude_user_labeled");
+  }
+
+  // Inference settings
+  args.push("--batch_size", String(config.batchSize));
+  args.push("--device", config.device);
+  if (config.maxInstances != null) {
+    args.push("--max_instances", String(config.maxInstances));
+  }
+  args.push("--peak_threshold", String(config.peakThreshold));
+  if (config.anchorPart) {
+    args.push("--anchor_part", config.anchorPart);
+  }
+
+  // Bottom-up advanced
+  if (config.integralRefinement) {
+    args.push("--integral_refinement", "integral");
+    args.push("--integral_patch_size", String(config.integralPatchSize));
+  }
+  if (config.pipeline === "bottom-up" || config.pipeline === "bottom-up-id") {
+    args.push("--n_points", String(config.nPoints));
+    args.push("--max_edge_length_ratio", String(config.maxEdgeLengthRatio));
+    args.push("--dist_penalty_weight", String(config.distPenaltyWeight));
+    args.push("--min_line_scores", String(config.minLineScores));
+  }
+
+  // Tracking
+  if (config.tracking) {
+    args.push("--tracking");
+    if (config.maxTracks != null) {
+      args.push("--max_tracks", String(config.maxTracks));
+    }
+  }
+
+  // Post-processing
+  if (config.filterOverlapping) {
+    args.push("--filter_overlapping");
+    args.push("--filter_overlapping_method", config.filterMethod);
+    args.push("--filter_overlapping_threshold", String(config.filterThreshold));
+  }
+
+  const command = `${program} ${args.join(" ")}`;
+  console.log("[inference] Running:", command);
+  const success = await runPythonCommand(program, args, onEvent);
+  console.log("[inference] Process finished: success=%s, output=%s", success, outputPath);
+  return { success, outputPath, command };
 }

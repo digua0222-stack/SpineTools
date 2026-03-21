@@ -6,6 +6,7 @@
 //! All process spawning uses `tauri_plugin_shell::ShellExt` for consistent
 //! cross-platform behavior and streaming support.
 
+use crate::RunningProcess;
 use serde::Serialize;
 use tauri::{ipc::Channel, AppHandle, Runtime};
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
@@ -57,10 +58,10 @@ pub struct PythonInfo {
     pub sleap_version: Option<String>,
 }
 
-/// Events streamed during install operations.
+/// Events streamed during process operations.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase", tag = "event", content = "data")]
-pub enum InstallEvent {
+pub enum ProcessEvent {
     Stdout { line: String },
     Stderr { line: String },
     Finished { success: bool, code: Option<i32> },
@@ -100,7 +101,7 @@ async fn stream_command<R: Runtime>(
     app: &AppHandle<R>,
     program: &str,
     args: &[&str],
-    on_event: &Channel<InstallEvent>,
+    on_event: &Channel<ProcessEvent>,
 ) -> Result<bool, String> {
     let (mut rx, _child) = app
         .shell()
@@ -115,15 +116,15 @@ async fn stream_command<R: Runtime>(
         match event {
             CommandEvent::Stdout(bytes) => {
                 let line = String::from_utf8_lossy(&bytes).to_string();
-                let _ = on_event.send(InstallEvent::Stdout { line });
+                let _ = on_event.send(ProcessEvent::Stdout { line });
             }
             CommandEvent::Stderr(bytes) => {
                 let line = String::from_utf8_lossy(&bytes).to_string();
-                let _ = on_event.send(InstallEvent::Stderr { line });
+                let _ = on_event.send(ProcessEvent::Stderr { line });
             }
             CommandEvent::Terminated(payload) => {
                 success = payload.code == Some(0);
-                let _ = on_event.send(InstallEvent::Finished {
+                let _ = on_event.send(ProcessEvent::Finished {
                     success,
                     code: payload.code,
                 });
@@ -175,6 +176,29 @@ pub async fn detect_uv<R: Runtime>(app: AppHandle<R>) -> UvInfo {
         path,
         python_dir,
     }
+}
+
+/// Detect GPU availability for torch backend selection.
+/// Returns "cuda" if nvidia-smi is found, "mps" on Apple Silicon macOS, else "cpu".
+#[tauri::command]
+pub async fn detect_gpu<R: Runtime>(app: AppHandle<R>) -> String {
+    // Check for NVIDIA GPU via nvidia-smi
+    if let Some(output) = shell_output(&app, "nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"]).await {
+        if !output.trim().is_empty() {
+            return "cuda".to_string();
+        }
+    }
+
+    // Check for Apple Silicon (MPS)
+    #[cfg(target_os = "macos")]
+    {
+        // Apple Silicon Macs always support MPS via Metal
+        if std::env::consts::ARCH == "aarch64" {
+            return "mps".to_string();
+        }
+    }
+
+    "cpu".to_string()
 }
 
 /// List tools installed via `uv tool`.
@@ -266,7 +290,7 @@ pub async fn check_python<R: Runtime>(
 pub async fn install_python<R: Runtime>(
     app: AppHandle<R>,
     version: String,
-    on_event: Channel<InstallEvent>,
+    on_event: Channel<ProcessEvent>,
 ) -> Result<(), String> {
     stream_command(&app, "uv", &["python", "install", &version], &on_event).await?;
     Ok(())
@@ -275,13 +299,15 @@ pub async fn install_python<R: Runtime>(
 /// Install a uv tool (e.g., sleap-nn).
 /// If `python_path` is provided, uses `--python <path>`.
 /// If `force` is true, uses `--force` for reinstall.
+/// `extra_args` allows passing additional flags like `--torch-backend=auto`.
 #[tauri::command]
 pub async fn install_uv_tool<R: Runtime>(
     app: AppHandle<R>,
     package: String,
     python_path: Option<String>,
     force: Option<bool>,
-    on_event: Channel<InstallEvent>,
+    extra_args: Option<Vec<String>>,
+    on_event: Channel<ProcessEvent>,
 ) -> Result<(), String> {
     let mut args = vec!["tool", "install"];
     args.push(&package);
@@ -297,6 +323,12 @@ pub async fn install_uv_tool<R: Runtime>(
         args.push("--force");
     }
 
+    // Collect extra_args so we can borrow them
+    let extras = extra_args.unwrap_or_default();
+    for arg in &extras {
+        args.push(arg);
+    }
+
     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_ref()).collect();
     stream_command(&app, "uv", &arg_refs, &on_event).await?;
     Ok(())
@@ -307,7 +339,7 @@ pub async fn install_uv_tool<R: Runtime>(
 pub async fn upgrade_uv_tool<R: Runtime>(
     app: AppHandle<R>,
     package: String,
-    on_event: Channel<InstallEvent>,
+    on_event: Channel<ProcessEvent>,
 ) -> Result<(), String> {
     stream_command(&app, "uv", &["tool", "upgrade", &package], &on_event).await?;
     Ok(())
@@ -317,7 +349,7 @@ pub async fn upgrade_uv_tool<R: Runtime>(
 #[tauri::command]
 pub async fn update_uv<R: Runtime>(
     app: AppHandle<R>,
-    on_event: Channel<InstallEvent>,
+    on_event: Channel<ProcessEvent>,
 ) -> Result<(), String> {
     stream_command(&app, "uv", &["self", "update"], &on_event).await?;
     Ok(())
@@ -329,7 +361,7 @@ pub async fn update_uv<R: Runtime>(
 #[tauri::command]
 pub async fn install_uv<R: Runtime>(
     app: AppHandle<R>,
-    on_event: Channel<InstallEvent>,
+    on_event: Channel<ProcessEvent>,
 ) -> Result<(), String> {
     #[cfg(not(windows))]
     {
@@ -359,6 +391,77 @@ pub async fn install_uv<R: Runtime>(
         .await?;
     }
 
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Process management commands
+// ---------------------------------------------------------------------------
+
+/// Spawn an arbitrary program with args, streaming output and retaining the
+/// child handle so it can be cancelled via `cancel_command`.
+#[tauri::command]
+pub async fn run_python_command<R: Runtime>(
+    app: AppHandle<R>,
+    running: tauri::State<'_, RunningProcess>,
+    program: String,
+    args: Vec<String>,
+    on_event: Channel<ProcessEvent>,
+) -> Result<bool, String> {
+    let (mut rx, child) = app
+        .shell()
+        .command(&program)
+        .args(&args)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn {}: {}", program, e))?;
+
+    // Store child handle for cancellation
+    {
+        let mut guard = running.0.lock().map_err(|e| e.to_string())?;
+        *guard = Some(child);
+    }
+
+    let mut success = false;
+    while let Some(event) = rx.recv().await {
+        match event {
+            tauri_plugin_shell::process::CommandEvent::Stdout(line) => {
+                let line = String::from_utf8_lossy(&line).to_string();
+                let _ = on_event.send(ProcessEvent::Stdout { line });
+            }
+            tauri_plugin_shell::process::CommandEvent::Stderr(line) => {
+                let line = String::from_utf8_lossy(&line).to_string();
+                let _ = on_event.send(ProcessEvent::Stderr { line });
+            }
+            tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                success = payload.code == Some(0);
+                let _ = on_event.send(ProcessEvent::Finished {
+                    success,
+                    code: payload.code,
+                });
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    // Clear stored handle
+    {
+        let mut guard = running.0.lock().map_err(|e| e.to_string())?;
+        *guard = None;
+    }
+
+    Ok(success)
+}
+
+/// Kill the currently running process spawned by `run_python_command`, if any.
+#[tauri::command]
+pub async fn cancel_command(
+    running: tauri::State<'_, RunningProcess>,
+) -> Result<(), String> {
+    let mut guard = running.0.lock().map_err(|e| e.to_string())?;
+    if let Some(child) = guard.take() {
+        child.kill().map_err(|e| format!("Failed to kill process: {}", e))?;
+    }
     Ok(())
 }
 

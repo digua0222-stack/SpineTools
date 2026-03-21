@@ -29,9 +29,9 @@ import { ViewPanel } from "../panels/ViewPanel";
 import { DebugPanel } from "../panels/DebugPanel";
 import { NotificationsPanel } from "../panels/NotificationsPanel";
 import { EnvironmentPanel } from "../panels/EnvironmentPanel";
+import { InferencePanel } from "../panels/InferencePanel";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { TrainingDialog } from "../dialogs/TrainingDialog";
-import { InferenceDialog } from "../dialogs/InferenceDialog";
 import { GoToFrameDialog } from "../dialogs/GoToFrameDialog";
 import { DeletePredictionsDialog } from "../dialogs/DeletePredictionsDialog";
 import { ExportDialog } from "../dialogs/ExportDialog";
@@ -51,6 +51,7 @@ import {
   PanelRightOpen,
   GripVertical,
   Cpu,
+  Zap,
 } from "lucide-react";
 import {
   Tooltip,
@@ -72,6 +73,7 @@ const PANELS = [
   { id: "instances", label: "Instances", icon: Users, component: InstancesPanel },
   { id: "view", label: "View", icon: Eye, component: ViewPanel },
   { id: "suggestions", label: "Suggestions", icon: Lightbulb, component: SuggestionsPanel },
+  { id: "inference", label: "Inference", icon: Zap, component: InferencePanel },
   { id: "environment", label: "Environment", icon: Cpu, component: EnvironmentPanel },
   { id: "notifications", label: "Notifications", icon: Bell, component: NotificationsPanel },
   { id: "debug", label: "Debug", icon: Bug, component: DebugPanel },
@@ -163,7 +165,6 @@ export function AppShell() {
 
       {/* Global dialogs */}
       <TrainingDialog />
-      <InferenceDialog />
       <GoToFrameDialog />
       <DeletePredictionsDialog
         open={deletePredictionsDialogOpen}
