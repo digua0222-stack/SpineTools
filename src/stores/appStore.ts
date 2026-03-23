@@ -57,6 +57,8 @@ export interface AppState {
   distinctlyColor: ColorTarget;
   markerSize: number;
   nodeLabelSize: number;
+  insetSize: number;
+  insetZoom: number;
   trailLength: number;
   trailShade: string;
   lutMin: number;
@@ -132,6 +134,8 @@ const PERSISTED_KEYS: (keyof AppState)[] = [
   "showNonVisibleNodes",
   "colorPredicted",
   "trailLength",
+  "insetSize",
+  "insetZoom",
   "defaultToPan",
 ];
 
@@ -174,6 +178,8 @@ export const useAppStore = create<AppState>()(
       distinctlyColor: "track" as ColorTarget,
       markerSize: 4,
       nodeLabelSize: 12,
+      insetSize: 400,
+      insetZoom: 4,
       trailLength: 0,
       trailShade: "Normal",
       lutMin: 0,
@@ -377,7 +383,7 @@ export const useAppStore = create<AppState>()(
         }),
     })),
     {
-      name: "sleap-label-preferences",
+      name: "sleap-app-preferences",
       partialize: (state) =>
         Object.fromEntries(
           PERSISTED_KEYS.map((key) => [key, state[key]])
