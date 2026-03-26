@@ -18,6 +18,8 @@ export const MSG_JOB_PROGRESS = "JOB_PROGRESS";
 export const MSG_JOB_COMPLETE = "JOB_COMPLETE";
 export const MSG_JOB_FAILED = "JOB_FAILED";
 export const MSG_JOB_CANCEL = "JOB_CANCEL";
+export const MSG_JOB_STOP = "JOB_STOP";
+export const MSG_CONTROL_COMMAND = "CONTROL_COMMAND";
 
 // Filesystem messages
 export const MSG_FS_GET_MOUNTS = "FS_GET_MOUNTS";
@@ -50,6 +52,20 @@ export interface TrackJobSpec {
   only_suggested_frames?: boolean;
   frames?: string;
 }
+
+export interface TrainJobSpec {
+  type: "train";
+  config_contents: string[];
+  model_types: string[];
+  labels_path: string;
+  val_labels_path?: string;
+  max_epochs?: number;
+  batch_size?: number;
+  learning_rate?: number;
+  run_name?: string;
+}
+
+export type JobSpec = TrackJobSpec | TrainJobSpec;
 
 export interface FileEntry {
   name: string;

@@ -4,7 +4,7 @@ import type {
   WorkerInfo,
   Credentials,
   FileEntry,
-  TrackJobSpec,
+  JobSpec,
   JobResult,
 } from "@/lib/sleapConnect";
 import {
@@ -13,6 +13,8 @@ import {
   generateJobId,
   MSG_JOB_SUBMIT,
   MSG_JOB_CANCEL,
+  MSG_JOB_STOP,
+  MSG_CONTROL_COMMAND,
   MSG_JOB_ACCEPTED,
   MSG_JOB_REJECTED,
   MSG_JOB_PROGRESS,
@@ -55,8 +57,10 @@ interface PendingFsRequest {
 }
 
 interface PendingJobCallbacks {
-  onProgress: (line: string) => void;
+  onProgress: (line: string, isCarriageReturn?: boolean) => void;
   onComplete: (result: JobResult) => void;
+  onModelComplete?: (result: JobResult) => void; // per-model completion for multi-model pipelines
+  remainingCompletions: number; // resolve only when this reaches 0
 }
 
 interface ConnectState {
@@ -88,10 +92,13 @@ interface ConnectState {
   connectToWorker: (workerId: string) => Promise<void>;
   browseRemoteDir: (path: string) => Promise<FileEntry[]>;
   submitJob: (
-    spec: TrackJobSpec,
-    onProgress: (line: string) => void,
+    spec: JobSpec,
+    onProgress: (line: string, isCarriageReturn?: boolean) => void,
+    options?: { expectedCompletions?: number; onModelComplete?: (result: JobResult) => void },
   ) => Promise<JobResult>;
   cancelJob: (jobId: string) => void;
+  stopJob: () => void;
+  sendControlCommand: (command: string) => void;
   loadCredentialsFromDisk: () => Promise<void>;
   fetchRooms: () => Promise<void>;
 
@@ -402,8 +409,9 @@ export const useConnectStore = create<ConnectState>()(
 
       // ── Job submission ───────────────────────────────────────
       submitJob: async (
-        spec: TrackJobSpec,
-        onProgress: (line: string) => void,
+        spec: JobSpec,
+        onProgress: (line: string, isCarriageReturn?: boolean) => void,
+        options?: { expectedCompletions?: number; onModelComplete?: (result: JobResult) => void },
       ): Promise<JobResult> => {
         const { _dc } = get();
         if (!_dc || _dc.readyState !== "open") {
@@ -417,6 +425,8 @@ export const useConnectStore = create<ConnectState>()(
           _pendingJobs.set(jobId, {
             onProgress,
             onComplete: resolve,
+            onModelComplete: options?.onModelComplete,
+            remainingCompletions: options?.expectedCompletions ?? 1,
           });
 
           _dc.send(
@@ -429,6 +439,24 @@ export const useConnectStore = create<ConnectState>()(
         const { _dc } = get();
         if (_dc && _dc.readyState === "open") {
           _dc.send(buildMessage(MSG_JOB_CANCEL, jobId));
+        }
+      },
+
+      stopJob: () => {
+        const { _dc } = get();
+        if (_dc && _dc.readyState === "open") {
+          _dc.send(buildMessage(MSG_JOB_STOP));
+        }
+      },
+
+      sendControlCommand: (command: string) => {
+        // Forward a command to sleap-nn's TrainingControllerZMQ via the
+        // worker. Matches the PyQt RemoteProgressBridge pattern:
+        // CONTROL_COMMAND::{jsonpickle-encoded payload}
+        const { _dc } = get();
+        if (_dc && _dc.readyState === "open") {
+          const payload = JSON.stringify({ command });
+          _dc.send(buildMessage(MSG_CONTROL_COMMAND, payload));
         }
       },
 
@@ -589,14 +617,14 @@ export const useConnectStore = create<ConnectState>()(
           }
 
           case "CR": {
-            // Worker sends stdout lines as CR::{text}
-            // These contain the actual sleap-nn output including progress JSON
+            // Worker sends \r-terminated tqdm lines as CR::{text}
+            // These should overwrite the previous line (carriage return behavior)
             const line = parts.slice(1).join(MSG_SEPARATOR);
             const { _pendingJobs } = get();
             const crEntry = Array.from(_pendingJobs.entries())[0];
             if (crEntry) {
               const [, pending] = crEntry;
-              pending.onProgress(line);
+              pending.onProgress(line, true);
             }
             break;
           }
@@ -618,35 +646,38 @@ export const useConnectStore = create<ConnectState>()(
           }
 
           case MSG_JOB_PROGRESS: {
-            // Worker sends: JOB_PROGRESS::{json} (no job ID prefix)
-            const progressPayload = parts.slice(1).join(MSG_SEPARATOR);
-            const { _pendingJobs } = get();
-            // Find the active pending job (there's only one at a time)
-            const pendingEntry = Array.from(_pendingJobs.entries())[0];
-            if (pendingEntry) {
-              const [, pending] = pendingEntry;
-              pending.onProgress(progressPayload);
-            }
+            // Intentionally ignored — matches PyQt client behavior.
+            // Terminal output is handled via CR:: (tqdm) and regular log
+            // lines. JOB_PROGRESS fires once per batch, which spams the
+            // terminal with ~100 formatted lines per epoch.
             break;
           }
 
           case MSG_JOB_COMPLETE: {
-            // Worker sends: JOB_COMPLETE::{json} (no job ID prefix)
+            // Worker sends: JOB_COMPLETE::{json} per model in multi-model pipelines.
+            // Only resolve the promise after all expected completions.
             const completePayload = parts.slice(1).join(MSG_SEPARATOR);
             const { _pendingJobs } = get();
             const completeEntry = Array.from(_pendingJobs.entries())[0];
             if (completeEntry) {
               const [jobId, pending] = completeEntry;
-              _pendingJobs.delete(jobId);
+              let result: JobResult;
               try {
-                const result = JSON.parse(completePayload);
-                pending.onComplete({
-                  jobId,
-                  success: true,
-                  outputPath: result.output_path,
-                });
+                const parsed = JSON.parse(completePayload);
+                result = { jobId, success: true, outputPath: parsed.output_path };
               } catch {
-                pending.onComplete({ jobId, success: true });
+                result = { jobId, success: true };
+              }
+
+              pending.remainingCompletions--;
+
+              if (pending.remainingCompletions <= 0) {
+                // All models done — resolve the promise
+                _pendingJobs.delete(jobId);
+                pending.onComplete(result);
+              } else {
+                // More models to go — notify per-model callback, keep listening
+                pending.onModelComplete?.(result);
               }
             }
             break;
@@ -674,8 +705,36 @@ export const useConnectStore = create<ConnectState>()(
             break;
           }
 
-          default:
-            console.log("[connect] Unhandled data channel message:", msgType);
+          case "PROGRESS_REPORT": {
+            // Worker sends: PROGRESS_REPORT::{jsonpickle payload}
+            // Contains structured progress events (epoch_begin, epoch_end,
+            // train_begin, train_end) from sleap-nn's ZMQ progress reporter.
+            // NOT printed to terminal — silently updates progress state.
+            // Matches PyQt behavior: LossViewer._check_messages() consumes
+            // these for loss curves, not terminal output.
+            const prPayload = parts.slice(1).join(MSG_SEPARATOR);
+            const { _pendingJobs: prJobs } = get();
+            const prEntry = Array.from(prJobs.entries())[0];
+            if (prEntry) {
+              const [, pending] = prEntry;
+              // Tag as progress report so trainingStore handles it differently
+              pending.onProgress(`__PROGRESS_REPORT__${prPayload}`);
+            }
+            break;
+          }
+
+          default: {
+            // Unrecognized message — raw log line from worker (e.g. wandb
+            // output, error messages, training summaries). Forward to
+            // onProgress, matching the PyQt client's on_log() behavior.
+            const { _pendingJobs } = get();
+            const defaultEntry = Array.from(_pendingJobs.entries())[0];
+            if (defaultEntry) {
+              const [, pending] = defaultEntry;
+              pending.onProgress(data);
+            }
+            break;
+          }
         }
       },
     }),
