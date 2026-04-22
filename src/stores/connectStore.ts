@@ -54,7 +54,7 @@ export interface RoomInfo {
 }
 
 interface PendingFsRequest {
-  resolve: (entries: FileEntry[]) => void;
+  resolve: (result: { entries: FileEntry[]; hasMore: boolean }) => void;
   reject: (err: Error) => void;
 }
 
@@ -86,6 +86,7 @@ interface ConnectState {
   _ws: WebSocket | null;
   _pc: RTCPeerConnection | null;
   _transport: Transport | null;
+  _connectGeneration: number;
   _pendingFs: Map<string, PendingFsRequest>;
   _pendingJobs: Map<string, PendingJobCallbacks>;
 
@@ -127,6 +128,7 @@ export const useConnectStore = create<ConnectState>()(
       _ws: null,
       _pc: null,
       _transport: null,
+      _connectGeneration: 0,
       _pendingFs: new Map(),
       _pendingJobs: new Map(),
 
@@ -288,7 +290,7 @@ export const useConnectStore = create<ConnectState>()(
       },
 
       disconnect: () => {
-        const { _ws, _pc, _transport } = get();
+        const { _ws, _pc, _transport, _connectGeneration } = get();
         if (_transport) _transport.close();
         if (_pc) _pc.close();
         if (_ws) _ws.close();
@@ -302,22 +304,31 @@ export const useConnectStore = create<ConnectState>()(
           _ws: null,
           _pc: null,
           _transport: null,
+          _connectGeneration: _connectGeneration + 1, // invalidate pending timeouts
         });
       },
 
       selectWorker: (workerId) => set({ selectedWorkerId: workerId }),
 
       connectToWorker: async (workerId: string) => {
-        const { _ws, credentials, roomId } = get();
+        const { _ws, credentials, roomId, _connectGeneration } = get();
         if (!_ws || !credentials || !roomId) return;
 
+        // Increment generation to invalidate any previous connectToWorker attempt
+        const gen = _connectGeneration + 1;
+        set({ selectedWorkerId: workerId, _connectGeneration: gen });
+
         console.log("[connect] Attempting WebRTC connection to worker:", workerId);
-        set({ selectedWorkerId: workerId });
 
         // ── Helper to finalize connection with a transport ─────
         let settled = false;
         const finalize = (transport: Transport, mode: "direct" | "relay") => {
           if (settled) return;
+          if (gen !== get()._connectGeneration) {
+            console.log("[connect] Stale connection attempt (gen mismatch), ignoring");
+            transport.close();
+            return;
+          }
           settled = true;
           transport.onMessage((data) => get()._handleDataChannelMessage(data));
 
@@ -399,6 +410,11 @@ export const useConnectStore = create<ConnectState>()(
         // ── 10s ICE timeout → relay fallback ──────────────────
         setTimeout(async () => {
           if (settled) return;
+          if (gen !== get()._connectGeneration) {
+            console.log("[connect] Stale ICE timeout (gen mismatch), ignoring");
+            try { pc.close(); } catch { /* ignore */ }
+            return;
+          }
           console.log("[connect] ICE timeout after 10s → falling back to relay transport");
           // Clean up failed WebRTC attempt
           try { pc.close(); } catch { /* ignore */ }
@@ -426,20 +442,41 @@ export const useConnectStore = create<ConnectState>()(
           throw new Error("Not connected to worker");
         }
 
-        return new Promise((resolve, reject) => {
-          const { _pendingFs } = get();
-          _pendingFs.set("_current", { resolve, reject });
+        // Auto-paginate: keep requesting more pages until has_more is false.
+        // Worker paginates fs_list responses (~25 entries per page by default).
+        const allEntries: FileEntry[] = [];
+        let offset = 0;
+        const MAX_PAGES = 200; // safety cap (200 pages * ~25 = ~5000 entries)
 
-          _transport.send(buildMessage(MSG_FS_LIST_DIR, path, "0"));
-
-          // Timeout after 10s
-          setTimeout(() => {
-            if (_pendingFs.has("_current")) {
-              _pendingFs.delete("_current");
-              reject(new Error("Filesystem request timed out"));
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const result = await new Promise<{
+            entries: FileEntry[];
+            hasMore: boolean;
+          }>((resolve, reject) => {
+            const { _pendingFs, _transport: t } = get();
+            if (!t || !t.ready) {
+              reject(new Error("Transport disconnected mid-request"));
+              return;
             }
-          }, 10000);
-        });
+            _pendingFs.set("_current", { resolve, reject });
+
+            t.send(buildMessage(MSG_FS_LIST_DIR, path, String(offset)));
+
+            // Timeout after 10s per page
+            setTimeout(() => {
+              if (_pendingFs.has("_current")) {
+                _pendingFs.delete("_current");
+                reject(new Error("Filesystem request timed out"));
+              }
+            }, 10000);
+          });
+
+          allEntries.push(...result.entries);
+          if (!result.hasMore || result.entries.length === 0) break;
+          offset += result.entries.length;
+        }
+
+        return allEntries;
       },
 
       // ── Job submission ───────────────────────────────────────
@@ -599,7 +636,7 @@ export const useConnectStore = create<ConnectState>()(
                     size: e.size as number | undefined,
                   }),
                 );
-                pending.resolve(entries);
+                pending.resolve({ entries, hasMore: !!result.has_more });
               } catch {
                 pending.reject(new Error("Invalid filesystem response"));
               }
