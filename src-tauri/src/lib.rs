@@ -1,4 +1,5 @@
 mod environment;
+mod rtc;
 
 use std::path::{Component, PathBuf};
 use std::sync::Mutex;
@@ -62,6 +63,7 @@ pub fn run() {
   tauri::Builder::default()
     .manage(InitialFile(Mutex::new(file_arg)))
     .manage(RunningProcess(Mutex::new(None)))
+    .manage(tokio::sync::Mutex::new(rtc::RtcState::new()))
     .invoke_handler(tauri::generate_handler![
         get_initial_file,
         environment::detect_uv,
@@ -77,6 +79,11 @@ pub fn run() {
         environment::install_uv,
         environment::run_python_command,
         environment::cancel_command,
+        rtc::rtc_join_room,
+        rtc::rtc_connect_worker,
+        rtc::rtc_send,
+        rtc::rtc_disconnect_worker,
+        rtc::rtc_leave_room,
     ])
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_dialog::init())
