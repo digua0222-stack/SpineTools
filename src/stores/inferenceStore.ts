@@ -28,7 +28,8 @@ export interface InferenceConfig {
 
   // Data
   videoIndex: number | "all";
-  frameRange: "all" | "labeled" | "suggested" | { start: number; end: number };
+  frameRange: "all_videos" | "video" | "suggestions" | "user_labeled" | "predicted" | "random_video" | "random" | "frame" | { start: number; end: number };
+  sampleCount: number;
   excludeUserLabeled: boolean;
 
   // Inference
@@ -233,17 +234,115 @@ export const useInferenceStore = create<InferenceState>()((set) => ({
       // Use the resolved data path (first entry)
       const resolvedDataPath = confirmedPaths[0]?.worker ?? remoteOpts.dataPath;
 
-      // Build TrackJobSpec with path_mappings
+      // Build TrackJobSpec from inference target
+      // Map UI target keys to TrackJobSpec fields, matching the PyQt GUI's
+      // _track_target_to_spec_fields mapper in dialog.py.
+      const target = typeof config.frameRange === "string" ? config.frameRange : null;
+      const currentVideoIdx = config.videoIndex !== "all" ? config.videoIndex : undefined;
+
+      // Helper: sample N random indices from [0, totalFrames)
+      const sampleRandom = (totalFrames: number, count: number): number[] => {
+        const n = Math.min(count, totalFrames);
+        const indices = Array.from({ length: totalFrames }, (_, i) => i);
+        // Fisher-Yates shuffle, take first n
+        for (let i = indices.length - 1; i > 0 && i >= indices.length - n; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+        return indices.slice(indices.length - n).sort((a, b) => a - b);
+      };
+
+      // frame_filter: only for filter-based targets (worker-side filtering)
+      const FILTER_MAP: Record<string, string> = {
+        suggestions: "suggested",
+        user_labeled: "user",
+        predicted: "predicted",
+      };
+      const frameFilter = target && target in FILTER_MAP ? FILTER_MAP[target] : undefined;
+
+      // frames + video_index: depends on target type
+      let frames: string | undefined;
+      let videoIndex: number | undefined;
+
+      if (typeof config.frameRange === "object") {
+        // custom range
+        frames = `${config.frameRange.start}-${config.frameRange.end}`;
+        videoIndex = currentVideoIdx;
+      } else if (target === "frame") {
+        const { frameIdx } = useAppStore.getState();
+        frames = String(frameIdx);
+        videoIndex = currentVideoIdx;
+      } else if (target === "video") {
+        videoIndex = currentVideoIdx;
+      } else if (target === "random_video") {
+        // Client-side random sampling: pick N frames from current video
+        const { video: activeVideo } = useAppStore.getState();
+        const nFrames = activeVideo?.shape?.[0] ?? 0;
+        if (nFrames > 0) {
+          const sampled = sampleRandom(nFrames, config.sampleCount);
+          frames = sampled.join(",");
+        }
+        videoIndex = currentVideoIdx;
+      } else if (target === "random") {
+        // Random sample (all videos): submit one spec per video sequentially
+        // Each spec samples N frames from that video
+        const allVideos = labels?.videos ?? [];
+        const specs = allVideos.map((v, i) => {
+          const nFrames = v.shape?.[0] ?? 0;
+          if (nFrames === 0) return null;
+          const sampled = sampleRandom(nFrames, config.sampleCount);
+          return {
+            type: "track" as const,
+            data_path: resolvedDataPath,
+            model_paths: config.modelPaths,
+            batch_size: config.batchSize,
+            peak_threshold: config.peakThreshold,
+            video_index: i,
+            exclude_user_labeled: config.excludeUserLabeled || undefined,
+            frames: sampled.join(","),
+            path_mappings: Object.keys(pathMappings).length > 0 ? pathMappings : undefined,
+          };
+        }).filter(Boolean);
+
+        set((state) => ({
+          log: [`$ Remote (${specs.length} videos): ${JSON.stringify(specs, null, 2)}`, ...state.log],
+        }));
+
+        try {
+          for (let i = 0; i < specs.length; i++) {
+            const spec = specs[i]!;
+            set((state) => ({
+              log: [...state.log, `── Video ${i + 1} of ${specs.length} ──`],
+            }));
+            const result = await submitJob(spec, (line: string) => {
+              handleProcessEvent({ event: "stdout", data: { line } });
+            });
+            if (!result.success) {
+              set({ status: "error", error: result.error || `Video ${i + 1} failed` });
+              return;
+            }
+          }
+          set({ status: "completed" });
+        } catch (e) {
+          set({
+            status: "error",
+            error: `Remote inference error: ${e instanceof Error ? e.message : String(e)}`,
+          });
+        }
+        return;
+      }
+      // all_videos, suggestions, user_labeled, predicted: no frames/videoIndex needed
+
       const spec = {
         type: "track" as const,
         data_path: resolvedDataPath,
         model_paths: config.modelPaths,
         batch_size: config.batchSize,
         peak_threshold: config.peakThreshold,
-        only_suggested_frames: config.frameRange === "suggested",
-        frames: typeof config.frameRange === "object"
-          ? `${config.frameRange.start}-${config.frameRange.end}`
-          : undefined,
+        frame_filter: frameFilter,
+        video_index: videoIndex,
+        exclude_user_labeled: config.excludeUserLabeled || undefined,
+        frames,
         path_mappings: Object.keys(pathMappings).length > 0 ? pathMappings : undefined,
       };
 
@@ -254,13 +353,7 @@ export const useInferenceStore = create<InferenceState>()((set) => ({
 
       try {
         const result = await submitJob(spec, (line: string) => {
-          // Forward progress lines to handleProcessEvent
-          // Note: progress bar updates require --gui flag on sleap-nn track
-          // which outputs JSON with n_processed/n_total fields
-          handleProcessEvent({
-            event: "stdout",
-            data: { line },
-          });
+          handleProcessEvent({ event: "stdout", data: { line } });
         });
 
         if (result.success) {

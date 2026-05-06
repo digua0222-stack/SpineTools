@@ -42,7 +42,7 @@ import {
 
 // ── Types & Constants ─────────────────────────────────────────────────────────
 
-type FrameRange = "all" | "labeled" | "suggested" | "custom";
+type FrameRange = "all_videos" | "video" | "suggestions" | "user_labeled" | "predicted" | "random_video" | "random" | "frame" | "custom";
 
 const PIPELINE_OPTIONS: { value: PipelineType; label: string; desc: string }[] =
   [
@@ -185,6 +185,7 @@ function NumField({
 
 const DEFAULTS: Omit<InferenceConfig, "modelPaths" | "videoIndex" | "frameRange"> = {
   pipeline: "top-down",
+  sampleCount: 20,
   excludeUserLabeled: false,
   batchSize: 4,
   device: "auto",
@@ -215,7 +216,7 @@ const DEFAULTS: Omit<InferenceConfig, "modelPaths" | "videoIndex" | "frameRange"
 // ── Panel ─────────────────────────────────────────────────────────────────────
 
 export function InferencePanel() {
-  const labels = useAppStore((s) => s.labels);
+  const video = useAppStore((s) => s.video);
   const skeleton = useAppStore((s) => s.skeleton);
   const tools = useEnvironmentStore((s) => s.tools);
   const detectionStatus = useEnvironmentStore((s) => s.detectionStatus);
@@ -239,10 +240,10 @@ export function InferencePanel() {
   // Config state
   const [pipeline, setPipeline] = useState<PipelineType>(DEFAULTS.pipeline);
   const [modelPaths, setModelPaths] = useState<string[]>([]);
-  const [selectedVideo, setSelectedVideo] = useState("all");
-  const [frameRange, setFrameRange] = useState<FrameRange>("all");
+  const [frameRange, setFrameRange] = useState<FrameRange>("suggestions");
   const [frameStart, setFrameStart] = useState("0");
   const [frameEnd, setFrameEnd] = useState("1000");
+  const [sampleCount, setSampleCount] = useState(20);
   const [excludeUserLabeled, setExcludeUserLabeled] = useState(DEFAULTS.excludeUserLabeled);
   const [batchSize, setBatchSize] = useState(DEFAULTS.batchSize);
   const [device, setDevice] = useState(DEFAULTS.device);
@@ -304,7 +305,6 @@ export function InferencePanel() {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [log]);
 
-  const videos = labels?.videos ?? [];
   const nodes = skeleton?.nodes ?? [];
   const sleapNnAvailable = tools.some(
     (t) => t.name === "sleap-nn" || t.commands?.includes("sleap-nn")
@@ -312,7 +312,20 @@ export function InferencePanel() {
   const isRunning = inferenceStatus === "running";
   const isDone = inferenceStatus === "completed" || inferenceStatus === "error" || inferenceStatus === "cancelled";
   const activeModelPaths = remoteEnabled ? remoteModelPaths : modelPaths;
-  const canRun = (remoteEnabled ? (!!selectedWorkerId && !!remoteDataPath) : sleapNnAvailable) && !isRunning && !isDone && activeModelPaths.length > 0;
+
+  // Custom range validation: check against current video's frame count
+  const currentVideoFrameCount = video?.shape?.[0] ?? Infinity;
+  const customRangeInvalid = frameRange === "custom" && (
+    Number(frameStart) < 0 ||
+    Number(frameEnd) < 0 ||
+    Number(frameStart) >= currentVideoFrameCount ||
+    Number(frameEnd) >= currentVideoFrameCount ||
+    Number(frameStart) > Number(frameEnd) ||
+    isNaN(Number(frameStart)) ||
+    isNaN(Number(frameEnd))
+  );
+
+  const canRun = (remoteEnabled ? (!!selectedWorkerId && !!remoteDataPath) : sleapNnAvailable) && !isRunning && !isDone && activeModelPaths.length > 0 && !customRangeInvalid;
   const isBottomUp = pipeline === "bottom-up" || pipeline === "bottom-up-id";
   const isTopDown = pipeline === "top-down" || pipeline === "top-down-id";
 
@@ -337,11 +350,24 @@ export function InferencePanel() {
   };
 
   const handleRunInference = async () => {
+    // Derive video index from inference target: "current video" targets use the
+    // active video from appStore, "all videos" targets use "all"
+    const currentVideoTargets = ["frame", "video", "random_video", "custom"];
+    const currentVideoIdx = (() => {
+      const { labels, video: activeVideo } = useAppStore.getState();
+      if (!labels || !activeVideo) return 0;
+      const idx = labels.videos.indexOf(activeVideo);
+      return idx >= 0 ? idx : 0;
+    })();
+    const videoIndex = currentVideoTargets.includes(frameRange as string)
+      ? currentVideoIdx
+      : ("all" as const);
+
     const config: InferenceConfig = {
       pipeline, modelPaths: remoteEnabled ? remoteModelPaths : modelPaths,
-      videoIndex: selectedVideo === "all" ? "all" : Number(selectedVideo),
+      videoIndex,
       frameRange: frameRange === "custom" ? { start: Number(frameStart), end: Number(frameEnd) } : frameRange,
-      excludeUserLabeled, batchSize, device,
+      sampleCount, excludeUserLabeled, batchSize, device,
       maxInstances: noMaxInstances ? null : maxInstances,
       peakThreshold,
       anchorPart: isTopDown ? anchorPart : null,
@@ -445,37 +471,51 @@ export function InferencePanel() {
         {/* ── Data ────────────────────────────────────────────────── */}
         <Section title="Data" defaultOpen={true}>
           <div className="space-y-1">
-            <span className="text-[10px] text-muted-foreground">Video</span>
-            <Select value={selectedVideo} onValueChange={setSelectedVideo} disabled={isRunning}>
-              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All videos</SelectItem>
-                {videos.map((video, i) => (
-                  <SelectItem key={i} value={String(i)}>
-                    {video.filename ?? video.backendMetadata?.filename ?? `Video ${i + 1}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
             <span className="text-[10px] text-muted-foreground">Inference Target</span>
             <Select value={frameRange} onValueChange={(v) => setFrameRange(v as FrameRange)} disabled={isRunning}>
               <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All frames</SelectItem>
-                <SelectItem value="labeled">Labeled frames only</SelectItem>
-                <SelectItem value="suggested">Suggested frames only</SelectItem>
+                <SelectItem value="frame">Current frame</SelectItem>
                 <SelectItem value="custom">Custom range</SelectItem>
+                <SelectItem value="video">Entire current video</SelectItem>
+                <SelectItem value="all_videos">All videos</SelectItem>
+                <SelectItem value="random_video">Random sample (current video)</SelectItem>
+                <SelectItem value="random">Random sample (all videos)</SelectItem>
+                <SelectItem value="suggestions">Suggested frames</SelectItem>
+                <SelectItem value="user_labeled">User labeled frames</SelectItem>
+                <SelectItem value="predicted">Frames with predictions</SelectItem>
               </SelectContent>
             </Select>
+            {(frameRange === "random_video" || frameRange === "random") && (
+              <div className="flex items-center justify-between gap-2 mt-1">
+                <span className="text-[10px] text-muted-foreground shrink-0">Sample count</span>
+                <Input type="number" min={1} value={sampleCount}
+                  onChange={(e) => setSampleCount(Math.max(1, Number(e.target.value)))}
+                  className="h-6 text-[10px] w-20" disabled={isRunning} />
+              </div>
+            )}
             {frameRange === "custom" && (
-              <div className="flex items-center gap-1 mt-1">
-                <Input type="number" min={0} placeholder="Start" value={frameStart}
-                  onChange={(e) => setFrameStart(e.target.value)} className="h-6 text-[10px] flex-1" disabled={isRunning} />
-                <span className="text-[10px] text-muted-foreground">to</span>
-                <Input type="number" min={0} placeholder="End" value={frameEnd}
-                  onChange={(e) => setFrameEnd(e.target.value)} className="h-6 text-[10px] flex-1" disabled={isRunning} />
+              <div className="space-y-1 mt-1">
+                <div className="flex items-center gap-1">
+                  <Input type="number" min={0} placeholder="Start" value={frameStart}
+                    onChange={(e) => setFrameStart(e.target.value)}
+                    className={`h-6 text-[10px] flex-1 ${customRangeInvalid ? "border-red-500" : ""}`}
+                    disabled={isRunning} />
+                  <span className="text-[10px] text-muted-foreground">to</span>
+                  <Input type="number" min={0} placeholder="End" value={frameEnd}
+                    onChange={(e) => setFrameEnd(e.target.value)}
+                    className={`h-6 text-[10px] flex-1 ${customRangeInvalid ? "border-red-500" : ""}`}
+                    disabled={isRunning} />
+                </div>
+                {customRangeInvalid && (
+                  <p className="text-[10px] text-red-400">
+                    {Number(frameStart) > Number(frameEnd)
+                      ? "Start must be less than end"
+                      : currentVideoFrameCount !== Infinity
+                        ? `Range must be 0–${currentVideoFrameCount - 1} (${currentVideoFrameCount} frames in current video)`
+                        : "Invalid range"}
+                  </p>
+                )}
               </div>
             )}
           </div>

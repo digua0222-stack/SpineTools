@@ -346,6 +346,7 @@ export function TrainingPanel() {
   const [remoteEnabled, setRemoteEnabled] = useState(!isTauri);
   const [remoteLabelsPath, setRemoteLabelsPath] = useState("");
   const [remoteValLabelsPath, setRemoteValLabelsPath] = useState("");
+  const [inferenceTarget, setInferenceTarget] = useState<string>("suggestions");
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const [fileBrowserCallback, setFileBrowserCallback] = useState<
     ((path: string) => void) | null
@@ -446,6 +447,7 @@ export function TrainingPanel() {
         workerId: selectedWorkerId!,
         labelsPath: remoteLabelsPath,
         valLabelsPath: remoteValLabelsPath || undefined,
+        inferenceTarget,
       });
     } else {
       await startTraining();
@@ -596,6 +598,31 @@ export function TrainingPanel() {
                 <Folder className="h-3.5 w-3.5" />
               </Button>
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <span className="text-[10px] text-muted-foreground">
+              Post-Training Inference Target
+            </span>
+            <Select
+              value={inferenceTarget}
+              onValueChange={(v) => setInferenceTarget(v)}
+              disabled={isRunning}
+            >
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nothing">Nothing (skip inference)</SelectItem>
+                <SelectItem value="suggestions">Suggested frames</SelectItem>
+                <SelectItem value="user_labeled">User labeled frames</SelectItem>
+                <SelectItem value="predicted">Frames with predictions</SelectItem>
+                <SelectItem value="video">Entire current video</SelectItem>
+                <SelectItem value="all_videos">All videos</SelectItem>
+                <SelectItem value="random_video">Random sample (current video)</SelectItem>
+                <SelectItem value="random">Random sample (all videos)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </Section>
 
