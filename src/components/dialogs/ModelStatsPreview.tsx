@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react";
-import yaml from "js-yaml";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/stores/appStore";
 import { computeReceptiveField, computeCropSize, computeParamCount } from "@/lib/modelStats";
 import type { ConfigHyperparams } from "@/stores/trainingStore";
@@ -9,67 +8,24 @@ interface ModelStatsPreviewProps {
   maxStride: number;
   filters: number;
   filtersRate: number;
-  configYaml?: string;
+  outputStride: number;
+  stemStride: number | null;
+  backbone: string;
+  inputChannels?: number;
   slot?: string;
 }
 
-interface ParsedBackboneParams {
-  maxStride: number;
-  filters: number;
-  filtersRate: number;
-  outputStride: number;
-  stemStride: number | null;
-  inputChannels: number;
-}
-
-function parseBackboneFromYaml(yamlText: string | undefined): ParsedBackboneParams | null {
-  if (!yamlText) return null;
-  try {
-    const doc = yaml.load(yamlText) as Record<string, unknown>;
-    const modelConfig = (doc?.model_config ?? {}) as Record<string, unknown>;
-    const backboneConfig = (modelConfig?.backbone_config ?? {}) as Record<string, unknown>;
-    const unet = (backboneConfig?.unet ?? {}) as Record<string, unknown>;
-    if (!unet || typeof unet !== "object") return null;
-    const headConfigs = (modelConfig?.head_configs ?? {}) as Record<string, unknown>;
-    let outputStride = 1;
-    for (const val of Object.values(headConfigs)) {
-      if (val && typeof val === "object") {
-        const head = val as Record<string, unknown>;
-        if (typeof head.output_stride === "number") { outputStride = head.output_stride; break; }
-        const confmaps = head.confmaps as Record<string, unknown> | undefined;
-        if (confmaps && typeof confmaps.output_stride === "number") { outputStride = confmaps.output_stride; break; }
-      }
-    }
-    return {
-      maxStride: typeof unet.max_stride === "number" ? unet.max_stride : 16,
-      filters: typeof unet.filters === "number" ? unet.filters : 16,
-      filtersRate: typeof unet.filters_rate === "number" ? unet.filters_rate : 2.0,
-      outputStride,
-      stemStride: typeof unet.stem_stride === "number" ? unet.stem_stride : null,
-      inputChannels: typeof unet.in_channels === "number" ? unet.in_channels : 1,
-    };
-  } catch { return null; }
-}
-
 const THUMBNAIL_SIZE = 200;
+const DPR = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
-export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: defaultFilters, filtersRate: defaultFiltersRate, configYaml, slot }: ModelStatsPreviewProps) {
+export function ModelStatsPreview({ hp, maxStride, filters, filtersRate, outputStride, stemStride, backbone, inputChannels = 1, slot }: ModelStatsPreviewProps) {
   const labels = useAppStore((s) => s.labels);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [thumbnail, setThumbnail] = useState<ImageBitmap | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
-
-  const parsed = useMemo(() => parseBackboneFromYaml(configYaml), [configYaml]);
-  const maxStride = parsed?.maxStride ?? defaultMaxStride;
-  const filters = parsed?.filters ?? defaultFilters;
-  const filtersRate = parsed?.filtersRate ?? defaultFiltersRate;
-  const outputStride = parsed?.outputStride ?? 1;
-  const stemStride = parsed?.stemStride ?? null;
-  const inputChannels = parsed?.inputChannels ?? 1;
-
-  const backbone = hp.backbone || "unet";
   const rf = computeReceptiveField(maxStride, stemStride);
   const showCropSize = slot !== "centroid";
   const cropSize = showCropSize ? computeCropSize(labels, maxStride, hp.scale) : null;
@@ -146,7 +102,10 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // HiDPI: scale backing buffer by devicePixelRatio
+    canvas.width = THUMBNAIL_SIZE * DPR;
+    canvas.height = THUMBNAIL_SIZE * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
 
     if (thumbnail) {
@@ -174,8 +133,17 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
 
       // Scale factor: thumbnail pixels per original pixel
       const imgScale = drawW / thumbnail.width;
-      const centerX = offsetX + drawW / 2;
-      const centerY = offsetY + drawH / 2;
+
+      // Box center follows mouse; falls back to image center when cursor is outside
+      let boxCenterX: number, boxCenterY: number;
+      if (mousePos) {
+        // Convert CSS mouse coords to pre-transform canvas coords
+        boxCenterX = (mousePos.x - THUMBNAIL_SIZE / 2 - pan.x) / zoom + THUMBNAIL_SIZE / 2;
+        boxCenterY = (mousePos.y - THUMBNAIL_SIZE / 2 - pan.y) / zoom + THUMBNAIL_SIZE / 2;
+      } else {
+        boxCenterX = offsetX + drawW / 2;
+        boxCenterY = offsetY + drawH / 2;
+      }
 
       // Draw crop size box (red dashed)
       if (cropSize != null) {
@@ -183,7 +151,7 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
         ctx.strokeStyle = "#ef4444";
         ctx.lineWidth = 2 / zoom;
         ctx.setLineDash([6 / zoom, 4 / zoom]);
-        ctx.strokeRect(centerX - cropPx / 2, centerY - cropPx / 2, cropPx, cropPx);
+        ctx.strokeRect(boxCenterX - cropPx / 2, boxCenterY - cropPx / 2, cropPx, cropPx);
         ctx.setLineDash([]);
       }
 
@@ -191,7 +159,7 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
       const rfPx = (rf / hp.scale) * imgScale;
       ctx.strokeStyle = "#3b82f6";
       ctx.lineWidth = 3 / zoom;
-      ctx.strokeRect(centerX - rfPx / 2, centerY - rfPx / 2, rfPx, rfPx);
+      ctx.strokeRect(boxCenterX - rfPx / 2, boxCenterY - rfPx / 2, rfPx, rfPx);
 
       ctx.restore();
     } else {
@@ -202,7 +170,7 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
       ctx.textAlign = "center";
       ctx.fillText("No labeled frames", THUMBNAIL_SIZE / 2, THUMBNAIL_SIZE / 2);
     }
-  }, [thumbnail, cropSize, rf, hp.scale, zoom, pan]);
+  }, [thumbnail, cropSize, rf, hp.scale, zoom, pan, mousePos]);
 
   return (
     <div className="mb-5 pb-4 border-b">
@@ -211,9 +179,10 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
         <div className="shrink-0">
           <canvas
             ref={canvasRef}
-            width={THUMBNAIL_SIZE}
-            height={THUMBNAIL_SIZE}
-            className="rounded border border-border cursor-grab active:cursor-grabbing"
+            width={THUMBNAIL_SIZE * DPR}
+            height={THUMBNAIL_SIZE * DPR}
+            style={{ width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE }}
+            className="rounded border border-border cursor-crosshair"
             onWheel={(e) => {
               e.preventDefault();
               setZoom((z) => Math.max(0.5, Math.min(10, z * (e.deltaY < 0 ? 1.15 : 0.87))));
@@ -222,6 +191,8 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
               dragRef.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
             }}
             onMouseMove={(e) => {
+              const rect = canvasRef.current!.getBoundingClientRect();
+              setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
               if (!dragRef.current) return;
               setPan({
                 x: dragRef.current.panX + (e.clientX - dragRef.current.startX),
@@ -229,7 +200,7 @@ export function ModelStatsPreview({ hp, maxStride: defaultMaxStride, filters: de
               });
             }}
             onMouseUp={() => { dragRef.current = null; }}
-            onMouseLeave={() => { dragRef.current = null; }}
+            onMouseLeave={() => { dragRef.current = null; setMousePos(null); }}
           />
         </div>
 

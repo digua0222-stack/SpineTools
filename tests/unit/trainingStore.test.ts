@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import yaml from "js-yaml";
 import { useTrainingStore } from "@/stores/trainingStore";
-import { getConfigSlots, getSlotLabel, defaultHyperparams } from "@/stores/trainingStore";
+import { getConfigSlots, getSlotLabel, defaultHyperparams, applyHyperparamsToYaml } from "@/stores/trainingStore";
 import type { ConfigFile } from "@/stores/trainingStore";
 
 /** Helper to create a ConfigFile with default hyperparams */
@@ -11,6 +12,7 @@ function makeConfigFile(overrides: Partial<ConfigFile> = {}): ConfigFile {
     modelType: "centroid",
     slot: "centroid",
     hyperparams: { ...defaultHyperparams },
+    hasTrainedModel: false,
     ...overrides,
   };
 }
@@ -150,6 +152,45 @@ trainer_config:
       expect(result!.hyperparams.wandbProject).toBe("");
     });
 
+    it("parses overfitMode from use_same_data_for_val", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  use_same_data_for_val: true
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result).not.toBeNull();
+      expect(result!.hyperparams.overfitMode).toBe(true);
+    });
+
+    it("detects hasTrainedModel from run_name", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config:
+  run_name: my_trained_model
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hasTrainedModel).toBe(true);
+    });
+
+    it("hasTrainedModel is false when no run_name", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config: {}
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hasTrainedModel).toBe(false);
+    });
+
     it("handles train_labels_path as array", () => {
       const yamlText = `
 model_config:
@@ -196,6 +237,505 @@ data_config:
       expect(getSlotLabel("centroid")).toBe("Centroid Config");
       expect(getSlotLabel("centered_instance")).toBe("Centered Instance Config");
       expect(getSlotLabel("config")).toBe("Config");
+    });
+  });
+
+  describe("applyHyperparamsToYaml", () => {
+    it("writes overfitMode to use_same_data_for_val", () => {
+      const input = `
+data_config: {}
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config: {}
+`;
+      const hp = { ...defaultHyperparams, overfitMode: true };
+      const result = applyHyperparamsToYaml(input, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.data_config.use_same_data_for_val).toBe(true);
+    });
+  });
+
+  describe("applyHyperparamsToYaml - augmentation", () => {
+    const baseYaml = `
+data_config: {}
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config: {}
+`;
+
+    it("writes rotation ±180° correctly", () => {
+      const hp = { ...defaultHyperparams, rotationPreset: "180" as const };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const aug = doc.data_config.augmentation_config;
+      expect(aug.geometric.rotation_min).toBe(-180);
+      expect(aug.geometric.rotation_max).toBe(180);
+      expect(aug.geometric.affine_p).toBe(1.0);
+    });
+
+    it("writes rotation off correctly", () => {
+      const hp = { ...defaultHyperparams, rotationPreset: "off" as const };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const aug = doc.data_config.augmentation_config;
+      expect(aug.geometric.affine_p).toBe(0);
+    });
+
+    it("writes rotation ±15° correctly", () => {
+      const hp = { ...defaultHyperparams, rotationPreset: "15" as const };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const geo = doc.data_config.augmentation_config.geometric;
+      expect(geo.rotation_min).toBe(-15);
+      expect(geo.rotation_max).toBe(15);
+      expect(geo.affine_p).toBe(1.0);
+    });
+
+    it("writes custom rotation angle correctly", () => {
+      const hp = { ...defaultHyperparams, rotationPreset: "custom" as const, rotationCustomAngle: 30 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const geo = doc.data_config.augmentation_config.geometric;
+      expect(geo.rotation_min).toBe(-30);
+      expect(geo.rotation_max).toBe(30);
+      expect(geo.affine_p).toBe(1.0);
+    });
+
+    it("writes scale when enabled", () => {
+      const hp = { ...defaultHyperparams, scaleEnabled: true, scaleMin: 0.8, scaleMax: 1.2 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const geo = doc.data_config.augmentation_config.geometric;
+      expect(geo.scale_min).toBe(0.8);
+      expect(geo.scale_max).toBe(1.2);
+    });
+
+    it("resets scale_min/max to 1.0 when scale disabled", () => {
+      const hp = { ...defaultHyperparams, scaleEnabled: false };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const geo = doc.data_config.augmentation_config.geometric;
+      expect(geo.scale_min).toBe(1.0);
+      expect(geo.scale_max).toBe(1.0);
+    });
+
+    it("writes gaussian noise when enabled", () => {
+      const hp = { ...defaultHyperparams, gaussianNoiseEnabled: true, gaussianNoiseMean: 0.0, gaussianNoiseStd: 0.04 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const int = doc.data_config.augmentation_config.intensity;
+      expect(int.gaussian_noise_p).toBe(1.0);
+      expect(int.gaussian_noise_mean).toBe(0.0);
+      expect(int.gaussian_noise_std).toBe(0.04);
+    });
+
+    it("sets gaussian_noise_p to 0 when disabled", () => {
+      const hp = { ...defaultHyperparams, gaussianNoiseEnabled: false };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const int = doc.data_config.augmentation_config.intensity;
+      expect(int.gaussian_noise_p).toBe(0);
+    });
+
+    it("writes uniform noise when enabled", () => {
+      const hp = { ...defaultHyperparams, uniformNoiseEnabled: true, uniformNoiseMin: 0.0, uniformNoiseMax: 0.1 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const int = doc.data_config.augmentation_config.intensity;
+      expect(int.uniform_noise_p).toBe(1.0);
+      expect(int.uniform_noise_min).toBe(0.0);
+      expect(int.uniform_noise_max).toBe(0.1);
+    });
+
+    it("writes contrast when enabled", () => {
+      const hp = { ...defaultHyperparams, contrastEnabled: true, contrastMin: 0.5, contrastMax: 2.0 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const int = doc.data_config.augmentation_config.intensity;
+      expect(int.contrast_p).toBe(1.0);
+      expect(int.contrast_min).toBe(0.5);
+      expect(int.contrast_max).toBe(2.0);
+    });
+
+    it("writes brightness when enabled", () => {
+      const hp = { ...defaultHyperparams, brightnessEnabled: true, brightnessMin: 0.0, brightnessMax: 0.2 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const int = doc.data_config.augmentation_config.intensity;
+      expect(int.brightness_p).toBe(1.0);
+      expect(int.brightness_min).toBe(0.0);
+      expect(int.brightness_max).toBe(0.2);
+    });
+  });
+
+  describe("applyHyperparamsToYaml - model params", () => {
+    const baseYaml = `
+data_config: {}
+model_config:
+  backbone_config:
+    unet:
+      filters: 16
+      max_stride: 16
+  head_configs:
+    centroid:
+      confmaps:
+        sigma: 2.5
+        output_stride: 2
+trainer_config: {}
+`;
+
+    it("writes backbone model params to YAML", () => {
+      const hp = { ...defaultHyperparams, maxStride: 32, filters: 24, filtersRate: 1.5, middleBlock: false, upInterpolate: false };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const unet = doc.model_config.backbone_config.unet;
+      expect(unet.max_stride).toBe(32);
+      expect(unet.filters).toBe(24);
+      expect(unet.filters_rate).toBe(1.5);
+      expect(unet.middle_block).toBe(false);
+      expect(unet.up_interpolate).toBe(false);
+    });
+
+    it("writes output_stride to head config", () => {
+      const hp = { ...defaultHyperparams, outputStride: 4 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.model_config.head_configs.centroid.confmaps.output_stride).toBe(4);
+    });
+
+    it("writes stem_stride to backbone config", () => {
+      const hp = { ...defaultHyperparams, stemStride: 2 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.model_config.backbone_config.unet.stem_stride).toBe(2);
+    });
+
+    it("writes anchor_part to head config", () => {
+      const hp = { ...defaultHyperparams, anchorPart: "thorax" };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.model_config.head_configs.centroid.confmaps.anchor_part).toBe("thorax");
+    });
+  });
+
+  describe("parseYamlConfig - model params", () => {
+    it("extracts backbone params from YAML", () => {
+      const yamlText = `
+model_config:
+  backbone_config:
+    unet:
+      filters: 24
+      filters_rate: 1.5
+      max_stride: 32
+      stem_stride: 2
+      middle_block: false
+      up_interpolate: false
+  head_configs:
+    centered_instance:
+      confmaps:
+        output_stride: 4
+        anchor_part: thorax
+        sigma: 2.5
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "ci.yaml", "centered_instance");
+      expect(result!.hyperparams.filters).toBe(24);
+      expect(result!.hyperparams.filtersRate).toBe(1.5);
+      expect(result!.hyperparams.maxStride).toBe(32);
+      expect(result!.hyperparams.stemStride).toBe(2);
+      expect(result!.hyperparams.middleBlock).toBe(false);
+      expect(result!.hyperparams.upInterpolate).toBe(false);
+      expect(result!.hyperparams.outputStride).toBe(4);
+      expect(result!.hyperparams.anchorPart).toBe("thorax");
+    });
+  });
+
+  describe("applyHyperparamsToYaml - data and optimization", () => {
+    const baseYaml = `
+data_config:
+  preprocessing: {}
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config:
+  early_stopping: {}
+  online_hard_keypoint_mining: {}
+`;
+
+    it("writes cropSize to preprocessing", () => {
+      const hp = { ...defaultHyperparams, cropSize: 192 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.data_config.preprocessing.crop_size).toBe(192);
+    });
+
+    it("writes null cropSize as null", () => {
+      const hp = { ...defaultHyperparams, cropSize: null };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.data_config.preprocessing.crop_size).toBeNull();
+    });
+
+    it("writes randomSeed to trainer_config.seed", () => {
+      const hp = { ...defaultHyperparams, randomSeed: 42 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.trainer_config.seed).toBe(42);
+    });
+
+    it("writes stop_training_on_plateau", () => {
+      const hp = { ...defaultHyperparams, stopOnPlateau: false };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.trainer_config.early_stopping.stop_training_on_plateau).toBe(false);
+    });
+
+    it("writes plateauMinDelta to early_stopping.min_delta", () => {
+      const hp = { ...defaultHyperparams, plateauMinDelta: 0.001 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      expect(doc.trainer_config.early_stopping.min_delta).toBe(0.001);
+    });
+
+    it("writes online mining params", () => {
+      const hp = { ...defaultHyperparams, onlineMining: true, minHardKeypoints: 3, maxHardKeypoints: 10 };
+      const result = applyHyperparamsToYaml(baseYaml, hp);
+      const doc = yaml.load(result) as Record<string, any>;
+      const ohkm = doc.trainer_config.online_hard_keypoint_mining;
+      expect(ohkm.online_mining).toBe(true);
+      expect(ohkm.min_hard_keypoints).toBe(3);
+      expect(ohkm.max_hard_keypoints).toBe(10);
+    });
+  });
+
+  describe("parseYamlConfig - data and optimization", () => {
+    it("parses cropSize from preprocessing", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  preprocessing:
+    crop_size: 192
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.cropSize).toBe(192);
+    });
+
+    it("defaults cropSize to null when not present", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config: {}
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.cropSize).toBeNull();
+    });
+
+    it("parses randomSeed from trainer_config.seed", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config:
+  seed: 42
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.randomSeed).toBe(42);
+    });
+
+    it("parses stopOnPlateau false", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config:
+  early_stopping:
+    stop_training_on_plateau: false
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.stopOnPlateau).toBe(false);
+    });
+
+    it("parses online mining params", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config:
+  online_hard_keypoint_mining:
+    online_mining: true
+    min_hard_keypoints: 3
+    max_hard_keypoints: 10
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.onlineMining).toBe(true);
+      expect(result!.hyperparams.minHardKeypoints).toBe(3);
+      expect(result!.hyperparams.maxHardKeypoints).toBe(10);
+    });
+
+    it("parses plateauMinDelta from early_stopping.min_delta", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+trainer_config:
+  early_stopping:
+    min_delta: 0.001
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.plateauMinDelta).toBe(0.001);
+    });
+  });
+
+  describe("parseYamlConfig - augmentation reverse-map", () => {
+    it("detects rotation ±180° from rotation_min/max", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  augmentation_config:
+    geometric:
+      rotation_min: -180
+      rotation_max: 180
+      affine_p: 1.0
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.rotationPreset).toBe("180");
+    });
+
+    it("detects rotation off from affine_p=0", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  augmentation_config:
+    geometric:
+      rotation_min: 0
+      rotation_max: 0
+      affine_p: 0
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.rotationPreset).toBe("off");
+    });
+
+    it("detects rotation ±15°", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  augmentation_config:
+    geometric:
+      rotation_min: -15
+      rotation_max: 15
+      affine_p: 1.0
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.rotationPreset).toBe("15");
+    });
+
+    it("detects custom rotation from non-standard angles", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  augmentation_config:
+    geometric:
+      rotation_min: -45
+      rotation_max: 45
+      affine_p: 1.0
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.rotationPreset).toBe("custom");
+      expect(result!.hyperparams.rotationCustomAngle).toBe(45);
+    });
+
+    it("detects scale enabled from scale_min != scale_max", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  augmentation_config:
+    geometric:
+      scale_min: 0.9
+      scale_max: 1.1
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.scaleEnabled).toBe(true);
+      expect(result!.hyperparams.scaleMin).toBe(0.9);
+      expect(result!.hyperparams.scaleMax).toBe(1.1);
+    });
+
+    it("detects scale disabled when both are 1.0", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  augmentation_config:
+    geometric:
+      scale_min: 1.0
+      scale_max: 1.0
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.scaleEnabled).toBe(false);
+    });
+
+    it("detects gaussian noise enabled from p > 0", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config:
+  augmentation_config:
+    intensity:
+      gaussian_noise_p: 0.5
+      gaussian_noise_mean: 0.0
+      gaussian_noise_std: 0.04
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.gaussianNoiseEnabled).toBe(true);
+      expect(result!.hyperparams.gaussianNoiseStd).toBe(0.04);
+    });
+
+    it("defaults augmentation fields when no augmentation_config present", () => {
+      const yamlText = `
+model_config:
+  head_configs:
+    centroid:
+      sigma: 1.5
+data_config: {}
+`;
+      const result = useTrainingStore.getState().parseYamlConfig(yamlText, "c.yaml", "centroid");
+      expect(result!.hyperparams.rotationPreset).toBe("180");
+      expect(result!.hyperparams.scaleEnabled).toBe(false);
+      expect(result!.hyperparams.gaussianNoiseEnabled).toBe(false);
+      expect(result!.hyperparams.uniformNoiseEnabled).toBe(false);
+      expect(result!.hyperparams.contrastEnabled).toBe(false);
+      expect(result!.hyperparams.brightnessEnabled).toBe(false);
     });
   });
 });
