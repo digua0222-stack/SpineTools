@@ -894,8 +894,8 @@ export function VideoPlayer() {
 
     // Draw nearby edges from the overlay instance
     const toInset = (px: number, py: number) => ({
-      ix: (px - sx) * INSET_ZOOM,
-      iy: (py - sy) * INSET_ZOOM,
+      ix: (px - sx) * effectiveZoom,
+      iy: (py - sy) * effectiveZoom,
     });
 
     if (overlayInst) {
@@ -1128,15 +1128,22 @@ export function VideoPlayer() {
         return;
       }
 
-      // Pan mode (default or space-toggled): left-click panning
-      if (shouldPan && !areaDeleteMode) {
-        e.preventDefault();
-        setIsPanning(true);
-        setPanStart({ x: e.clientX - panX, y: e.clientY - panY });
-        return;
-      }
-
       const { x, y } = canvasToScene(e.clientX, e.clientY);
+
+      // In pan mode, check for node hits first so nodes are still draggable
+      if (shouldPan && !areaDeleteMode) {
+        const instances = renderedInstancesRef.current;
+        const nt = (markerSize * 2) / zoom;
+        const hit = hitTestNode(instances, x, y, nt, showNonVisibleNodes);
+        if (hit && !instances[hit.instanceIdx]?.isPredicted) {
+          // Node hit in pan mode — fall through to normal node drag handling below
+        } else {
+          e.preventDefault();
+          setIsPanning(true);
+          setPanStart({ x: e.clientX - panX, y: e.clientY - panY });
+          return;
+        }
+      }
 
       // Area-delete mode: start drawing the delete rectangle
       if (areaDeleteMode) {
@@ -1562,6 +1569,7 @@ export function VideoPlayer() {
           commandContext.execute(ConvertPredictionToInstance, {
             instanceIdx: nodeHit.instanceIdx,
           });
+          useAppStore.getState().bumpOverlayVersion();
           return;
         }
         // User instance: select all nodes in this instance
@@ -1586,6 +1594,7 @@ export function VideoPlayer() {
         commandContext.execute(ConvertPredictionToInstance, {
           instanceIdx: instHit,
         });
+        useAppStore.getState().bumpOverlayVersion();
         return;
       }
 
