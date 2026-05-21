@@ -465,6 +465,147 @@ pub async fn cancel_command(
     Ok(())
 }
 
+/// Start a ZMQ PUB relay using std::process::Command for reliable pipe control.
+/// Binds on port 9000 (matching PyQt SLEAP GUI default).
+/// Kills any stale process on the port before binding.
+#[tauri::command]
+pub async fn start_zmq_relay(
+    relay: tauri::State<'_, crate::ZmqRelay>,
+) -> Result<(), String> {
+    // Kill any existing relay we own
+    {
+        let mut guard = relay.0.lock().map_err(|e| e.to_string())?;
+        if let Some(mut child) = guard.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
+    let port: u16 = 9000;
+
+    let script = format!(
+        "import zmq, sys\n\
+         c = zmq.Context()\n\
+         s = c.socket(zmq.PUB)\n\
+         s.bind('tcp://127.0.0.1:{}')\n\
+         sys.stdout.write('ready\\n')\n\
+         sys.stdout.flush()\n\
+         for line in sys.stdin:\n\
+         \tline = line.strip()\n\
+         \tif line:\n\
+         \t\ts.send_string(line)\n\
+         s.close()\n\
+         c.term()\n",
+        port
+    );
+
+    // Kill any stale process holding the port (from crashed previous runs)
+    #[cfg(unix)]
+    {
+        use std::process::Command as StdCommand;
+        if let Ok(output) = StdCommand::new("lsof")
+            .args(["-ti", &format!(":{}", port)])
+            .output()
+        {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid_str in pids.split_whitespace() {
+                if let Ok(pid) = pid_str.parse::<i32>() {
+                    log::info!("[zmq-relay] Killing stale process on port {}: pid={}", port, pid);
+                    unsafe { libc::kill(pid, libc::SIGKILL); }
+                }
+            }
+            // Brief wait for OS to release the port
+            if !pids.trim().is_empty() {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+    }
+
+    log::info!("[zmq-relay] Starting on port {}...", port);
+    let mut child = std::process::Command::new("python3")
+        .args(["-u", "-c", &script])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn ZMQ relay: {}", e))?;
+
+    let pid = child.id();
+
+    // Wait for "ready" to confirm the relay bound successfully
+    if let Some(ref mut stdout) = child.stdout {
+        use std::io::BufRead;
+        let mut reader = std::io::BufReader::new(stdout);
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(n) if n > 0 && line.trim() == "ready" => {
+                log::info!("[zmq-relay] Ready on port {} (pid={})", port, pid);
+            }
+            Ok(_) => {
+                let stderr_msg = child.stderr.as_mut().map(|se| {
+                    let mut buf = String::new();
+                    use std::io::Read;
+                    let _ = se.read_to_string(&mut buf);
+                    buf
+                }).unwrap_or_default();
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("ZMQ relay failed: {}", stderr_msg.trim()));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("Failed to read from ZMQ relay: {}", e));
+            }
+        }
+    }
+
+    // Detach stdout/stderr so pipes don't block
+    child.stdout.take();
+    child.stderr.take();
+
+    let mut guard = relay.0.lock().map_err(|e| e.to_string())?;
+    *guard = Some(child);
+    Ok(())
+}
+
+/// Send a stop command to sleap-nn via the ZMQ relay's stdin.
+#[tauri::command]
+pub async fn send_training_stop(
+    relay: tauri::State<'_, crate::ZmqRelay>,
+) -> Result<(), String> {
+    let mut guard = relay.0.lock().map_err(|e| e.to_string())?;
+    if let Some(ref mut child) = *guard {
+        if let Some(ref mut stdin) = child.stdin {
+            use std::io::Write;
+            stdin.write_all(b"{\"command\":\"stop\"}\n")
+                .map_err(|e| format!("Failed to write to relay stdin: {}", e))?;
+            stdin.flush()
+                .map_err(|e| format!("Failed to flush relay stdin: {}", e))?;
+            log::info!("[zmq-relay] Sent stop command");
+            Ok(())
+        } else {
+            Err("ZMQ relay stdin not available".into())
+        }
+    } else {
+        Err("No ZMQ relay running".into())
+    }
+}
+
+/// Kill the ZMQ relay process.
+#[tauri::command]
+pub async fn stop_zmq_relay(
+    relay: tauri::State<'_, crate::ZmqRelay>,
+) -> Result<(), String> {
+    let mut guard = relay.0.lock().map_err(|e| e.to_string())?;
+    if let Some(mut child) = guard.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+        log::info!("[zmq-relay] Stopped");
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Parsers (pure functions, testable)
 // ---------------------------------------------------------------------------

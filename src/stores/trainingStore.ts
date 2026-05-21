@@ -78,6 +78,7 @@ export interface ConfigHyperparams {
   minHardKeypoints: number;
   maxHardKeypoints: number | null;
   trainingMode: "reuse_config" | "resume" | "reuse_model";
+  accelerator: "auto" | "cuda" | "mps" | "cpu";
 }
 
 export const defaultHyperparams: ConfigHyperparams = {
@@ -127,6 +128,7 @@ export const defaultHyperparams: ConfigHyperparams = {
   minHardKeypoints: 2,
   maxHardKeypoints: null,
   trainingMode: "reuse_config",
+  accelerator: "auto",
 };
 
 export interface ConfigFile {
@@ -144,6 +146,13 @@ export interface RemoteTrainingOptions {
   labelsPath: string; // path on worker
   valLabelsPath?: string;
   inferenceTarget?: string;
+}
+
+export interface LocalTrainingOptions {
+  inferenceTarget?: string;
+  sampleCount?: number;
+  skipUserLabeled?: boolean;
+  existingPredictions?: "clear_all" | "replace" | "keep";
 }
 
 export type TrainingStatus = "idle" | "running" | "completed" | "error" | "stopped";
@@ -166,11 +175,14 @@ interface TrainingState {
   status: TrainingStatus;
   error: string | null;
   startedAt: number | null;
+  _stopRequested: boolean;
+  _isRemote: boolean;
 
   // Progress
   models: ModelProgress[];
   currentModelIndex: number;
   wandbUrl: string | null;
+  modelOutputDirs: string[];
   log: string[]; // single shared log for all models
 
   // Actions
@@ -180,7 +192,7 @@ interface TrainingState {
   removeConfigFile: (slot: string) => void;
   parseYamlConfig: (yamlText: string, filename: string, slot: string) => ConfigFile | null;
   reset: () => void;
-  startTraining: (remoteOpts?: RemoteTrainingOptions) => Promise<void>;
+  startTraining: (opts?: RemoteTrainingOptions | LocalTrainingOptions) => Promise<void>;
   stopTraining: () => Promise<void>;
   cancelTraining: () => Promise<void>;
 }
@@ -251,6 +263,9 @@ export function applyHyperparamsToYaml(yamlText: string, hp: ConfigHyperparams):
 
   // Seed
   trainer.seed = hp.randomSeed;
+
+  // Override accelerator so configs from CUDA machines work on CPU/MPS
+  trainer.trainer_accelerator = hp.accelerator;
 
   // Early stopping
   if (!trainer.early_stopping) trainer.early_stopping = {};
@@ -384,9 +399,12 @@ const initialState = {
   status: "idle" as TrainingStatus,
   error: null as string | null,
   startedAt: null as number | null,
+  _stopRequested: false,
+  _isRemote: false,
   models: [] as ModelProgress[],
   currentModelIndex: 0,
   wandbUrl: null as string | null,
+  modelOutputDirs: [] as string[],
   log: [] as string[],
 };
 
@@ -580,6 +598,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
         minHardKeypoints: typeof ohkmCfg.min_hard_keypoints === "number" ? ohkmCfg.min_hard_keypoints : 2,
         maxHardKeypoints: typeof ohkmCfg.max_hard_keypoints === "number" ? ohkmCfg.max_hard_keypoints : null,
         trainingMode: "reuse_config" as const,
+        accelerator: (typeof trainer.trainer_accelerator === "string" ? trainer.trainer_accelerator : "auto") as ConfigHyperparams["accelerator"],
       };
 
       // Also auto-fill data paths into the global config
@@ -609,7 +628,9 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
 
   reset: () => set({ ...initialState, config: { ...initialConfig } }),
 
-  startTraining: async (remoteOpts?: RemoteTrainingOptions) => {
+  startTraining: async (opts?: RemoteTrainingOptions | LocalTrainingOptions) => {
+    const remoteOpts = opts && "remote" in opts ? opts : undefined;
+    const localOpts = opts && !("remote" in opts) ? opts as LocalTrainingOptions : undefined;
     const { config } = get();
 
     // Build model progress entries from per-config hyperparams
@@ -631,9 +652,12 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
       status: "running",
       error: null,
       startedAt: Date.now(),
+      _stopRequested: false,
+      _isRemote: !!remoteOpts?.remote,
       models,
       currentModelIndex: 0,
       wandbUrl: null,
+      modelOutputDirs: [],
       log: [],
     });
 
@@ -905,44 +929,316 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
         return;
       }
 
-      // For MVP, local training is not yet implemented
-      set({ status: "error", error: "Local training coming soon. Use remote training via sleap-connect." });
+      const { runTraining, startZmqRelay, stopZmqRelay } = await import("@/platform/backend");
+      const labelsPath = config.trainingLabelsPath || (await import("@/stores/appStore")).useAppStore.getState().projectPath || "";
+      if (!labelsPath) {
+        set({ status: "error", error: "No training labels file selected" });
+        return;
+      }
+
+      // Save models next to the labels file
+      const modelDir = labelsPath.replace(/[/\\][^/\\]+$/, "") + "/models";
+      const trainedModelPaths: string[] = [];
+
+      // Start ZMQ relay so sleap-nn can receive stop commands
+      try {
+        await startZmqRelay();
+        console.log("[training] ZMQ relay started on port 9000");
+      } catch (e) {
+        console.error("[training] ZMQ relay failed to start:", e);
+        set((s) => ({
+          log: [...s.log, `[warn] ZMQ relay failed: ${e instanceof Error ? e.message : String(e)} — Stop Early disabled`],
+        }));
+      }
+
+      set((state) => ({
+        models: state.models.map((m, i) =>
+          i === 0 ? { ...m, status: "running" as const } : m,
+        ),
+      }));
+
+      try {
+        for (let i = 0; i < slots.length; i++) {
+          const cf = config.configs.find((c) => c.slot === slots[i]);
+          if (!cf) continue;
+
+          set((s) => ({
+            currentModelIndex: i,
+            models: s.models.map((m, j) =>
+              j === i ? { ...m, status: "running" as const } : m,
+            ),
+            log: i > 0 ? [...s.log, `— Starting ${s.models[i]?.label}...`] : s.log,
+          }));
+
+          const configYaml = applyHyperparamsToYaml(cf.content, cf.hyperparams);
+          const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
+          const runName = cf.hyperparams.runName || `${cf.modelType}_${ts}`;
+
+          const result = await runTraining(configYaml, labelsPath, runName, (event) => {
+            const state = get();
+            const idx = state.currentModelIndex;
+
+            if (event.event === "stdout" || event.event === "stderr") {
+              const line = event.data.line;
+
+              // Parse tqdm-style progress
+              const tqdmMatch = line.match(/Epoch (\d+):\s+(\d+)%\|.*?loss=([\d.]+)/);
+              if (tqdmMatch) {
+                const epoch = parseInt(tqdmMatch[1]);
+                const loss = parseFloat(tqdmMatch[3]);
+                set((s) => ({
+                  models: s.models.map((m, j) =>
+                    j === idx ? { ...m, epoch, loss } : m,
+                  ),
+                }));
+              }
+
+              // Parse JSON progress
+              try {
+                const data = JSON.parse(line);
+                if ("epoch" in data) {
+                  set((s) => ({
+                    models: s.models.map((m, j) =>
+                      j === idx
+                        ? {
+                            ...m,
+                            epoch: data.epoch ?? m.epoch,
+                            loss: data.loss ?? m.loss,
+                            valLoss: data.val_loss ?? m.valLoss,
+                            bestValLoss:
+                              data.val_loss != null &&
+                              (m.bestValLoss === null || data.val_loss < m.bestValLoss)
+                                ? data.val_loss
+                                : m.bestValLoss,
+                          }
+                        : m,
+                    ),
+                  }));
+                  return;
+                }
+              } catch {
+                // Not JSON
+              }
+
+              // W&B URL detection
+              if (line.includes("wandb.ai/")) {
+                const urlMatch = line.match(/(https:\/\/wandb\.ai\/[^\s"}\]>)]+)/);
+                if (urlMatch) set({ wandbUrl: urlMatch[1] });
+              }
+
+              // Model output directory detection (best_ckpt path from sleap-nn)
+              const ckptMatch = line.match(/best_ckpt['":\s]+([^\s'",}]+\.ckpt)/);
+              if (ckptMatch) {
+                const dir = ckptMatch[1].replace(/\/[^/]+$/, "");
+                set((s) => {
+                  const dirs = [...s.modelOutputDirs];
+                  if (!dirs.includes(dir)) dirs.push(dir);
+                  return { modelOutputDirs: dirs };
+                });
+              }
+
+              if (line.trim()) {
+                set((s) => ({ log: [...s.log, line] }));
+              }
+            }
+          }, modelDir);
+
+          if (result.modelPath) trainedModelPaths.push(result.modelPath);
+
+          const wasStopped = get()._stopRequested;
+          console.log("[training] Model %d finished: success=%s, wasStopped=%s, modelPath=%s", i, result.success, wasStopped, result.modelPath);
+          if (result.success || wasStopped) {
+            set((s) => ({
+              _stopRequested: false,
+              models: s.models.map((m, j) =>
+                j === i ? { ...m, status: "completed" as const } : m,
+              ),
+              log: wasStopped
+                ? [...s.log, `— ${s.models[i]?.label} stopped early, moving to next model...`]
+                : s.log,
+            }));
+            console.log("[training] Continuing to next model (i=%d, total=%d)", i, slots.length);
+          } else {
+            console.log("[training] Model failed, aborting training loop");
+            set((s) => ({
+              status: "error",
+              error: `Training failed for ${cf.modelType}`,
+              models: s.models.map((m, j) =>
+                j === i ? { ...m, status: "failed" as const } : m,
+              ),
+            }));
+            return;
+          }
+        }
+
+        set({ modelOutputDirs: trainedModelPaths });
+
+        // ── Post-training inference ───────────────────────────
+        const inferenceTarget = localOpts?.inferenceTarget;
+        if (inferenceTarget && inferenceTarget !== "nothing" && trainedModelPaths.length > 0) {
+          set((s) => ({
+            log: [...s.log, `— Training complete. Running inference (${inferenceTarget}) with models: ${trainedModelPaths.join(", ")}...`],
+          }));
+
+          const { runInference } = await import("@/platform/backend");
+          const { useAppStore } = await import("@/stores/appStore");
+          const { loadSlp } = await import("@talmolab/sleap-io.js");
+          const { commandContext } = await import("@/commands");
+          const { MergePredictions } = await import("@/commands/editCommands");
+          const getPlatform = (await import("@/platform")).getPlatform;
+
+          const pipelineMap: Record<string, import("@/stores/inferenceStore").PipelineType> = {
+            single_animal: "single-animal",
+            top_down: "top-down",
+            bottom_up: "bottom-up",
+            top_down_id: "top-down-id",
+            bottom_up_id: "bottom-up-id",
+          };
+          const inferenceConfig: import("@/stores/inferenceStore").InferenceConfig = {
+            pipeline: pipelineMap[config.modelType] || "top-down",
+            modelPaths: trainedModelPaths,
+            videoIndex: (inferenceTarget === "video" || inferenceTarget === "random_video")
+              ? (() => {
+                  const { labels, video } = useAppStore.getState();
+                  return labels && video ? labels.videos.indexOf(video) : 0;
+                })()
+              : "all",
+            frameRange: inferenceTarget as import("@/stores/inferenceStore").InferenceConfig["frameRange"],
+            sampleCount: localOpts?.sampleCount ?? 20,
+            excludeUserLabeled: localOpts?.skipUserLabeled ?? false,
+            batchSize: 4,
+            device: "auto",
+            maxInstances: null,
+            peakThreshold: 0.2,
+            anchorPart: null,
+            integralRefinement: true,
+            integralPatchSize: 5,
+            nPoints: 10,
+            maxEdgeLengthRatio: 0.25,
+            distPenaltyWeight: 1.0,
+            minLineScores: 0.25,
+            tracking: true,
+            trackerMethod: "simple",
+            similarityMethod: "oks",
+            matchingMethod: "hungarian",
+            trackingWindowSize: 5,
+            maxTracks: null,
+            connectSingleBreaks: false,
+            robust: 0.95,
+            flowImgScale: 1.0,
+            flowWindowSize: 21,
+            flowMaxLevels: 3,
+            ensureChannels: "auto",
+            filterOverlapping: false,
+            filterMethod: "iou",
+            filterThreshold: 0.8,
+          };
+
+          try {
+            const { projectPath, labels: currentLabels } = useAppStore.getState();
+
+            const logEvent = (event: import("@/platform/backend").ProcessEvent) => {
+              if (event.event === "stdout" || event.event === "stderr") {
+                const line = event.data.line;
+                if (line.trim()) set((s) => ({ log: [...s.log, line] }));
+              }
+            };
+
+            const mergeOutputSlp = async (outputPath: string) => {
+              const platform = await getPlatform();
+              const bytes = await platform.readFile(outputPath);
+              console.log("[training] Read predictions file: %d bytes", bytes.byteLength);
+              const predictions = await loadSlp(bytes.buffer, {
+                openVideos: false,
+                h5: { filenameHint: outputPath },
+              });
+              console.log("[training] Loaded predictions: %d videos, %d frames, %d tracks",
+                predictions.videos?.length ?? 0,
+                predictions.labeledFrames?.length ?? 0,
+                predictions.tracks?.length ?? 0,
+              );
+              await commandContext.execute(MergePredictions, { predictions });
+            };
+
+            if (inferenceTarget === "random") {
+              // Per-video random sampling
+              const videos = currentLabels?.videos ?? [];
+              for (let vi = 0; vi < videos.length; vi++) {
+                const nFrames = videos[vi].shape?.[0] ?? 0;
+                if (nFrames === 0) continue;
+                set((s) => ({ log: [...s.log, `— Inference: video ${vi + 1}/${videos.length}...`] }));
+                const perVideoConfig = { ...inferenceConfig, videoIndex: vi as number | "all", frameRange: "random_video" as typeof inferenceConfig.frameRange };
+                const result = await runInference(perVideoConfig, projectPath, logEvent);
+                if (result.success && result.outputPath) {
+                  await mergeOutputSlp(result.outputPath);
+                }
+              }
+            } else {
+              const result = await runInference(inferenceConfig, projectPath, logEvent);
+              if (result.success && result.outputPath) {
+                await mergeOutputSlp(result.outputPath);
+              } else if (!result.success) {
+                set((s) => ({ log: [...s.log, "— Post-training inference failed (non-zero exit)."] }));
+              }
+            }
+            set((s) => ({ log: [...s.log, "— Predictions merged into project."] }));
+          } catch (e) {
+            console.error("[training] Post-training inference failed:", e);
+            set((s) => ({
+              log: [...s.log, `— Post-training inference failed: ${e instanceof Error ? e.message : String(e)}`],
+            }));
+          }
+        }
+
+        set({ status: "completed" });
+      } catch (e) {
+        set({
+          status: "error",
+          error: `Local training error: ${e instanceof Error ? e.message : String(e)}`,
+        });
+      } finally {
+        try { await stopZmqRelay(); } catch { /* ignore */ }
+      }
     }
   },
 
   stopTraining: async () => {
-    // Send CONTROL_COMMAND::{"command":"stop"} — forwarded by the worker
-    // to sleap-nn's TrainingControllerZMQ, which does a graceful early
-    // stop at the trainer level (saves checkpoint, continues to next
-    // model). This matches the PyQt LossViewer's "Stop Early" button.
-    //
-    // NOT JOB_STOP (which sends SIGINT to the process group and crashes
-    // DDP training).
-    try {
+    if (get()._isRemote) {
+      // Remote: send CONTROL_COMMAND for graceful early stop
       const { useConnectStore } = await import("@/stores/connectStore");
       const { sendControlCommand } = useConnectStore.getState();
       sendControlCommand("stop");
-      // Keep status running — worker continues to next model or completes
       set((s) => ({
         log: [...s.log, "— Stop Early requested, saving checkpoint..."],
       }));
-    } catch (e) {
-      console.warn("[training] Failed to stop:", e);
-      await cancelCommand();
-      set({ status: "stopped" });
+    } else {
+      // Local: send stop via ZMQ (same as PyQt GUI)
+      const { sendTrainingStop } = await import("@/platform/backend");
+      set((s) => ({
+        _stopRequested: true,
+        log: [...s.log, "— Stop Early requested, finishing current epoch..."],
+      }));
+      try {
+        await sendTrainingStop();
+      } catch (e) {
+        console.error("[training] sendTrainingStop() failed:", e);
+        set((s) => ({
+          log: [...s.log, `[debug] Stop command failed: ${e instanceof Error ? e.message : String(e)}`],
+        }));
+      }
     }
   },
 
   cancelTraining: async () => {
-    // Send JOB_CANCEL for hard cancel
-    try {
+    if (get()._isRemote) {
+      // Remote: send JOB_CANCEL
       const { useConnectStore } = await import("@/stores/connectStore");
       const { cancelJob } = useConnectStore.getState();
       cancelJob("current");
-      set({ status: "error", error: "Training cancelled" });
-    } catch {
+    } else {
+      // Local: kill subprocess
       await cancelCommand();
-      set({ status: "error", error: "Training cancelled" });
     }
+    set({ status: "error", error: "Training cancelled" });
   },
 }));

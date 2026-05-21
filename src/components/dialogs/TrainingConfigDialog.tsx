@@ -37,6 +37,8 @@ interface TrainingConfigDialogProps {
   remoteEnabled: boolean;
   onRemoteEnabledChange: (enabled: boolean) => void;
   skeletonNodes?: string[];
+  sampleCount: number;
+  onSampleCountChange: (v: number) => void;
   skipUserLabeled: boolean;
   onSkipUserLabeledChange: (v: boolean) => void;
   existingPredictions: "clear_all" | "replace" | "keep";
@@ -657,6 +659,8 @@ export function TrainingConfigDialog({
   remoteEnabled,
   onRemoteEnabledChange,
   skeletonNodes = [],
+  sampleCount,
+  onSampleCountChange,
   skipUserLabeled,
   onSkipUserLabeledChange,
   existingPredictions,
@@ -921,6 +925,14 @@ export function TrainingConfigDialog({
                         Frames in the Labeling Suggestions list ({suggestionsCount} frames)
                       </span>
                     )}
+                    {(inferenceTarget === "random_video" || inferenceTarget === "random") && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Sample count:</span>
+                        <Input type="number" min={1} value={sampleCount}
+                          onChange={(e) => onSampleCountChange(Math.max(1, Number(e.target.value)))}
+                          className="h-8 text-sm w-24" />
+                      </div>
+                    )}
                   </div>
                   <Toggle
                     label="Skip user labeled frames"
@@ -1037,7 +1049,7 @@ export function TrainingConfigDialog({
                         Accelerator
                         <HintBubble text="Hardware to use for training. 'Auto' detects available hardware. Use 'cuda' for NVIDIA GPUs, 'mps' for Apple Silicon, or 'cpu' for CPU-only (slow)." />
                       </span>
-                      <Select value="auto">
+                      <Select value={firstHp?.accelerator ?? "auto"} onValueChange={(v) => configs.forEach((c) => onUpdateSlot(c.slot, { accelerator: v as "auto" | "cuda" | "mps" | "cpu" }))}>
                         <SelectTrigger className="h-8 text-sm w-28" id="field-accelerator"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="auto">auto</SelectItem>
