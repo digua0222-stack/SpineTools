@@ -6,7 +6,7 @@
  */
 
 import { Instance, PredictedInstance } from "@talmolab/sleap-io.js";
-import type { Skeleton, Video, LabeledFrame, InstancePlacementMethod } from "../types";
+import type { Labels, Skeleton, Video, LabeledFrame, InstancePlacementMethod } from "../types";
 
 /** Default frame dimensions when video shape is unknown. */
 const DEFAULT_WIDTH = 800;
@@ -218,28 +218,31 @@ function placePriorFrame(
   priorFrame: LabeledFrame | null
 ): Instance {
   if (priorFrame && priorFrame.instances.length > 0) {
-    // Try to find a user instance (not predicted) with matching track first
     const userInstances = priorFrame.instances.filter(
       (inst) => !(inst instanceof PredictedInstance) && hasPlacedPoints(inst)
     );
+    const candidates = userInstances.length > 0
+      ? userInstances
+      : priorFrame.instances.filter((inst) => hasPlacedPoints(inst));
 
-    let source: Instance | undefined;
+    if (candidates.length > 0) {
+      const usedTracks = new Set(
+        existingInstances
+          .filter((inst) => inst.track !== null)
+          .map((inst) => inst.track)
+      );
 
-    // If we have existing instances, try to match by track
-    if (userInstances.length > 0) {
-      source = userInstances[0];
-    } else {
-      // Fall back to any instance with placed points
-      source = priorFrame.instances.find((inst) => hasPlacedPoints(inst));
-    }
+      const source = candidates.find(
+        (inst) => !inst.track || !usedTracks.has(inst.track)
+      ) ?? candidates[0];
 
-    if (source) {
       const instance = Instance.empty({ skeleton });
       for (let i = 0; i < instance.points.length && i < source.points.length; i++) {
         instance.points[i].xy = [source.points[i].xy[0], source.points[i].xy[1]];
         instance.points[i].visible = source.points[i].visible;
         instance.points[i].complete = source.points[i].complete;
       }
+      if (source.track) instance.track = source.track;
       return instance;
     }
   }
@@ -308,6 +311,24 @@ function placePrediction(
  * @param priorFrame - The labeled frame from frameIdx-1 (for prior_frame method)
  * @returns A new Instance with points positioned according to the method
  */
+/** Find the nearest labeled frame before `frameIdx` for the given video. */
+export function findNearestPriorFrame(
+  labels: Labels,
+  video: Video,
+  frameIdx: number
+): LabeledFrame | null {
+  if (frameIdx <= 0) return null;
+  let best: LabeledFrame | null = null;
+  let bestIdx = -1;
+  for (const lf of labels.labeledFrames) {
+    if (lf.video === video && lf.frameIdx < frameIdx && lf.frameIdx > bestIdx) {
+      bestIdx = lf.frameIdx;
+      best = lf;
+    }
+  }
+  return best;
+}
+
 export function placeInstance(
   method: InstancePlacementMethod,
   skeleton: Skeleton,
