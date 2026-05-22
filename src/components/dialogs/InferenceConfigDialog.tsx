@@ -50,6 +50,7 @@ interface InferenceConfigDialogProps {
   onUpdate: (updates: Partial<InferenceConfigValues>) => void;
   pipeline: string;
   tracking: boolean;
+  onTrackingChange: (enabled: boolean) => void;
   skeletonNodes?: string[];
 }
 
@@ -162,6 +163,7 @@ export function InferenceConfigDialog({
   onUpdate,
   pipeline,
   tracking,
+  onTrackingChange,
   skeletonNodes = [],
 }: InferenceConfigDialogProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -226,7 +228,7 @@ export function InferenceConfigDialog({
         <div className="flex flex-1 min-h-0 border-t">
           {/* Left nav — jump links */}
           <nav className="w-[180px] border-r bg-muted/30 py-3 shrink-0">
-            {CATEGORIES.map((cat) => (
+            {CATEGORIES.filter((cat) => cat.id !== "flow" || v.trackerMethod === "flow").map((cat) => (
               <button
                 key={cat.id}
                 className="w-full text-left px-5 py-2.5 text-sm transition-colors text-muted-foreground hover:text-foreground hover:bg-accent/50"
@@ -304,9 +306,10 @@ export function InferenceConfigDialog({
             {/* ── Tracking ── */}
             <SectionHeading id="tracking" label="Tracking" />
             <div className="space-y-2">
+              <Toggle label="Enable Tracking" hint="Connect predicted instances across frames to maintain identity over time." checked={tracking} onChange={onTrackingChange} />
               {!tracking ? (
                 <p className="text-sm text-muted-foreground">
-                  Tracking is disabled. Enable it in the sidebar to configure these settings.
+                  Tracking is disabled. Enable it above to configure tracking settings.
                 </p>
               ) : (
                 <>
@@ -399,44 +402,48 @@ export function InferenceConfigDialog({
 
             <Separator className="my-5" />
 
-            {/* ── Optical Flow ── */}
-            <SectionHeading id="flow" label="Optical Flow" />
-            <div className="space-y-2">
-              <Field label="Image Scale" id="field-flowscale" hint="Scale factor for images before computing optical flow. Lower values are faster but less precise.">
-                <Input
-                  type="number"
-                  value={v.flowImgScale}
-                  onChange={(e) => onUpdate({ flowImgScale: Number(e.target.value) })}
-                  min={0.1}
-                  max={2}
-                  step={0.1}
-                  className="h-9 text-sm"
-                />
-              </Field>
-              <Field label="Window Size" id="field-flowwindow" hint="Size of the search window for optical flow computation. Larger windows handle faster motion but are slower.">
-                <Input
-                  type="number"
-                  value={v.flowWindowSize}
-                  onChange={(e) => onUpdate({ flowWindowSize: Number(e.target.value) })}
-                  min={3}
-                  max={99}
-                  step={2}
-                  className="h-9 text-sm"
-                />
-              </Field>
-              <Field label="Pyramid Levels" id="field-flowlevels" hint="Number of image pyramid levels for multi-scale optical flow. More levels handle larger displacements.">
-                <Input
-                  type="number"
-                  value={v.flowMaxLevels}
-                  onChange={(e) => onUpdate({ flowMaxLevels: Number(e.target.value) })}
-                  min={1}
-                  max={10}
-                  className="h-9 text-sm"
-                />
-              </Field>
-            </div>
+            {v.trackerMethod === "flow" && (
+              <>
+                {/* ── Optical Flow ── */}
+                <SectionHeading id="flow" label="Optical Flow" />
+                <div className="space-y-2">
+                  <Field label="Image Scale" id="field-flowscale" hint="Scale factor for images before computing optical flow. Lower values are faster but less precise.">
+                    <Input
+                      type="number"
+                      value={v.flowImgScale}
+                      onChange={(e) => onUpdate({ flowImgScale: Number(e.target.value) })}
+                      min={0.1}
+                      max={2}
+                      step={0.1}
+                      className="h-9 text-sm"
+                    />
+                  </Field>
+                  <Field label="Window Size" id="field-flowwindow" hint="Size of the search window for optical flow computation. Larger windows handle faster motion but are slower.">
+                    <Input
+                      type="number"
+                      value={v.flowWindowSize}
+                      onChange={(e) => onUpdate({ flowWindowSize: Number(e.target.value) })}
+                      min={3}
+                      max={99}
+                      step={2}
+                      className="h-9 text-sm"
+                    />
+                  </Field>
+                  <Field label="Pyramid Levels" id="field-flowlevels" hint="Number of image pyramid levels for multi-scale optical flow. More levels handle larger displacements.">
+                    <Input
+                      type="number"
+                      value={v.flowMaxLevels}
+                      onChange={(e) => onUpdate({ flowMaxLevels: Number(e.target.value) })}
+                      min={1}
+                      max={10}
+                      className="h-9 text-sm"
+                    />
+                  </Field>
+                </div>
 
-            <Separator className="my-5" />
+                <Separator className="my-5" />
+              </>
+            )}
 
             {/* ── Advanced ── */}
             <SectionHeading id="advanced" label="Advanced" />
