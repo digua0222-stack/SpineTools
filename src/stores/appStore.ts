@@ -36,6 +36,7 @@ export interface AppState {
   labeledFrame: LabeledFrame | null;
   skeleton: Skeleton | null;
   lastInteractedFrame: number | null;
+  frameInteractionStack: string[];
 
   // === UI layout state ===
   uiScale: number;
@@ -111,6 +112,7 @@ export interface AppState {
   setInstance: (instance: Instance | null) => void;
   setLabeledFrame: (frame: LabeledFrame | null) => void;
   markChanged: () => void;
+  touchFrame: () => void;
   clearChanges: () => void;
   setLoading: (loading: boolean, message?: string) => void;
   setTrainingDialogOpen: (open: boolean) => void;
@@ -162,12 +164,13 @@ export const useAppStore = create<AppState>()(
       labeledFrame: null,
       skeleton: null,
       lastInteractedFrame: null,
+      frameInteractionStack: [],
 
       // UI layout state
       uiScale: 1,
       sidebarCollapsed: false,
       sidebarActivePanel: "videos",
-      panelOrder: ["videos", "skeleton", "instances", "view", "suggestions", "training", "inference", "environment", "connect", "notifications", "debug"],
+      panelOrder: ["videos", "skeleton", "instances", "view", "suggestions", "frames", "training", "inference", "environment", "connect", "notifications", "debug"],
 
       // View state
       showInstances: true,
@@ -307,6 +310,16 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           state.hasChanges = true;
           state.lastInteractedFrame = state.frameIdx;
+        }),
+
+      touchFrame: () =>
+        set((state) => {
+          if (!state.video || !state.labels) return;
+          const vidIdx = state.labels.videos.indexOf(state.video);
+          const key = `${vidIdx}:${state.frameIdx}`;
+          const idx = state.frameInteractionStack.indexOf(key);
+          if (idx !== -1) state.frameInteractionStack.splice(idx, 1);
+          state.frameInteractionStack.push(key);
         }),
 
       clearChanges: () =>
