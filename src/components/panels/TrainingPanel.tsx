@@ -7,7 +7,7 @@
  *  - Progress (when running or done)
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useTrainingStore, getConfigSlots, getSlotLabel } from "@/stores/trainingStore";
 import type { ModelType, ConfigFile, ConfigHyperparams } from "@/stores/trainingStore";
 import { useConnectStore } from "@/stores/connectStore";
@@ -51,6 +51,164 @@ const MODEL_TYPE_OPTIONS: { value: ModelType; label: string }[] = [
   { value: "top_down_id", label: "Top-Down + ID" },
   { value: "bottom_up_id", label: "Bottom-Up + ID" },
 ];
+
+// ── Skeleton ↔ Pipeline Compatibility & Recommendation ───────────────────────
+
+interface SkeletonCompatibility {
+  disabledTypes: Set<ModelType>;
+  warnings: Map<ModelType, string>;
+}
+
+interface PipelineRecommendation {
+  recommended: ModelType;
+  reason: string;
+  alternatives: ModelType[];
+}
+
+const BOTTOM_UP_TYPES: ModelType[] = ["bottom_up", "bottom_up_id"];
+
+function isSkeletonConnected(
+  nodes: { name: string }[],
+  edges: { source: { name: string }; destination: { name: string } }[],
+): boolean {
+  if (nodes.length <= 1) return true;
+  if (edges.length === 0) return false;
+  const adj = new Map<string, Set<string>>();
+  for (const n of nodes) adj.set(n.name, new Set());
+  for (const e of edges) {
+    adj.get(e.source.name)?.add(e.destination.name);
+    adj.get(e.destination.name)?.add(e.source.name);
+  }
+  const visited = new Set<string>();
+  const queue = [nodes[0].name];
+  visited.add(nodes[0].name);
+  while (queue.length > 0) {
+    const curr = queue.pop()!;
+    for (const neighbor of adj.get(curr) ?? []) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+  }
+  return visited.size === nodes.length;
+}
+
+function getSkeletonCompatibility(
+  skeleton: { nodes: { name: string }[]; edges: { source: { name: string }; destination: { name: string } }[] } | null,
+): SkeletonCompatibility {
+  const disabledTypes = new Set<ModelType>();
+  const warnings = new Map<ModelType, string>();
+
+  if (!skeleton) return { disabledTypes, warnings };
+
+  if (skeleton.edges.length === 0) {
+    for (const t of BOTTOM_UP_TYPES) disabledTypes.add(t);
+  } else if (!isSkeletonConnected(skeleton.nodes, skeleton.edges)) {
+    for (const t of BOTTOM_UP_TYPES) {
+      warnings.set(t, "Bottom-Up works best with a fully connected skeleton");
+    }
+  }
+
+  return { disabledTypes, warnings };
+}
+
+type LabelsLike = {
+  labeledFrames: Array<{
+    userInstances: Array<{
+      points: Array<{ xy: [number, number]; visible: boolean }>;
+    }>;
+  }>;
+  videos: Array<{ shape: [number, number, number, number] | null }>;
+  skeletons: Array<{ edges: { source: { name: string }; destination: { name: string } }[] }>;
+  tracks: unknown[];
+};
+
+function recommendPipeline(labels: LabelsLike | null): PipelineRecommendation | null {
+  if (!labels || labels.labeledFrames.length === 0) return null;
+
+  let maxInstances = 0;
+  let bboxSum = 0;
+  let bboxCount = 0;
+  let maxPointCoord = 0;
+
+  for (const lf of labels.labeledFrames) {
+    const userInsts = lf.userInstances;
+    if (userInsts.length > maxInstances) maxInstances = userInsts.length;
+
+    for (const inst of userInsts) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let validCount = 0;
+      for (const pt of inst.points) {
+        if (pt.visible && !Number.isNaN(pt.xy[0]) && !Number.isNaN(pt.xy[1])) {
+          if (pt.xy[0] < minX) minX = pt.xy[0];
+          if (pt.xy[1] < minY) minY = pt.xy[1];
+          if (pt.xy[0] > maxX) maxX = pt.xy[0];
+          if (pt.xy[1] > maxY) maxY = pt.xy[1];
+          if (pt.xy[0] > maxPointCoord) maxPointCoord = pt.xy[0];
+          if (pt.xy[1] > maxPointCoord) maxPointCoord = pt.xy[1];
+          validCount++;
+        }
+      }
+      if (validCount >= 2) {
+        bboxSum += Math.max(maxX - minX, maxY - minY);
+        bboxCount++;
+      }
+    }
+  }
+
+  const avgBbox = bboxCount > 0 ? bboxSum / bboxCount : 0;
+  let maxDim = 0;
+  for (const v of labels.videos) {
+    if (v.shape) {
+      const d = Math.max(v.shape[1], v.shape[2]);
+      if (d > maxDim) maxDim = d;
+    }
+  }
+  if (maxDim === 0 && maxPointCoord > 0) {
+    maxDim = maxPointCoord;
+  }
+
+  const ratio = maxDim > 0 ? avgBbox / maxDim : 0;
+  const numEdges = labels.skeletons[0]?.edges.length ?? 0;
+  const hasTracks = labels.tracks.length > 1;
+
+  if (maxInstances <= 1) {
+    return {
+      recommended: "single_animal",
+      reason: "Only one animal per frame",
+      alternatives: ["top_down"],
+    };
+  }
+
+  if (ratio < 0.20) {
+    const alts: ModelType[] = ["bottom_up"];
+    if (hasTracks) alts.push("top_down_id");
+    return {
+      recommended: "top_down",
+      reason: `Animals are small (~${Math.round(ratio * 100)}% of frame) — top-down recommended`,
+      alternatives: alts,
+    };
+  }
+
+  if (numEdges === 0) {
+    const alts: ModelType[] = [];
+    if (hasTracks) alts.push("top_down_id");
+    return {
+      recommended: "top_down",
+      reason: "No skeleton edges — bottom-up requires edges for Part Affinity Fields",
+      alternatives: alts,
+    };
+  }
+
+  const alts: ModelType[] = ["top_down"];
+  if (hasTracks) alts.push("bottom_up_id");
+  return {
+    recommended: "bottom_up",
+    reason: `Larger animals (~${Math.round(ratio * 100)}% of frame) — bottom-up handles occlusions well`,
+    alternatives: alts,
+  };
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -319,6 +477,10 @@ export function TrainingPanel() {
 
   // App state
   const projectPath = useAppStore((s) => s.projectPath);
+  const skeleton = useAppStore((s) => s.skeleton);
+  const labels = useAppStore((s) => s.labels);
+  const skeletonCompat = useMemo(() => getSkeletonCompatibility(skeleton), [skeleton]);
+  const pipelineRec = useMemo(() => recommendPipeline(labels as LabelsLike | null), [labels]);
 
   // Elapsed time ticker
   const [elapsed, setElapsed] = useState(0);
@@ -352,10 +514,12 @@ export function TrainingPanel() {
     cf.hyperparams.pafsLossWeight > 0 &&
     cf.hyperparams.classLossWeight > 0
   );
+  const isModelTypeIncompatible = skeletonCompat.disabledTypes.has(config.modelType);
   const canStart =
     hasAllConfigs &&
     hasData &&
     hasValidLossWeights &&
+    !isModelTypeIncompatible &&
     status === "idle" &&
     (remoteEnabled ? !!selectedWorkerId : true);
 
@@ -451,13 +615,30 @@ export function TrainingPanel() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MODEL_TYPE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
+                {MODEL_TYPE_OPTIONS.map((o) => {
+                  const isDisabled = skeletonCompat.disabledTypes.has(o.value);
+                  const isRecommended = pipelineRec?.recommended === o.value;
+                  return (
+                    <SelectItem key={o.value} value={o.value} disabled={isDisabled}>
+                      {o.label}{isDisabled ? " (requires edges)" : ""}
+                      {isRecommended && !isDisabled ? " ★" : ""}
+                      {skeletonCompat.warnings.has(o.value) ? " ⚠" : ""}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
+            {pipelineRec && config.modelType !== pipelineRec.recommended && !skeletonCompat.disabledTypes.has(config.modelType) && (
+              <p className="text-[10px] text-green-400">
+                💡 Recommended: {MODEL_TYPE_OPTIONS.find((o) => o.value === pipelineRec.recommended)?.label} — {pipelineRec.reason}
+              </p>
+            )}
+            {skeletonCompat.warnings.has(config.modelType) && (
+              <p className="text-[10px] text-yellow-400">⚠ {skeletonCompat.warnings.get(config.modelType)}</p>
+            )}
+            {isModelTypeIncompatible && (
+              <p className="text-[10px] text-red-400">Selected model type is incompatible with the current skeleton</p>
+            )}
           </div>
 
           {requiredSlots.map((slot) => {
