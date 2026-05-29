@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "../bun-test";
 import {
   buildMessage,
   parseMessage,
@@ -9,8 +9,8 @@ import {
   MSG_AUTH_RESPONSE,
   MSG_AUTH_SUCCESS,
   MSG_AUTH_FAILURE,
-  TrackJobSpec,
-  TrainJobSpec,
+  type TrackJobSpec,
+  type TrainJobSpec,
 } from "@/lib/sleapConnect";
 
 describe("sleapConnect protocol helpers", () => {

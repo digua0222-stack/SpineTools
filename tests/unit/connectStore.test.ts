@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "../bun-test";
 import { useConnectStore } from "@/stores/connectStore";
 
 describe("connectStore", () => {
@@ -13,7 +13,6 @@ describe("connectStore", () => {
       selectedWorkerId: null,
       _ws: null,
       _pc: null,
-      _dc: null,
       _pendingFs: new Map(),
       _pendingJobs: new Map(),
     });

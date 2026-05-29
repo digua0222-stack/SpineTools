@@ -18,21 +18,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
+          bun-version-file: .bun-version
 
-      - name: Clone and build sleap-io.js
-        run: |
-          git clone --depth 1 https://github.com/talmolab/sleap-io.js.git ../sleap-io.js
-          cd ../sleap-io.js && npm ci && npm run build
+      - name: Cache bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
+      # Tests run against the published @talmolab/sleap-io.js (pinned in
+      # package.json / bun.lock), so no sibling checkout is needed.
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Type check and build
-        run: npm run build
+        run: bun run build
+
+      - name: Type check tests
+        run: bun run typecheck:tests
 
       - name: Run tests
-        run: npm test -- --run
+        run: bun run test

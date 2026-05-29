@@ -2,8 +2,8 @@
  * Tests for dialog components.
  */
 
-import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, beforeEach, beforeAll, vi } from "../bun-test";
+import { render, screen } from "@testing-library/react";
 import { useAppStore } from "@/stores/appStore";
 
 // Mock platform module
@@ -412,7 +412,7 @@ describe("Dialog components", () => {
       const { ExportDialog } = await import(
         "@/components/dialogs/ExportDialog"
       );
-      const { container } = render(<ExportDialog open={true} onOpenChange={() => {}} />);
+      render(<ExportDialog open={true} onOpenChange={() => {}} />);
 
       // Should not render anything meaningful
       expect(screen.queryByText("Export")).not.toBeInTheDocument();

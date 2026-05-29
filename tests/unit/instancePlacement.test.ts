@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "../bun-test";
 import {
   Instance,
   Labels,
@@ -166,7 +166,6 @@ describe("placePriorFrame", () => {
 });
 
 describe("findNearestPriorFrame", () => {
-  const skeleton = makeSkeleton();
   const video = makeVideo();
   const video2 = makeVideo();
 

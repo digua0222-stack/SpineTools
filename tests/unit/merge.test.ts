@@ -11,6 +11,7 @@
  * instance checks.
  */
 
+import { describe, it, expect } from "../bun-test";
 import {
   Labels,
   LabeledFrame,
@@ -21,7 +22,6 @@ import {
   Track,
 } from "@talmolab/sleap-io.js";
 import { merge, centroid, centroidDistance } from "@/lib/merge";
-import type { MergeOptions, MergeResult } from "@/lib/merge";
 
 // ---------------------------------------------------------------------------
 // Helper factories

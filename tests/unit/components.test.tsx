@@ -2,7 +2,7 @@
  * Basic component rendering tests.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "../bun-test";
 import { render, screen } from "@testing-library/react";
 import { useAppStore } from "@/stores/appStore";
 
@@ -335,7 +335,7 @@ describe("Component rendering", () => {
       );
 
       // Component that throws on render
-      function ThrowingComponent() {
+      function ThrowingComponent(): never {
         throw new Error("Test error");
       }
 
@@ -359,7 +359,7 @@ describe("Component rendering", () => {
         "@/components/layout/ErrorBoundary"
       );
 
-      function ThrowingComponent() {
+      function ThrowingComponent(): never {
         throw new Error("Test error");
       }
 
