@@ -739,3 +739,118 @@ data_config: {}
     });
   });
 });
+
+import type { ModelProgress } from "@/stores/trainingStore";
+
+function makeModel(over: Partial<ModelProgress> = {}): ModelProgress {
+  return {
+    label: "Centroid", epoch: 0, maxEpochs: 100, loss: null, valLoss: null,
+    bestValLoss: null, status: "running",
+    epochSamples: [], batchSamples: [],
+    epochSize: 1, lastBatchNumber: 0,
+    metrics: { meanEpochTimeSec: null, etaNext10Min: null, epochsInPlateau: 0, inPlateau: false, bestValEpoch: null },
+    epochStartedAt: null, plateauPatience: 10, plateauMinDelta: null,
+    runDir: null,
+    ...over,
+  };
+}
+
+describe("recordEpoch", () => {
+  beforeEach(() => useTrainingStore.getState().reset());
+
+  it("appends an epoch sample and updates scalars", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    useTrainingStore.getState().recordEpoch(0, { epoch: 0, trainLoss: 1.0, valLoss: 0.9 });
+    const m = useTrainingStore.getState().models[0];
+    expect(m.epochSamples).toHaveLength(1);
+    expect(m.epochSamples[0]).toEqual({ epoch: 0, trainLoss: 1.0, valLoss: 0.9 });
+    expect(m.epoch).toBe(1);          // PyQt displays epoch+1
+    expect(m.loss).toBe(1.0);
+    expect(m.valLoss).toBe(0.9);
+    expect(m.bestValLoss).toBe(0.9);
+  });
+
+  it("tracks best val loss across epochs and recomputes metrics", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    const s = useTrainingStore.getState();
+    s.recordEpoch(0, { epoch: 0, trainLoss: 1.0, valLoss: 0.5 });
+    s.recordEpoch(0, { epoch: 1, trainLoss: 0.8, valLoss: 0.6 }); // worse
+    const m = useTrainingStore.getState().models[0];
+    expect(m.bestValLoss).toBe(0.5);
+    expect(m.metrics.bestValEpoch).toBe(0);
+    expect(m.metrics.inPlateau).toBe(true);
+    expect(m.epochSamples).toHaveLength(2);
+  });
+
+  it("ignores out-of-range model index safely", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    expect(() => useTrainingStore.getState().recordEpoch(5, { epoch: 0, trainLoss: 1, valLoss: 1 })).not.toThrow();
+  });
+
+  it("recordEpoch preserves prior loss/valLoss when a sample field is null", () => {
+    useTrainingStore.setState({ models: [makeModel({ loss: 0.7, valLoss: 0.6, bestValLoss: 0.6 })], startedAt: 0 });
+    useTrainingStore.getState().recordEpoch(0, { epoch: 0, trainLoss: null, valLoss: null });
+    const m = useTrainingStore.getState().models[0];
+    expect(m.loss).toBe(0.7);        // unchanged (sample.trainLoss was null)
+    expect(m.valLoss).toBe(0.6);     // unchanged (sample.valLoss was null)
+    expect(m.bestValLoss).toBe(0.6); // unchanged (no new val loss)
+    expect(m.epochSamples).toHaveLength(1);
+  });
+});
+
+describe("recordBatch / epochSize", () => {
+  beforeEach(() => useTrainingStore.getState().reset());
+
+  it("computes globalBatch = epoch*epochSize + batch (epochSize starts at 1)", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    useTrainingStore.getState().recordBatch(0, { epoch: 0, batch: 5, loss: 0.4 });
+    const m = useTrainingStore.getState().models[0];
+    expect(m.batchSamples).toEqual([{ globalBatch: 5, loss: 0.4 }]); // 0*1+5
+    expect(m.lastBatchNumber).toBe(5);
+  });
+
+  it("recordEpoch learns epochSize from lastBatchNumber, used by later batches", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    const s = useTrainingStore.getState();
+    s.recordBatch(0, { epoch: 0, batch: 5, loss: 0.4 });          // lastBatch=5
+    s.recordEpoch(0, { epoch: 0, trainLoss: 0.4, valLoss: 0.5 }); // epochSize = max(1,6) = 6
+    expect(useTrainingStore.getState().models[0].epochSize).toBe(6);
+    s.recordBatch(0, { epoch: 1, batch: 2, loss: 0.3 });          // 1*6+2 = 8
+    const m = useTrainingStore.getState().models[0];
+    expect(m.batchSamples[m.batchSamples.length - 1]).toEqual({ globalBatch: 8, loss: 0.3 });
+  });
+
+  it("recordBatches appends multiple points in one update", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    useTrainingStore.getState().recordBatches(0, [
+      { epoch: 0, batch: 0, loss: 1.0 },
+      { epoch: 0, batch: 1, loss: 0.9 },
+    ]);
+    expect(useTrainingStore.getState().models[0].batchSamples).toEqual([
+      { globalBatch: 0, loss: 1.0 },
+      { globalBatch: 1, loss: 0.9 },
+    ]);
+  });
+
+  it("ignores out-of-range model index safely", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    expect(() => useTrainingStore.getState().recordBatch(9, { epoch: 0, batch: 0, loss: 1 })).not.toThrow();
+    expect(() => useTrainingStore.getState().recordBatches(9, [{ epoch: 0, batch: 0, loss: 1 }])).not.toThrow();
+  });
+});
+
+describe("markEpochBegin / epochStartedAt", () => {
+  beforeEach(() => useTrainingStore.getState().reset());
+  it("recordEpoch keeps epochStartedAt (set by epoch_begin)", () => {
+    useTrainingStore.setState({ models: [makeModel({ epochStartedAt: 1000 })], startedAt: 0 });
+    useTrainingStore.getState().recordEpoch(0, { epoch: 0, trainLoss: 1, valLoss: 1 });
+    expect(useTrainingStore.getState().models[0].epochStartedAt).toBe(1000);
+  });
+  it("markEpochBegin sets epoch and stamps epochStartedAt", () => {
+    useTrainingStore.setState({ models: [makeModel()], startedAt: 0 });
+    useTrainingStore.getState().markEpochBegin(0, 3);
+    const m = useTrainingStore.getState().models[0];
+    expect(m.epoch).toBe(3);
+    expect(typeof m.epochStartedAt).toBe("number");
+  });
+});

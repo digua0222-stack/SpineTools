@@ -2,6 +2,15 @@ import { create } from "zustand";
 import yaml from "js-yaml";
 import { cancelCommand } from "@/platform/backend";
 import { isTauri } from "@/platform";
+import { computeRuntimeMetrics } from "@/lib/trainingMetrics";
+
+const MAX_BATCH_SAMPLES = 20000; // bound batchSamples; drop oldest beyond this
+const MAX_LOG_LINES = 1000; // bound the training log so it doesn't grow unbounded during long runs
+
+function appendLog(prev: string[], ...lines: string[]): string[] {
+  const next = [...prev, ...lines];
+  return next.length > MAX_LOG_LINES ? next.slice(next.length - MAX_LOG_LINES) : next;
+}
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -164,6 +173,35 @@ export interface LocalTrainingOptions {
 
 export type TrainingStatus = "idle" | "running" | "completed" | "error" | "stopped";
 
+export interface EpochSample {
+  epoch: number;
+  trainLoss: number | null;
+  valLoss: number | null;
+}
+
+export interface BatchSample {
+  globalBatch: number;
+  loss: number;
+}
+
+export interface BatchInput {
+  epoch: number;
+  batch: number;
+  loss: number;
+}
+
+export interface RuntimeMetrics {
+  meanEpochTimeSec: number | null;
+  etaNext10Min: number | null;
+  epochsInPlateau: number;
+  inPlateau: boolean;
+  bestValEpoch: number | null;
+}
+
+export function emptyMetrics(): RuntimeMetrics {
+  return { meanEpochTimeSec: null, etaNext10Min: null, epochsInPlateau: 0, inPlateau: false, bestValEpoch: null };
+}
+
 export interface ModelProgress {
   label: string;
   epoch: number;
@@ -172,6 +210,16 @@ export interface ModelProgress {
   valLoss: number | null;
   bestValLoss: number | null;
   status: "pending" | "running" | "completed" | "failed";
+  epochSamples: EpochSample[];
+  batchSamples: BatchSample[];
+  epochSize: number;        // batches-per-epoch (learned: max seen last_batch+1); PyQt parity
+  lastBatchNumber: number;  // most recent batch index seen this epoch
+  metrics: RuntimeMetrics;
+  epochStartedAt: number | null;
+  plateauPatience: number | null;
+  plateauMinDelta: number | null;
+  /** Local-training-only filesystem run dir (`${modelDir}/${runName}`); null for remote / not-yet-started. */
+  runDir: string | null;
 }
 
 interface TrainingState {
@@ -202,6 +250,10 @@ interface TrainingState {
   startTraining: (opts?: RemoteTrainingOptions | LocalTrainingOptions) => Promise<void>;
   stopTraining: () => Promise<void>;
   cancelTraining: () => Promise<void>;
+  recordEpoch: (modelIndex: number, sample: EpochSample) => void;
+  recordBatch: (modelIndex: number, sample: BatchInput) => void;
+  recordBatches: (modelIndex: number, samples: BatchInput[]) => void;
+  markEpochBegin: (modelIndex: number, epoch: number) => void;
 }
 
 // ── Config slot helpers ───────────────────────────────────────────
@@ -698,6 +750,15 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
         valLoss: null,
         bestValLoss: null,
         status: "pending" as const,
+        epochSamples: [],
+        batchSamples: [],
+        epochSize: 1,
+        lastBatchNumber: 0,
+        metrics: emptyMetrics(),
+        epochStartedAt: null,
+        plateauPatience: cf?.hyperparams.earlyStoppingPatience ?? null,
+        plateauMinDelta: cf?.hyperparams.plateauMinDelta ?? null,
+        runDir: null,
       };
     });
 
@@ -809,37 +870,18 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
 
               if (event === "epoch_end") {
                 const logs = data.logs ?? data.py_dict?.logs ?? {};
-                const trainLoss = logs["train/loss"] ?? logs["loss"];
-                const valLoss = logs["val/loss"];
+                const trainLoss = logs["train/loss"] ?? logs["loss"] ?? null;
+                const valLoss = logs["val/loss"] ?? null;
                 const epoch = data.epoch ?? data.py_dict?.epoch;
-                set((s) => ({
-                  models: s.models.map((m, i) =>
-                    i === idx
-                      ? {
-                          ...m,
-                          epoch: typeof epoch === "number" ? epoch + 1 : m.epoch,
-                          loss: trainLoss ?? m.loss,
-                          valLoss: valLoss ?? m.valLoss,
-                          bestValLoss:
-                            valLoss != null &&
-                            (m.bestValLoss === null || valLoss < m.bestValLoss)
-                              ? valLoss
-                              : m.bestValLoss,
-                        }
-                      : m,
-                  ),
-                }));
+                // OQ-5: remote epoch is 0-based — pass through, no normalization.
+                if (typeof epoch === "number") {
+                  get().recordEpoch(idx, { epoch, trainLoss, valLoss });
+                }
               }
 
               if (event === "epoch_begin") {
                 const epoch = data.epoch ?? data.py_dict?.epoch;
-                if (typeof epoch === "number") {
-                  set((s) => ({
-                    models: s.models.map((m, i) =>
-                      i === idx ? { ...m, epoch } : m,
-                    ),
-                  }));
-                }
+                if (typeof epoch === "number") get().markEpochBegin(idx, epoch);
               }
             } catch {
               // Malformed progress report — ignore
@@ -871,7 +913,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
             // Replace last log line (carriage return behavior)
             set((s) => ({
               log: s.log.length > 0
-                ? [...s.log.slice(0, -1), clean]
+                ? appendLog(s.log.slice(0, -1), clean)
                 : [clean],
             }));
             return;
@@ -897,15 +939,15 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
                       }
                     : m,
                 ),
-                log: [
-                  ...s.log,
+                log: appendLog(
+                  s.log,
                   `[Epoch ${data.epoch}/${s.models[idx]?.maxEpochs}] loss: ${data.loss?.toFixed(4) ?? "?"} | val_loss: ${data.val_loss?.toFixed(4) ?? "?"}${
                     data.val_loss != null &&
                     (s.models[idx]?.bestValLoss === null || data.val_loss < (s.models[idx]?.bestValLoss ?? Infinity))
                       ? " *** best ***"
                       : ""
                   }`,
-                ],
+                ),
               }));
               return;
             }
@@ -924,7 +966,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
           }
 
           // ── Regular log line — append to shared log ───────────
-          set((s) => ({ log: [...s.log, line] }));
+          set((s) => ({ log: appendLog(s.log, line) }));
         }, {
           expectedCompletions: numModels,
           onModelComplete: () => {
@@ -941,7 +983,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
                       ? { ...m, status: "running" as const }
                       : m,
                 ),
-                log: [...s.log, `— ${s.models[idx]?.label} completed, starting ${s.models[nextIdx]?.label ?? "next model"}...`],
+                log: appendLog(s.log, `— ${s.models[idx]?.label} completed, starting ${s.models[nextIdx]?.label ?? "next model"}...`),
               };
             });
           },
@@ -982,7 +1024,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
         return;
       }
 
-      const { runTraining, startZmqRelay, stopZmqRelay } = await import("@/platform/backend");
+      const { runTraining, startZmqRelay, stopZmqRelay, startProgressRelay, stopProgressRelay, listenTrainingProgress } = await import("@/platform/backend");
       const labelsPath = config.trainingLabelsPath || (await import("@/stores/appStore")).useAppStore.getState().projectPath || "";
       if (!labelsPath) {
         set({ status: "error", error: "No training labels file selected" });
@@ -993,14 +1035,68 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
       const modelDir = labelsPath.replace(/[/\\][^/\\]+$/, "") + "/models";
       const trainedModelPaths: string[] = [];
 
+      // Holder for the ZMQ progress-relay subscription; cleaned up in finally.
+      let unlistenProgress: (() => void) | null = null;
+      const batchBuffer: { epoch: number; batch: number; loss: number }[] = [];
+      let batchFlushTimer: ReturnType<typeof setInterval> | null = null;
+
       // Start ZMQ relay so sleap-nn can receive stop commands
       try {
         await startZmqRelay();
         console.log("[training] ZMQ relay started on port 9000");
+
+        // Live loss telemetry: subscribe to sleap-nn's ZMQ progress (epoch loss)
+        // relayed by the Rust SUB relay, and feed it into the per-model time-series.
+        await startProgressRelay();
+        unlistenProgress = await listenTrainingProgress((msg) => {
+          let data: { event?: string; epoch?: number; batch?: number; wandb_url?: string; logs?: Record<string, number> };
+          try {
+            data = JSON.parse(msg);
+          } catch {
+            return;
+          }
+          const i = get().currentModelIndex;
+          const ev = data.event;
+          if (ev === "epoch_begin") {
+            if (typeof data.epoch === "number") get().markEpochBegin(i, data.epoch);
+          } else if (ev === "epoch_end") {
+            // Flush buffered batches first so epochSize (from lastBatchNumber) is fresh.
+            if (batchBuffer.length > 0) {
+              get().recordBatches(get().currentModelIndex, batchBuffer.splice(0, batchBuffer.length));
+            }
+            const logs = data.logs ?? {};
+            const trainLoss = logs["train/loss"] ?? logs["loss"] ?? null;
+            const valLoss = logs["val/loss"] ?? null;
+            if (typeof data.epoch === "number") {
+              get().recordEpoch(i, { epoch: data.epoch, trainLoss, valLoss });
+            }
+          } else if (ev === "train_begin") {
+            if (data.wandb_url) set({ wandbUrl: data.wandb_url });
+          } else if (ev === "batch_end") {
+            const logs = data.logs ?? {};
+            // PyQt reads logs["loss"] for batch loss (falls back to train/loss).
+            const loss = logs["loss"] ?? logs["train/loss"] ?? logs["train_loss"];
+            if (
+              typeof data.epoch === "number" &&
+              typeof data.batch === "number" &&
+              typeof loss === "number"
+            ) {
+              batchBuffer.push({ epoch: data.epoch, batch: data.batch, loss });
+            }
+          }
+        });
+
+        // Flush buffered per-batch losses ~2x/sec so high-frequency batch_end
+        // events don't thrash React (mirrors PyQt's 500ms redraw throttle).
+        batchFlushTimer = setInterval(() => {
+          if (batchBuffer.length === 0) return;
+          const drained = batchBuffer.splice(0, batchBuffer.length);
+          get().recordBatches(get().currentModelIndex, drained);
+        }, 500);
       } catch (e) {
         console.error("[training] ZMQ relay failed to start:", e);
         set((s) => ({
-          log: [...s.log, `[warn] ZMQ relay failed: ${e instanceof Error ? e.message : String(e)} — Stop Early disabled`],
+          log: appendLog(s.log, `[warn] ZMQ relay failed: ${e instanceof Error ? e.message : String(e)} — Stop Early disabled`),
         }));
       }
 
@@ -1020,12 +1116,18 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
             models: s.models.map((m, j) =>
               j === i ? { ...m, status: "running" as const } : m,
             ),
-            log: i > 0 ? [...s.log, `— Starting ${s.models[i]?.label}...`] : s.log,
+            log: i > 0 ? appendLog(s.log, `— Starting ${s.models[i]?.label}...`) : s.log,
           }));
 
           const configYaml = applyHyperparamsToYaml(cf.content, cf.hyperparams);
           const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
           const runName = cf.hyperparams.runName || `${cf.modelType}_${ts}`;
+
+          set((s) => ({
+            models: s.models.map((m, j) =>
+              j === i ? { ...m, runDir: `${modelDir}/${runName}` } : m,
+            ),
+          }));
 
           const result = await runTraining(configYaml, labelsPath, runName, (event) => {
             const state = get();
@@ -1035,6 +1137,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
               const line = event.data.line;
 
               // Parse tqdm-style progress
+              // tqdm fires many times per epoch (no val loss); epoch SAMPLES come from JSON lines, not here.
               const tqdmMatch = line.match(/Epoch (\d+):\s+(\d+)%\|.*?loss=([\d.]+)/);
               if (tqdmMatch) {
                 const epoch = parseInt(tqdmMatch[1]);
@@ -1050,23 +1153,11 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
               try {
                 const data = JSON.parse(line);
                 if ("epoch" in data) {
-                  set((s) => ({
-                    models: s.models.map((m, j) =>
-                      j === idx
-                        ? {
-                            ...m,
-                            epoch: data.epoch ?? m.epoch,
-                            loss: data.loss ?? m.loss,
-                            valLoss: data.val_loss ?? m.valLoss,
-                            bestValLoss:
-                              data.val_loss != null &&
-                              (m.bestValLoss === null || data.val_loss < m.bestValLoss)
-                                ? data.val_loss
-                                : m.bestValLoss,
-                          }
-                        : m,
-                    ),
-                  }));
+                  get().recordEpoch(idx, {
+                    epoch: data.epoch ?? 0,
+                    trainLoss: data.loss ?? null,
+                    valLoss: data.val_loss ?? null,
+                  });
                   return;
                 }
               } catch {
@@ -1091,7 +1182,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
               }
 
               if (line.trim()) {
-                set((s) => ({ log: [...s.log, line] }));
+                set((s) => ({ log: appendLog(s.log, line) }));
               }
             }
           }, modelDir);
@@ -1107,7 +1198,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
                 j === i ? { ...m, status: "completed" as const } : m,
               ),
               log: wasStopped
-                ? [...s.log, `— ${s.models[i]?.label} stopped early, moving to next model...`]
+                ? appendLog(s.log, `— ${s.models[i]?.label} stopped early, moving to next model...`)
                 : s.log,
             }));
             console.log("[training] Continuing to next model (i=%d, total=%d)", i, slots.length);
@@ -1130,7 +1221,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
         const inferenceTarget = localOpts?.inferenceTarget;
         if (inferenceTarget && inferenceTarget !== "nothing" && trainedModelPaths.length > 0) {
           set((s) => ({
-            log: [...s.log, `— Training complete. Running inference (${inferenceTarget}) with models: ${trainedModelPaths.join(", ")}...`],
+            log: appendLog(s.log, `— Training complete. Running inference (${inferenceTarget}) with models: ${trainedModelPaths.join(", ")}...`),
           }));
 
           const { runInference } = await import("@/platform/backend");
@@ -1193,7 +1284,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
             const logEvent = (event: import("@/platform/backend").ProcessEvent) => {
               if (event.event === "stdout" || event.event === "stderr") {
                 const line = event.data.line;
-                if (line.trim()) set((s) => ({ log: [...s.log, line] }));
+                if (line.trim()) set((s) => ({ log: appendLog(s.log, line) }));
               }
             };
 
@@ -1219,7 +1310,7 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
               for (let vi = 0; vi < videos.length; vi++) {
                 const nFrames = videos[vi].shape?.[0] ?? 0;
                 if (nFrames === 0) continue;
-                set((s) => ({ log: [...s.log, `— Inference: video ${vi + 1}/${videos.length}...`] }));
+                set((s) => ({ log: appendLog(s.log, `— Inference: video ${vi + 1}/${videos.length}...`) }));
                 const perVideoConfig = { ...inferenceConfig, videoIndex: vi as number | "all", frameRange: "random_video" as typeof inferenceConfig.frameRange };
                 const result = await runInference(perVideoConfig, projectPath, logEvent);
                 if (result.success && result.outputPath) {
@@ -1231,14 +1322,14 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
               if (result.success && result.outputPath) {
                 await mergeOutputSlp(result.outputPath);
               } else if (!result.success) {
-                set((s) => ({ log: [...s.log, "— Post-training inference failed (non-zero exit)."] }));
+                set((s) => ({ log: appendLog(s.log, "— Post-training inference failed (non-zero exit).") }));
               }
             }
-            set((s) => ({ log: [...s.log, "— Predictions merged into project."] }));
+            set((s) => ({ log: appendLog(s.log, "— Predictions merged into project.") }));
           } catch (e) {
             console.error("[training] Post-training inference failed:", e);
             set((s) => ({
-              log: [...s.log, `— Post-training inference failed: ${e instanceof Error ? e.message : String(e)}`],
+              log: appendLog(s.log, `— Post-training inference failed: ${e instanceof Error ? e.message : String(e)}`),
             }));
           }
         }
@@ -1250,6 +1341,12 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
           error: `Local training error: ${e instanceof Error ? e.message : String(e)}`,
         });
       } finally {
+        if (batchFlushTimer) { clearInterval(batchFlushTimer); batchFlushTimer = null; }
+        if (batchBuffer.length > 0) {
+          get().recordBatches(get().currentModelIndex, batchBuffer.splice(0, batchBuffer.length));
+        }
+        if (unlistenProgress) { unlistenProgress(); unlistenProgress = null; }
+        try { await stopProgressRelay(); } catch { /* ignore */ }
         try { await stopZmqRelay(); } catch { /* ignore */ }
       }
     }
@@ -1262,21 +1359,21 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
       const { sendControlCommand } = useConnectStore.getState();
       sendControlCommand("stop");
       set((s) => ({
-        log: [...s.log, "— Stop Early requested, saving checkpoint..."],
+        log: appendLog(s.log, "— Stop Early requested, saving checkpoint..."),
       }));
     } else {
       // Local: send stop via ZMQ (same as PyQt GUI)
       const { sendTrainingStop } = await import("@/platform/backend");
       set((s) => ({
         _stopRequested: true,
-        log: [...s.log, "— Stop Early requested, finishing current epoch..."],
+        log: appendLog(s.log, "— Stop Early requested, finishing current epoch..."),
       }));
       try {
         await sendTrainingStop();
       } catch (e) {
         console.error("[training] sendTrainingStop() failed:", e);
         set((s) => ({
-          log: [...s.log, `[debug] Stop command failed: ${e instanceof Error ? e.message : String(e)}`],
+          log: appendLog(s.log, `[debug] Stop command failed: ${e instanceof Error ? e.message : String(e)}`),
         }));
       }
     }
@@ -1294,4 +1391,82 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
     }
     set({ status: "error", error: "Training cancelled" });
   },
+
+  recordEpoch: (modelIndex, sample) =>
+    set((state) => {
+      if (modelIndex < 0 || modelIndex >= state.models.length) return state;
+      const startedAt = state.startedAt ?? Date.now();
+      return {
+        models: state.models.map((m, i) => {
+          if (i !== modelIndex) return m;
+          const epochSize = Math.max(m.epochSize, m.lastBatchNumber + 1);
+          const epochSamples = [...m.epochSamples, sample];
+
+          const metrics = computeRuntimeMetrics(epochSamples, startedAt, Date.now(), m.plateauMinDelta);
+
+          return {
+            ...m,
+            epochSize,
+            epochSamples,
+            epoch: sample.epoch + 1,
+            loss: sample.trainLoss ?? m.loss,
+            valLoss: sample.valLoss ?? m.valLoss,
+            bestValLoss:
+              sample.valLoss != null &&
+              (m.bestValLoss === null || sample.valLoss < m.bestValLoss)
+                ? sample.valLoss
+                : m.bestValLoss,
+            metrics,
+          };
+        }),
+      };
+    }),
+
+  recordBatch: (modelIndex, sample) =>
+    set((state) => {
+      if (modelIndex < 0 || modelIndex >= state.models.length) return state;
+      return {
+        models: state.models.map((m, i) => {
+          if (i !== modelIndex) return m;
+          const globalBatch = sample.epoch * m.epochSize + sample.batch;
+          const next = [...m.batchSamples, { globalBatch, loss: sample.loss }];
+          return {
+            ...m,
+            lastBatchNumber: sample.batch,
+            batchSamples: next.length > MAX_BATCH_SAMPLES ? next.slice(next.length - MAX_BATCH_SAMPLES) : next,
+          };
+        }),
+      };
+    }),
+
+  recordBatches: (modelIndex, samples) =>
+    set((state) => {
+      if (modelIndex < 0 || modelIndex >= state.models.length || samples.length === 0) return state;
+      return {
+        models: state.models.map((m, i) => {
+          if (i !== modelIndex) return m;
+          let lastBatch = m.lastBatchNumber;
+          const additions = samples.map((s) => {
+            lastBatch = s.batch;
+            return { globalBatch: s.epoch * m.epochSize + s.batch, loss: s.loss };
+          });
+          const next = [...m.batchSamples, ...additions];
+          return {
+            ...m,
+            lastBatchNumber: lastBatch,
+            batchSamples: next.length > MAX_BATCH_SAMPLES ? next.slice(next.length - MAX_BATCH_SAMPLES) : next,
+          };
+        }),
+      };
+    }),
+
+  markEpochBegin: (modelIndex, epoch) =>
+    set((state) => {
+      if (modelIndex < 0 || modelIndex >= state.models.length) return state;
+      return {
+        models: state.models.map((m, i) =>
+          i === modelIndex ? { ...m, epoch, epochStartedAt: Date.now() } : m,
+        ),
+      };
+    }),
 }));
