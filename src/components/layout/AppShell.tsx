@@ -23,18 +23,8 @@ import { StatusBar } from "./StatusBar";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { VideoPlayer } from "../video/VideoPlayer";
 
-import { VideosPanel } from "../panels/VideosPanel";
-import { SkeletonPanel } from "../panels/SkeletonPanel";
-import { InstancesPanel } from "../panels/InstancesPanel";
-import { SuggestionsPanel } from "../panels/SuggestionsPanel";
-import { ViewPanel } from "../panels/ViewPanel";
-import { DebugPanel } from "../panels/DebugPanel";
-import { NotificationsPanel } from "../panels/NotificationsPanel";
-import { EnvironmentPanel } from "../panels/EnvironmentPanel";
-import { InferencePanel } from "../panels/InferencePanel";
-import { ConnectPanel } from "../panels/ConnectPanel";
-import { FramesPanel } from "../panels/FramesPanel";
-import { TrainingPanel } from "../panels/TrainingPanel";
+import { PANELS } from "./panelRegistry";
+import { reorderById } from "@/lib/panelLayout";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { GoToFrameDialog } from "../dialogs/GoToFrameDialog";
 import { NewProjectDialog } from "../dialogs/NewProjectDialog";
@@ -45,51 +35,13 @@ import { ShortcutsDialog } from "../dialogs/ShortcutsDialog";
 import { HelpDialog } from "../dialogs/HelpDialog";
 import { useAppStore } from "../../stores/appStore";
 import { loadProjectFromFile } from "../../lib/loadProject";
-import {
-  Film,
-  Bone,
-  Users,
-  Lightbulb,
-  Bug,
-  Eye,
-  Bell,
-  PanelRightClose,
-  PanelRightOpen,
-  GripVertical,
-  Cpu,
-  Zap,
-  Globe,
-  GraduationCap,
-  TableProperties,
-} from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { PanelRightClose, PanelRightOpen, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   notificationListeners,
   getUnreadCount,
   markAllRead,
 } from "../../lib/notificationStore";
-
-/** Panel definitions with icons. */
-const PANELS = [
-  { id: "videos", label: "Videos", icon: Film, component: VideosPanel },
-  { id: "skeleton", label: "Skeleton", icon: Bone, component: SkeletonPanel },
-  { id: "instances", label: "Instances", icon: Users, component: InstancesPanel },
-  { id: "view", label: "View", icon: Eye, component: ViewPanel },
-  { id: "suggestions", label: "Suggestions", icon: Lightbulb, component: SuggestionsPanel },
-  { id: "frames", label: "Frames", icon: TableProperties, component: FramesPanel },
-  { id: "inference", label: "Inference", icon: Zap, component: InferencePanel },
-  { id: "training", label: "Training", icon: GraduationCap, component: TrainingPanel },
-  { id: "environment", label: "Environment", icon: Cpu, component: EnvironmentPanel },
-  { id: "notifications", label: "Notifications", icon: Bell, component: NotificationsPanel },
-  { id: "debug", label: "Debug", icon: Bug, component: DebugPanel },
-  { id: "connect", label: "Connect", icon: Globe, component: ConnectPanel },
-] as const;
 
 /** Hosts the PathResolutionDialog, listening for custom events from stores. */
 function PathResolutionHost() {
@@ -269,6 +221,7 @@ function Sidebar() {
   const collapsed = useAppStore((s) => s.sidebarCollapsed);
   const activePanel = useAppStore((s) => s.sidebarActivePanel);
   const panelOrder = useAppStore((s) => s.panelOrder);
+  const hiddenPanels = useAppStore((s) => s.hiddenPanels);
   const set = useAppStore((s) => s.set);
 
   // Sidebar resize state
@@ -277,9 +230,15 @@ function Sidebar() {
   const startX = useRef(0);
   const startWidth = useRef(0);
 
-  // Drag-to-reorder state
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  // Hover-expand: the icon rail widens to reveal panel labels (#135). A 44px
+  // in-flow placeholder reserves the footprint; the rail itself is absolutely
+  // positioned and grows leftward over the canvas, so it never reflows it.
+  const [railExpanded, setRailExpanded] = useState(false);
+
+  // Drag-to-reorder state, tracked by panel id (not render index): once the
+  // strip hides panels, a render index no longer maps to a panelOrder index.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Notification unread badge
   const [unreadCount, setUnreadCount] = useState(0);
@@ -332,59 +291,100 @@ function Sidebar() {
     window.addEventListener("mouseup", handleUp);
   }, [panelWidth]);
 
-  // Drag-to-reorder handlers
-  const handleDragStart = (e: React.DragEvent, idx: number) => {
-    setDragIdx(idx);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(idx));
+  // Pointer-based drag-to-reorder. Native HTML5 DnD proved unreliable here: the
+  // app's global file-drop handlers and (in the desktop webview) Tauri's
+  // OS-level drag-drop interception fight the dataTransfer effect negotiation,
+  // leaving a stuck "copy" cursor and a drop the browser refuses to fire. Mouse
+  // events — the same mechanism the resize handle uses — sidestep all of it and
+  // work identically in the browser and the Tauri app.
+  const reorderDrag = useRef<{ fromId: string; startY: number; dragging: boolean } | null>(null);
+  const justDragged = useRef(false);
+
+  const resetDrag = () => {
+    setDragId(null);
+    setDragOverId(null);
   };
 
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverIdx(idx);
+  const panelIdAtPoint = (x: number, y: number): string | undefined =>
+    document
+      .elementFromPoint(x, y)
+      ?.closest<HTMLElement>("[data-panel-id]")?.dataset.panelId;
+
+  const handleReorderPointerDown = (e: React.MouseEvent, panelId: string) => {
+    if (e.button !== 0) return;
+    // Clear any stale suppression: a cross-element drag (down on A, up on B)
+    // fires no trailing click, so the flag would otherwise linger and swallow
+    // the next genuine click. Each fresh mousedown starts clean.
+    justDragged.current = false;
+    reorderDrag.current = { fromId: panelId, startY: e.clientY, dragging: false };
+
+    const onMove = (ev: MouseEvent) => {
+      const st = reorderDrag.current;
+      if (!st) return;
+      if (!st.dragging) {
+        if (Math.abs(ev.clientY - st.startY) < 5) return; // tolerate a click jitter
+        st.dragging = true;
+        setRailExpanded(true); // keep labels visible through the drag
+        setDragId(st.fromId);
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "grabbing";
+      }
+      setDragOverId(panelIdAtPoint(ev.clientX, ev.clientY) ?? null);
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      const st = reorderDrag.current;
+      reorderDrag.current = null;
+      if (st?.dragging) {
+        justDragged.current = true; // swallow the click that trails this mouseup
+        const toId = panelIdAtPoint(ev.clientX, ev.clientY);
+        if (toId && toId !== st.fromId) {
+          set("panelOrder", reorderById(panelOrder, st.fromId, toId));
+        }
+      }
+      resetDrag();
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
 
-  const handleDrop = (e: React.DragEvent, dropIdx: number) => {
-    e.preventDefault();
-    if (dragIdx === null || dragIdx === dropIdx) {
-      setDragIdx(null);
-      setDragOverIdx(null);
+  const handlePanelClick = (panelId: string) => {
+    if (justDragged.current) {
+      justDragged.current = false; // this "click" was the tail of a drag
       return;
     }
-    const newOrder = [...panelOrder];
-    const [moved] = newOrder.splice(dragIdx, 1);
-    newOrder.splice(dropIdx, 0, moved);
-    set("panelOrder", newOrder);
-    setDragIdx(null);
-    setDragOverIdx(null);
+    togglePanel(panelId);
   };
 
-  const handleDragEnd = () => {
-    setDragIdx(null);
-    setDragOverIdx(null);
-  };
-
-  // Get ordered panels
+  // Visible panels in order (hidden ones filtered out, #135).
   const orderedPanels = panelOrder
+    .filter((id) => !hiddenPanels.includes(id))
     .map((id) => PANELS.find((p) => p.id === id))
-    .filter(Boolean) as typeof PANELS[number][];
+    .filter(Boolean) as (typeof PANELS)[number][];
 
-  // Find active panel component
+  // The active panel's content shows only when it is itself visible; hiding the
+  // active panel (or hiding every panel) leaves the strip empty.
+  const activeVisible = !hiddenPanels.includes(activePanel);
   const ActiveComponent = PANELS.find((p) => p.id === activePanel)?.component;
+  const showPanel = !collapsed && activeVisible && !!ActiveComponent;
 
   return (
     <div className="flex h-full shrink-0">
-      {/* Resize handle (only when expanded) */}
-      {!collapsed && (
+      {/* Resize handle (only when a panel is shown) */}
+      {showPanel && (
         <div
           className="w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary bg-border transition-colors"
           onMouseDown={handleResizeStart}
         />
       )}
 
-      {/* Expanded panel content */}
-      {!collapsed && ActiveComponent && (
+      {/* Expanded (click-pinned) panel content */}
+      {showPanel && (
         <div
           className="h-full bg-card flex flex-col overflow-hidden"
           style={{ width: panelWidth }}
@@ -402,81 +402,109 @@ function Sidebar() {
         </div>
       )}
 
-      {/* Icon strip */}
-      <TooltipProvider delayDuration={200}>
-        <div className="flex flex-col w-11 bg-card border-l border-border shrink-0">
+      {/* Icon rail. The 44px placeholder reserves the footprint in-flow; the
+          rail itself is absolutely positioned so hover-expand grows leftward
+          over the canvas without reflowing it (#135). */}
+      <div className="relative w-11 shrink-0">
+        <div
+          className={cn(
+            "absolute right-0 top-0 z-30 h-full flex flex-col overflow-hidden",
+            "bg-card border-l border-border",
+            "transition-[width] duration-150 ease-out",
+            railExpanded && "shadow-xl"
+          )}
+          style={{ width: railExpanded ? 184 : 44 }}
+          onMouseEnter={() => setRailExpanded(true)}
+          onMouseLeave={() => {
+            if (!dragId) setRailExpanded(false);
+          }}
+          onFocusCapture={() => setRailExpanded(true)}
+          onBlurCapture={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              setRailExpanded(false);
+            }
+          }}
+        >
           {/* Collapse/expand toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={toggleCollapse}
-                className={cn(
-                  "flex items-center justify-center h-9 w-full",
-                  "text-muted-foreground hover:text-foreground hover:bg-accent",
-                  "transition-colors border-b border-border"
-                )}
-              >
-                {collapsed ? (
-                  <PanelRightOpen className="h-4 w-4" />
-                ) : (
-                  <PanelRightClose className="h-4 w-4" />
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <p>{collapsed ? "Expand sidebar" : "Collapse sidebar"}</p>
-            </TooltipContent>
-          </Tooltip>
+          <button
+            onClick={toggleCollapse}
+            className={cn(
+              "flex items-center h-9 w-full shrink-0 overflow-hidden",
+              "text-muted-foreground hover:text-foreground hover:bg-accent",
+              "transition-colors border-b border-border"
+            )}
+          >
+            <span className="flex items-center justify-center w-11 shrink-0">
+              {collapsed ? (
+                <PanelRightOpen className="h-4 w-4" />
+              ) : (
+                <PanelRightClose className="h-4 w-4" />
+              )}
+            </span>
+            <span
+              className={cn(
+                "flex-1 min-w-0 truncate whitespace-nowrap pr-2 text-left text-sm",
+                "transition-opacity duration-150",
+                railExpanded ? "opacity-100" : "opacity-0"
+              )}
+            >
+              {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            </span>
+          </button>
 
-          {/* Panel icons (reorderable) */}
-          {orderedPanels.map((panel, idx) => {
+          {/* Panel rows (reorderable; labels revealed on hover) */}
+          {orderedPanels.map((panel) => {
             const Icon = panel.icon;
-            const isActive = !collapsed && activePanel === panel.id;
-            const isDragTarget = dragOverIdx === idx && dragIdx !== idx;
+            const isActive =
+              !collapsed && activeVisible && activePanel === panel.id;
+            const isDragTarget =
+              dragOverId === panel.id && dragId !== panel.id;
 
             return (
-              <Tooltip key={panel.id}>
-                <TooltipTrigger asChild>
-                  <button
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, idx)}
-                    onDragOver={(e) => handleDragOver(e, idx)}
-                    onDrop={(e) => handleDrop(e, idx)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => togglePanel(panel.id)}
-                    className={cn(
-                      "group relative flex items-center justify-center h-11 w-full",
-                      "transition-all duration-150",
-                      isActive
-                        ? "text-primary bg-primary/8"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/60",
-                      isDragTarget && "border-t-2 border-t-primary",
-                      dragIdx === idx && "opacity-40"
-                    )}
-                  >
-                    {/* Active indicator bar */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 bg-primary rounded-r" />
-                    )}
-                    <Icon className="h-[18px] w-[18px]" />
-                    {/* Unread notification badge */}
-                    {panel.id === "notifications" && unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 h-3.5 min-w-3.5 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground px-0.5">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    )}
-                    {/* Drag grip (visible on hover) */}
-                    <GripVertical className="absolute right-0.5 top-1/2 -translate-y-1/2 h-3 w-3 opacity-0 group-hover:opacity-30 transition-opacity" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>{panel.label}</p>
-                </TooltipContent>
-              </Tooltip>
+              <button
+                key={panel.id}
+                data-panel-id={panel.id}
+                onMouseDown={(e) => handleReorderPointerDown(e, panel.id)}
+                onClick={() => handlePanelClick(panel.id)}
+                className={cn(
+                  "group relative flex items-center h-11 w-full shrink-0 overflow-hidden",
+                  "transition-colors duration-150",
+                  isActive
+                    ? "text-primary bg-primary/8"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/60",
+                  isDragTarget && "border-t-2 border-t-primary",
+                  dragId === panel.id && "opacity-40"
+                )}
+              >
+                {/* Active indicator bar */}
+                {isActive && (
+                  <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 bg-primary rounded-r" />
+                )}
+                <span className="relative flex items-center justify-center w-11 shrink-0">
+                  <Icon className="h-[18px] w-[18px]" />
+                  {/* Unread notification badge */}
+                  {panel.id === "notifications" && unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 h-3.5 min-w-3.5 flex items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground px-0.5">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "flex-1 min-w-0 truncate whitespace-nowrap pr-6 text-left text-sm",
+                    "transition-opacity duration-150",
+                    railExpanded ? "opacity-100" : "opacity-0"
+                  )}
+                >
+                  {panel.label}
+                </span>
+                {/* Drag grip (visible on hover) */}
+                <GripVertical className="absolute right-1 top-1/2 -translate-y-1/2 h-3 w-3 opacity-0 group-hover:opacity-30 transition-opacity" />
+              </button>
             );
           })}
         </div>
-      </TooltipProvider>
+      </div>
     </div>
   );
 }
