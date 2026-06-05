@@ -17,7 +17,10 @@ export const GoNextLabeledFrame: Command = {
     const { labels, video, frameIdx } = ctx.state;
     if (!labels || !video) return;
 
-    // Get all labeled frame indices for the current video, sorted.
+    // Get all labeled frame indices for the current video, sorted. Empty
+    // LabeledFrames are kept (PyQt parity: GoNextLabeledFrame has no instance
+    // filter — they are still labeled frames). Skipping over image-less frames
+    // is the separate imaged-navigation mode's job.
     const frameIndices = labels.find({ video })
       .map((lf) => lf.frameIdx)
       .sort((a, b) => a - b);
@@ -43,6 +46,8 @@ export const GoPrevLabeledFrame: Command = {
     const { labels, video, frameIdx } = ctx.state;
     if (!labels || !video) return;
 
+    // All labeled frame indices for the current video, sorted (empties kept —
+    // see GoNextLabeledFrame).
     const frameIndices = labels.find({ video })
       .map((lf) => lf.frameIdx)
       .sort((a, b) => a - b);
