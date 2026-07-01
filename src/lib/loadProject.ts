@@ -30,12 +30,13 @@ export async function loadProjectFromFile(file: File): Promise<boolean> {
     if (!confirmed) return false;
   }
 
-  store.setLoading(true, `Loading ${file.name}...`);
+  store.setLoading(true, `Reading ${file.name}...`);
 
   try {
     const labels = await loadSlp(file, {
       openVideos: true,
     });
+    store.setLoading(true, "Locating videos...");
     await resolveExternalVideos(labels);
     store.setLabels(labels, file.name);
     toast.success(`Loaded ${file.name}`, {
@@ -73,7 +74,7 @@ export async function loadProjectFromPath(
   }
 
   const filename = path.split(/[\\/]/).pop() ?? path;
-  store.setLoading(true, `Loading ${filename}...`);
+  store.setLoading(true, `Reading ${filename}...`);
 
   try {
     // Make ImageVideo (image-sequence) frames resolvable on desktop: resolve
@@ -99,11 +100,13 @@ export async function loadProjectFromPath(
     }
 
     const bytes = await readFile(path);
+    store.setLoading(true, `Parsing ${filename}...`);
     const labels = await loadSlp(bytes, {
       openVideos: true,
       h5: { filenameHint: path },
     });
 
+    store.setLoading(true, "Locating videos...");
     // Try auto-resolving video paths if we have filesystem access
     if (exists) {
       await resolveExternalVideos(labels, {
@@ -117,18 +120,12 @@ export async function loadProjectFromPath(
 
     store.setLabels(labels, filename, path);
 
-    const missingVideos = labels.videos.filter((v) => v.backend === null && !v.hasEmbeddedImages);
-
     toast.success(`Loaded ${filename}`, {
       description: `${labels.videos.length} video(s), ${labels.labeledFrames.length} labeled frames`,
     });
 
-    if (missingVideos.length > 0) {
-      toast.info(`${missingVideos.length} video(s) not found`, {
-        description: "Use the Videos panel to locate them.",
-      });
-    }
-
+    // Missing / unsupported-codec videos are summarized (codec-aware) by
+    // resolveExternalVideos above — no separate toast here (avoids a duplicate).
     return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
