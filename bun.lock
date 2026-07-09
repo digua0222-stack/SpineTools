@@ -5,7 +5,7 @@
     "": {
       "name": "sleap-app",
       "dependencies": {
-        "@talmolab/sleap-io.js": "^0.5.3",
+        "@talmolab/sleap-io.js": "0.5.3",
         "@tanstack/react-table": "^8.21.0",
         "@tauri-apps/api": "^2.11.0",
         "@tauri-apps/plugin-dialog": "^2.7.1",
