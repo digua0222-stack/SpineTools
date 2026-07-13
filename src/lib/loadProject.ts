@@ -27,6 +27,18 @@ import { fileSize, readRange } from "./nativeRange";
 // and avoids per-chunk IPC overhead.
 const RANGE_READER_THRESHOLD = 1_000_000_000; // 1 GB
 
+// Defer opening external video decoders until a video is first viewed (open one,
+// not all N): resolveExternalVideos records the located path and
+// ensureVideoBackend opens the decoder on first view.
+const LAZY_VIDEO_BACKENDS = true;
+
+// Open large embedded pkg.slp fast: build videos from videos_json alone and defer
+// every per-video HDF5 read to a backend that reads them on first view
+// (sleap-io.js `lazyVideoMetadata`). Cuts a many-video open from ~30s to ~3s by
+// skipping the ~13 serial reads/video for videos never opened. Set false for the
+// eager path (reads all per-video metadata up front).
+const LAZY_VIDEO_METADATA = true;
+
 // Serve h5wasm same-origin so the streaming Worker can load it under cross-origin
 // isolation (COOP/COEP) — COEP blocks the default cross-origin CDN importScripts.
 // public/h5wasm/h5wasm.js ships with the app (dev: Vite; prod: Tauri asset protocol).
@@ -63,14 +75,32 @@ function reportParseProgress(current: number, total: number, message?: string): 
  * far from 0 (e.g. 76978+) — so frame 0 is usually an empty/black non-embedded
  * position, making a fully-loaded project look blank on open. Selects that
  * frame's video too (multi-video packages). No-op when there are no labeled
- * frames. (Full effect needs the sleap-io.js frame-axis fix so shape[0] spans
- * the original range; otherwise setFrameIdx clamps — but never a regression.)
+ * frames.
+ *
+ * For a deferred (lazyVideoMetadata) backend we pre-open it here so video.shape[0]
+ * is the true source frame count BEFORE setFrameIdx runs — otherwise setFrameIdx
+ * would clamp the first labeled frame (a large source index) down into the
+ * JSON-seeded range and the opening view would land off-target/blank.
  */
-function openFirstLabeledFrame(labels: Labels): void {
+async function openFirstLabeledFrame(labels: Labels): Promise<void> {
   const firstLF = labels.labeledFrames[0];
   if (!firstLF) return;
   const store = useAppStore.getState();
-  if (firstLF.video) store.setVideo(firstLF.video);
+  const video = firstLF.video;
+  if (video) {
+    store.setVideo(video);
+    const backend = video.backend as unknown as {
+      ensureLoaded?: () => Promise<void>;
+    } | null;
+    if (backend?.ensureLoaded) {
+      try {
+        await backend.ensureLoaded();
+        store.markVideoUpdated();
+      } catch {
+        /* non-deferred backend or a read failure — keep the seeded shape */
+      }
+    }
+  }
   store.setFrameIdx(firstLF.frameIdx);
 }
 
@@ -100,7 +130,7 @@ export async function loadProjectFromFile(file: File): Promise<boolean> {
     store.setLoading(true, "Locating videos...");
     await resolveExternalVideos(labels);
     store.setLabels(labels, file.name);
-    openFirstLabeledFrame(labels);
+    await openFirstLabeledFrame(labels);
     toast.success(`Loaded ${file.name}`, {
       description: `${labels.videos.length} video(s), ${labels.labeledFrames.length} labeled frames`,
     });
@@ -181,7 +211,11 @@ export async function loadProjectFromPath(
           readRange(path, offset, length),
       };
       labels = await readSlpStreaming(rangeSource, {
-        openVideos: true,
+        // Embedded (pkg.slp) videos: build from videos_json and open each video's
+        // backend on first view (LAZY_VIDEO_METADATA) so a many-video package
+        // opens fast. Eager path (openVideos) reads all per-video metadata now.
+        openVideos: !LAZY_VIDEO_METADATA,
+        lazyVideoMetadata: LAZY_VIDEO_METADATA,
         filenameHint: path,
         h5wasmUrl: H5WASM_URL,
         onProgress: reportParseProgress,
@@ -203,13 +237,14 @@ export async function loadProjectFromPath(
         projectPath: path,
         exists,
         readFile,
+        lazy: LAZY_VIDEO_BACKENDS,
       });
     } else {
       await resolveExternalVideos(labels);
     }
 
     store.setLabels(labels, filename, path);
-    openFirstLabeledFrame(labels);
+    await openFirstLabeledFrame(labels);
 
     toast.success(`Loaded ${filename}`, {
       description: `${labels.videos.length} video(s), ${labels.labeledFrames.length} labeled frames`,
