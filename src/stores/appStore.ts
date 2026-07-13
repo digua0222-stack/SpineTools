@@ -9,6 +9,7 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { persist } from "zustand/middleware";
 import { subscribeWithSelector } from "zustand/middleware";
+import { enableMapSet, type Draft } from "immer";
 import type {
   Labels,
   LabeledFrame,
@@ -21,6 +22,7 @@ import type {
   InstancePlacementMethod,
 } from "../types";
 import type { StatisticGraphType, Reduction } from "@/lib/statisticSeries";
+import type { QcMode } from "@/lib/instanceVisibility";
 import {
   navigableDomain,
   stepLabeled,
@@ -33,6 +35,21 @@ import {
   reconcileHiddenPanels,
   nextVisiblePanel,
 } from "@/lib/panelLayout";
+
+// Required before immer can draft Set/Map fields (hiddenInstances /
+// showNonVisibleOverride). Idempotent global; must run before store creation.
+enableMapSet();
+
+/**
+ * Reset the transient per-instance visibility fields on an immer draft. Shared
+ * by the initializer, frame/video changes, project load, and the explicit
+ * reset action so the lifecycle stays in one place.
+ */
+function clearTransientVisibility(state: Draft<AppState>) {
+  state.hiddenInstances = new Set<Instance>();
+  state.viewOnlyInstance = null;
+  state.showNonVisibleOverride = new Map<Instance, boolean>();
+}
 
 export interface AppState {
   // === Project state ===
@@ -105,6 +122,13 @@ export interface AppState {
   /** Which frames stepping/playback/seekbar are confined to (#137). */
   navigationDomain: NavigationDomain;
 
+  // Per-instance visibility (transient; reset on frame change; NOT persisted)
+  hiddenInstances: Set<Instance>;
+  viewOnlyInstance: Instance | null;
+  showNonVisibleOverride: Map<Instance, boolean>;
+  // Label-QC display mode (persisted app preference)
+  qcDisplayMode: QcMode;
+
   // === Editing state ===
   instanceInitMethod: InstancePlacementMethod;
   clipboardTrack: Track | null;
@@ -162,6 +186,11 @@ export interface AppState {
   incrementFrameIdx: (step: number) => void;
   setNavigationDomain: (mode: NavigationDomain) => void;
   cycleNavigationDomain: () => void;
+  setInstanceHidden: (instance: Instance, hidden: boolean) => void;
+  setViewOnlyInstance: (instance: Instance | null) => void;
+  setInstanceInvisibleOverride: (instance: Instance, value: boolean | undefined) => void;
+  setQcDisplayMode: (mode: QcMode) => void;
+  resetInstanceVisibility: () => void;
   setInstance: (instance: Instance | null) => void;
   setLabeledFrame: (frame: LabeledFrame | null) => void;
   markChanged: () => void;
@@ -203,6 +232,7 @@ export const PERSISTED_KEYS: (keyof AppState)[] = [
   "seekbarHeaderGraph",
   "seekbarHeaderReduction",
   "navigationDomain",
+  "qcDisplayMode",
   // Layout + scale persistence (PyQt saveState/restoreState parity).
   "panelOrder",
   "hiddenPanels",
@@ -287,6 +317,12 @@ export const useAppStore = create<AppState>()(
       seekbarHeaderReduction: "sum" as Reduction,
       navigationDomain: "all" as NavigationDomain,
 
+      // Per-instance visibility (transient) + QC display mode (persisted)
+      hiddenInstances: new Set<Instance>(),
+      viewOnlyInstance: null,
+      showNonVisibleOverride: new Map<Instance, boolean>(),
+      qcDisplayMode: "manual",
+
       // Editing state
       instanceInitMethod: "best" as InstancePlacementMethod,
       clipboardTrack: null,
@@ -345,10 +381,18 @@ export const useAppStore = create<AppState>()(
           state.frameIdx = 0;
           state.instance = null;
           state.labeledFrame = null;
+          // setLabels sets video/frame directly (not via setVideo), so drop any
+          // stale identity-keyed transients from the previous project.
+          clearTransientVisibility(state);
         }),
 
       setVideo: (video) =>
         set((state) => {
+          if (video !== state.video) {
+            // Per-instance visibility is scoped to the current frame/video —
+            // reset it whenever the video actually changes.
+            clearTransientVisibility(state);
+          }
           state.video = video;
           state.frameIdx = 0;
           state.instance = null;
@@ -363,13 +407,22 @@ export const useAppStore = create<AppState>()(
       setFrameIdx: (idx) =>
         set((state) => {
           const video = state.video;
+          let next: number;
           if (video && video.shape) {
             const maxFrame = (video.shape[0] ?? 1) - 1;
-            state.frameIdx = Math.max(0, Math.min(idx, maxFrame));
+            next = Math.max(0, Math.min(idx, maxFrame));
           } else {
             // No shape info — allow any non-negative index
-            state.frameIdx = Math.max(0, idx);
+            next = Math.max(0, idx);
           }
+          if (next !== state.frameIdx) {
+            // Per-instance visibility is scoped to the current frame — reset it
+            // whenever the frame actually changes (SLEAP QC-panel parity). Guard
+            // on the clamped target so an out-of-range idx at the boundary is a
+            // no-op rather than a spurious clear.
+            clearTransientVisibility(state);
+          }
+          state.frameIdx = next;
           state.instance = null;
           // Compute labeledFrame synchronously to avoid race condition during fast scrubbing
           if (state.labels && state.video) {
@@ -419,6 +472,34 @@ export const useAppStore = create<AppState>()(
           const order: NavigationDomain[] = ["all", "labeled", "imaged"];
           const i = order.indexOf(state.navigationDomain);
           state.navigationDomain = order[(i + 1) % order.length];
+        }),
+
+      setInstanceHidden: (instance, hidden) =>
+        set((state) => {
+          if (hidden) state.hiddenInstances.add(instance);
+          else state.hiddenInstances.delete(instance);
+          state.viewOnlyInstance = null; // clicking any Visibility box exits view-only
+        }),
+
+      setViewOnlyInstance: (instance) =>
+        set((state) => {
+          state.viewOnlyInstance = instance;
+        }),
+
+      setInstanceInvisibleOverride: (instance, value) =>
+        set((state) => {
+          if (value === undefined) state.showNonVisibleOverride.delete(instance);
+          else state.showNonVisibleOverride.set(instance, value);
+        }),
+
+      setQcDisplayMode: (mode) =>
+        set((state) => {
+          state.qcDisplayMode = mode;
+        }),
+
+      resetInstanceVisibility: () =>
+        set((state) => {
+          clearTransientVisibility(state);
         }),
 
       setInstance: (instance) =>

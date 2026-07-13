@@ -53,6 +53,7 @@ import {
   DeleteAllTracks,
 } from "../../commands";
 import { PALETTES } from "../../lib/colorPalettes";
+import { QC_MODE_CHOICES } from "../../lib/instanceVisibility";
 import { toast } from "@/lib/notify";
 import {
   Menubar,
@@ -462,6 +463,8 @@ function ViewMenu() {
   const sidebarSide = useAppStore((s) => s.sidebarSide);
   const showCrosshair = useAppStore((s) => s.showCrosshair);
   const uiScale = useAppStore((s) => s.uiScale);
+  const qcDisplayMode = useAppStore((s) => s.qcDisplayMode);
+  const setQcDisplayMode = useAppStore((s) => s.setQcDisplayMode);
   const toggle = useAppStore((s) => s.toggle);
   const setVal = useAppStore((s) => s.set);
 
@@ -558,6 +561,21 @@ function ViewMenu() {
         >
           Show Non-Visible Nodes <MenubarShortcut>V</MenubarShortcut>
         </MenubarCheckboxItem>
+        <MenubarSub>
+          <MenubarSubTrigger className="text-sm">Display</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarRadioGroup
+              value={qcDisplayMode}
+              onValueChange={(v) => setQcDisplayMode(v as typeof qcDisplayMode)}
+            >
+              {QC_MODE_CHOICES.map(([label, mode]) => (
+                <MenubarRadioItem key={mode} value={mode}>
+                  {label}
+                </MenubarRadioItem>
+              ))}
+            </MenubarRadioGroup>
+          </MenubarSubContent>
+        </MenubarSub>
         <MenubarCheckboxItem
           checked={showLabels}
           onCheckedChange={() => toggle("showLabels")}
