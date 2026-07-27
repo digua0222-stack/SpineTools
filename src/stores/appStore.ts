@@ -64,19 +64,43 @@ export interface AppState {
   filename: string | null;
   projectPath: string | null;
   /**
-   * The opened project File (browser). Retained so a re-save has the source at
-   * hand. A snapshot — prefer `projectFileHandle` for writing, since a File can
-   * go stale.
+   * The browser File the current project was opened from (file picker), retained
+   * so a re-save/export can read its images back via the OPFS streaming writer
+   * (WORKERFS source). A snapshot — prefer `projectFileHandle` for writing. Null
+   * on Tauri / new projects. NOT persisted (a File cannot be serialized).
    */
   projectFile: File | null;
   /**
    * The durable `FileSystemFileHandle` from a browser file-picker open, when
-   * available. Lets a plain Save write BACK to the opened file in place (no
-   * Save-As dialog), matching a native/PyQt save. Null for drag-drop / `<input>`
-   * opens (no handle) and outside Chromium.
+   * available. PREFERRED over `projectFile`: `getFile()` re-reads fresh bytes,
+   * and it lets a plain Save write BACK to the opened file in place (no Save-As
+   * dialog, matching a native/PyQt save) as well as a large-pkg re-save/export
+   * re-read the source. Null for drag-drop / `<input>` opens and outside Chromium.
    */
   projectFileHandle: FileSystemFileHandle | null;
   hasChanges: boolean;
+  /**
+   * Monotonic edit counter — bumped on EVERY label edit (markChanged), even when
+   * `hasChanges` is already true. The draft auto-save subscribes to this (not the
+   * boolean `hasChanges`, which only transitions once) so each edit re-arms the
+   * debounce, and so an edit landing mid-save is detected and not dropped.
+   */
+  editSeq: number;
+  /**
+   * OPFS path of the browser large-pkg fast-save's labels DRAFT (a bare-bones
+   * imageless .slp), or null. Set once a large embedded pkg has been ⌘S/auto-
+   * saved this session; the labels live here durably while the images stay in
+   * the original. Reset on project load. NOT persisted (resume-on-open, a later
+   * piece, will re-discover it via a manifest).
+   */
+  labelsDraftPath: string | null;
+  /**
+   * True when there are label edits saved to the local draft but NOT yet
+   * compiled/exported to the user's disk file (⌘S / auto-save sets it; an
+   * explicit Export clears it). Drives the "saved locally — export to disk"
+   * status + the unsaved-work guards.
+   */
+  pendingExport: boolean;
   projectLoaded: boolean;
 
   // === Selection state ===
@@ -247,7 +271,7 @@ export interface AppState {
     filename?: string,
     projectPath?: string,
     projectFile?: File | null,
-    projectFileHandle?: FileSystemFileHandle | null,
+    projectFileHandle?: FileSystemFileHandle | null
   ) => void;
   setVideo: (video: Video) => void;
   markVideoUpdated: () => void;
@@ -357,6 +381,9 @@ export const useAppStore = create<AppState>()(
       projectFile: null,
       projectFileHandle: null,
       hasChanges: false,
+      editSeq: 0,
+      labelsDraftPath: null,
+      pendingExport: false,
       projectLoaded: false,
 
       // Selection state
@@ -468,6 +495,10 @@ export const useAppStore = create<AppState>()(
           state.projectFileHandle = projectFileHandle ?? null;
           state.projectLoaded = true;
           state.hasChanges = false;
+          // A newly-loaded project has no labels draft yet (and no stale one
+          // from a previous project) — the first large-pkg ⌘S writes one.
+          state.labelsDraftPath = null;
+          state.pendingExport = false;
 
           // Set first video and skeleton
           if (labels.videos.length > 0) {
@@ -629,6 +660,7 @@ export const useAppStore = create<AppState>()(
       markChanged: () =>
         set((state) => {
           state.hasChanges = true;
+          state.editSeq += 1;
           state.lastInteractedFrame = state.frameIdx;
         }),
 

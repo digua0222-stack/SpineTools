@@ -25,6 +25,8 @@ import { VideoPlayer } from "../video/VideoPlayer";
 
 import { PANELS } from "./panelRegistry";
 import { reorderById, visibleOpenPanels } from "@/lib/panelLayout";
+import { hasUnsavedWork } from "@/lib/unsavedGuard";
+import { setupLabelsAutosave } from "@/lib/labelsAutosave";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { GoToFrameDialog } from "../dialogs/GoToFrameDialog";
 import { NewProjectDialog } from "../dialogs/NewProjectDialog";
@@ -128,16 +130,25 @@ export function AppShell() {
   const helpDialogOpen = useAppStore((s) => s.helpDialogOpen);
   const setHelpDialogOpen = useAppStore((s) => s.setHelpDialogOpen);
 
-  // Unsaved changes protection: warn before closing/refreshing
+  // Unsaved changes protection: warn before closing/refreshing when there are
+  // in-memory edits (hasChanges) OR a large-pkg labels draft saved locally but
+  // not yet exported to disk (pendingExport) — the latter survives in OPFS
+  // (resume-on-open can restore it) but the user hasn't written the file to disk
+  // yet, so a close still deserves a warning.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (useAppStore.getState().hasChanges) {
+      if (hasUnsavedWork(useAppStore.getState())) {
         e.preventDefault();
       }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
+
+  // EDL-style auto-save: for a browser large embedded pkg, persist the labels
+  // draft to OPFS a beat after edits settle (instant, silent). Small files /
+  // desktop are untouched (setupLabelsAutosave gates on eligibility).
+  useEffect(() => setupLabelsAutosave(), []);
 
   // Drag-and-drop to open a project is intentionally limited to the WelcomeScreen
   // (no project loaded) so a stray drop can never silently replace a project the
