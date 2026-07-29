@@ -86,7 +86,6 @@ export function VideoPlayer() {
   const rotation = useAppStore((s) => s.rotation);
   const defaultToPan = useAppStore((s) => s.defaultToPan);
   const fitSelection = useAppStore((s) => s.fitSelection);
-  const centerSelection = useAppStore((s) => s.centerSelection);
   const resetViewNonce = useAppStore((s) => s.resetViewNonce);
   const areaDeleteMode = useAppStore((s) => s.areaDeleteMode);
   const showCrosshair = useAppStore((s) => s.showCrosshair);
@@ -449,6 +448,13 @@ export function VideoPlayer() {
           }
           if (cancelled) return;
           if (!video.backend) {
+            // No usable backend (missing file, failed lazy open, unsupported
+            // codec) — blank the canvas instead of leaving the previously
+            // viewed video's frame on screen, which reads as "nothing
+            // happened" when a Locate-video placeholder is the only cue.
+            frameBitmapRef.current = null;
+            setFrameDims((prev) => (prev[0] === 0 && prev[1] === 0 ? prev : [0, 0]));
+            setBitmapVersion((v) => v + 1);
             useAppStore.getState().set("frameLoading", false);
             return;
           }
@@ -555,7 +561,7 @@ export function VideoPlayer() {
   useEffect(() => {
     const canvas = frameCanvasRef.current;
     const bmp = frameBitmapRef.current;
-    if (!canvas || !bmp) return;
+    if (!canvas) return;
 
     const [cw, ch] = containerSize;
     if (cw === 0 || ch === 0) return;
@@ -565,6 +571,15 @@ export function VideoPlayer() {
     canvas.height = ch * dpr;
     canvas.style.width = `${cw}px`;
     canvas.style.height = `${ch}px`;
+
+    if (!bmp) {
+      // No frame to show (e.g. the current video's backend failed to
+      // resolve) — clear rather than leave the last-drawn video's frame up.
+      const clearCtx = canvas.getContext("2d");
+      clearCtx?.scale(dpr, dpr);
+      clearCtx?.clearRect(0, 0, cw, ch);
+      return;
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -1083,7 +1098,11 @@ export function VideoPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fit, labeledFrame]);
 
-  // Fit view to selected instance (one-shot action triggered from menu)
+  // Fit view to selected instance (one-shot action): zooms and pans so the
+  // selected instance's visible-node bounding box (+ padding) fills the
+  // viewport. Triggered from the "Fit View to Selection" menu item, the
+  // Shift+Up/Down cycle-instance shortcut, and clicking an instance in the
+  // Instances panel.
   useEffect(() => {
     if (!fitSelection || !selectedInstance) return;
     // Reset the flag immediately so this is a one-shot action
@@ -1126,45 +1145,9 @@ export function VideoPlayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitSelection]);
 
-  // Snap view to the selected instance (one-shot): pan so the instance's
-  // visible-node bounding box is centered at the CURRENT zoom, without changing
-  // zoom. Fired when an instance is clicked in the Instances panel — unlike
-  // "Fit View to Selection" above, this keeps the zoom fixed so the jump stays
-  // un-disorienting. Does nothing if the instance has no visible points.
-  useEffect(() => {
-    if (!centerSelection || !selectedInstance) return;
-    // One-shot: clear the request immediately.
-    useAppStore.getState().set("centerSelection", false);
-
-    const [cw, ch] = containerSize;
-    if (cw === 0 || ch === 0) return;
-
-    const instances = renderedInstancesRef.current;
-    const selectedRendered = instances.find((ri) => ri.isSelected);
-    if (!selectedRendered) return;
-
-    const visibleNodes = selectedRendered.nodes.filter((n) => n.visible);
-    if (visibleNodes.length === 0) return;
-
-    const xs = visibleNodes.map((n) => n.x);
-    const ys = visibleNodes.map((n) => n.y);
-    const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
-    const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
-
-    // Pan so scene point (centerX, centerY) lands at the viewport center, at the
-    // current zoom (mirrors the centering math in the fit effects above).
-    const newPanX = cw / 2 - offsetX - centerX * baseScale * zoom;
-    const newPanY = ch / 2 - offsetY - centerY * baseScale * zoom;
-
-    viewRef.current = { zoom, panX: newPanX, panY: newPanY };
-    setPanX(newPanX);
-    setPanY(newPanY);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centerSelection]);
-
   // Reset the view to default (zoom=1, no pan, fit-frame) on demand. Driven by a
   // one-shot nonce bumped from the toolbar button / 'R' hotkey — mirrors the
-  // `fit`/`centerSelection` store-signal pattern (the toolbar/hotkey live
+  // `fit`/`fitSelection` store-signal pattern (the toolbar/hotkey live
   // outside this component and can't call setZoom/setPan directly). The initial
   // nonce of 0 is skipped so a fresh mount doesn't fire a spurious reset.
   useEffect(() => {
@@ -1775,9 +1758,30 @@ export function VideoPlayer() {
       const nodeHit = hitTestNode(instances, x, y, (markerSize * 2) / (baseScale * zoom));
       if (nodeHit) {
         const lf = useAppStore.getState().labeledFrame;
-        if (lf) {
-          useAppStore.getState().setInstance(lf.instances[nodeHit.instanceIdx]);
+        const inst = lf?.instances[nodeHit.instanceIdx];
+        if (inst) {
+          useAppStore.getState().setInstance(inst);
         }
+
+        // Right-click directly toggles a single node's visibility, mirroring
+        // legacy sleap — no menu pops up for this click. Predicted instances
+        // can't be edited, and a node that's part of a multi-node selection
+        // keeps going through the menu so the "toggle N selected" action
+        // stays reachable.
+        const nodeKey = makeNodeKey(nodeHit.instanceIdx, nodeHit.nodeIdx);
+        const isMultiSelected = selectedNodes.size > 1 && selectedNodes.has(nodeKey);
+        if (inst && !(inst instanceof PredictedInstance) && !isMultiSelected) {
+          const point = inst.points[nodeHit.nodeIdx];
+          if (point) {
+            commandContext.execute(BeginEdit);
+            point.visible = !point.visible;
+            useAppStore.getState().markChanged();
+            useAppStore.getState().touchFrame();
+            useAppStore.getState().bumpOverlayVersion();
+          }
+          return;
+        }
+
         setContextMenu({
           x: e.clientX,
           y: e.clientY,
@@ -1811,7 +1815,7 @@ export function VideoPlayer() {
         nodeIdx: null,
       });
     },
-    [canvasToScene, markerSize, zoom, baseScale]
+    [canvasToScene, markerSize, zoom, baseScale, selectedNodes]
   );
 
   // Full-canvas crosshair while zoomed (View ▸ "Crosshair When Zoomed"). Only
