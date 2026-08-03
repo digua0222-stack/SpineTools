@@ -63,12 +63,17 @@ export default function App() {
   const hashApplied = useRef(false);
 
   // Open a file passed on launch — a CLI argument, or a macOS file-association
-  // open that fired before the webview was ready (Tauri only).
+  // open that fired before the webview was ready (Tauri only). Crash-recovery
+  // drafts are NOT auto-restored here — the WelcomeScreen "Restore unsaved work?"
+  // card surfaces them for both runtimes (see recoverableDrafts.ts), so recovery
+  // is a user click (never a racy auto-prompt) and is trivially escapable.
   useEffect(() => {
     if (!isTauri) return;
-    loadInitialFileIfAny().catch((err) => {
-      console.warn("[app] Failed to load initial file:", err);
-    });
+    (async () => {
+      await loadInitialFileIfAny().catch((err) => {
+        console.warn("[app] Failed to load initial file:", err);
+      });
+    })();
   }, []);
 
   // macOS file-association / "Open With" opens while the app is already running
