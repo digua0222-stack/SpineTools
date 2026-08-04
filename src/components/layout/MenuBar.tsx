@@ -22,6 +22,8 @@ import {
   OpenProjectCommand,
   ImportAnalysisH5Command,
   ImportCocoCommand,
+  ImportDlcCommand,
+  ImportDlcFolderCommand,
   SaveProjectCommand,
   SaveAsProjectCommand,
   ExportJsonCommand,
@@ -129,12 +131,23 @@ function FileMenu() {
         <MenubarItem onClick={() => exec(OpenProjectCommand)}>
           Open Project... <MenubarShortcut>{modKey}+O</MenubarShortcut>
         </MenubarItem>
-        <MenubarItem onClick={() => exec(ImportAnalysisH5Command)}>
-          Import Analysis HDF5...
-        </MenubarItem>
-        <MenubarItem onClick={() => exec(ImportCocoCommand)}>
-          Import COCO...
-        </MenubarItem>
+        <MenubarSub>
+          <MenubarSubTrigger>Import</MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarItem onClick={() => exec(ImportAnalysisH5Command)}>
+              Analysis HDF5...
+            </MenubarItem>
+            <MenubarItem onClick={() => exec(ImportCocoCommand)}>
+              COCO dataset...
+            </MenubarItem>
+            <MenubarItem onClick={() => exec(ImportDlcCommand)}>
+              DeepLabCut dataset...
+            </MenubarItem>
+            <MenubarItem onClick={() => exec(ImportDlcFolderCommand)}>
+              Multiple DeepLabCut datasets from folder...
+            </MenubarItem>
+          </MenubarSubContent>
+        </MenubarSub>
         <MenubarSub>
           <MenubarSubTrigger disabled={!projectLoaded}>Replace Videos...</MenubarSubTrigger>
           <MenubarSubContent>
@@ -166,36 +179,32 @@ function FileMenu() {
           Save As... <MenubarShortcut>{modKey}+Shift+S</MenubarShortcut>
         </MenubarItem>
         <MenubarSeparator />
-        <MenubarItem
-          disabled={!projectLoaded}
-          onClick={() => exec(ExportJsonCommand)}
-        >
-          Export JSON...
-        </MenubarItem>
-        <MenubarItem
-          disabled={!projectLoaded}
-          onClick={() => exec(ExportCSVCommand)}
-        >
-          Export Analysis CSV...
-        </MenubarItem>
-        <MenubarItem
-          disabled={!projectLoaded}
-          onClick={() => exec(ExportAnalysisH5Command)}
-        >
-          Export Analysis HDF5...
-        </MenubarItem>
-        <MenubarItem
-          disabled={!projectLoaded}
-          onClick={() => exec(ExportPackageCommand)}
-        >
-          Export Labels Package...
-        </MenubarItem>
-        <MenubarItem
-          disabled={!projectLoaded}
-          onClick={() => useAppStore.getState().setExportClipDialogOpen(true)}
-        >
-          Export Labeled Clip (Video)...
-        </MenubarItem>
+        <MenubarSub>
+          <MenubarSubTrigger disabled={!projectLoaded}>
+            Export
+          </MenubarSubTrigger>
+          <MenubarSubContent>
+            <MenubarItem onClick={() => exec(ExportJsonCommand)}>
+              JSON...
+            </MenubarItem>
+            <MenubarItem onClick={() => exec(ExportCSVCommand)}>
+              Analysis CSV...
+            </MenubarItem>
+            <MenubarItem onClick={() => exec(ExportAnalysisH5Command)}>
+              Analysis HDF5...
+            </MenubarItem>
+            <MenubarItem onClick={() => exec(ExportPackageCommand)}>
+              Labels Package...
+            </MenubarItem>
+            <MenubarItem
+              onClick={() =>
+                useAppStore.getState().setExportClipDialogOpen(true)
+              }
+            >
+              Labeled Clip (Video)...
+            </MenubarItem>
+          </MenubarSubContent>
+        </MenubarSub>
         {isTauri && (
           <>
             <MenubarSeparator />
