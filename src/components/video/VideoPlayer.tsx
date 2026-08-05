@@ -186,6 +186,8 @@ export function VideoPlayer() {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
+    /** Scene/frame coordinates of the click, for "Add Instance" placement. */
+    sceneLocation: [number, number];
     instanceIdx: number | null;
     nodeIdx: number | null;
   } | null>(null);
@@ -452,6 +454,39 @@ export function VideoPlayer() {
   const baseScale = displayW > 0 && displayH > 0 ? Math.min(cw / displayW, ch / displayH) : 1;
   const offsetX = displayW > 0 && displayH > 0 ? (cw - displayW * baseScale) / 2 : 0;
   const offsetY = displayW > 0 && displayH > 0 ? (ch - displayH * baseScale) / 2 : 0;
+
+  // Keep the store's `visibleSceneRect` in sync with the current viewport, in
+  // frame/scene pixel coordinates -- the JS port of PyQt's
+  // `QtVideoPlayer.getVisibleRect()`. Transforms the canvas's four corners
+  // with the same inverse pan/zoom/rotation math as `canvasToScene` (defined
+  // below) and takes their axis-aligned bounding box. `AddInstance`'s random
+  // placement reads this so a new instance lands within view.
+  useEffect(() => {
+    if (cw <= 0 || ch <= 0 || fw <= 0 || fh <= 0) {
+      useAppStore.getState().set("visibleSceneRect", null);
+      return;
+    }
+    const toScene = (cx: number, cy: number): [number, number] => {
+      let sx = (cx - offsetX - panX) / (baseScale * zoom);
+      let sy = (cy - offsetY - panY) / (baseScale * zoom);
+      if (rotation === 90) {
+        const fx = sy, fy = fh - sx;
+        sx = fx; sy = fy;
+      } else if (rotation === 180) {
+        sx = fw - sx; sy = fh - sy;
+      } else if (rotation === 270) {
+        const fx = fw - sy, fy = sx;
+        sx = fx; sy = fy;
+      }
+      return [sx, sy];
+    };
+    const corners = [toScene(0, 0), toScene(cw, 0), toScene(0, ch), toScene(cw, ch)];
+    const xs = corners.map((c) => c[0]);
+    const ys = corners.map((c) => c[1]);
+    useAppStore.getState().set("visibleSceneRect", [
+      Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys),
+    ]);
+  }, [cw, ch, fw, fh, baseScale, offsetX, offsetY, panX, panY, zoom, rotation]);
 
   // Load the current frame (convert to ImageBitmap, trigger dimension update)
   useEffect(() => {
@@ -1398,7 +1433,10 @@ export function VideoPlayer() {
       if (shouldPan && !areaDeleteMode) {
         const instances = renderedInstancesRef.current;
         const nt = (markerSize * 2) / (baseScale * zoom);
-        const hit = hitTestNode(instances, x, y, nt);
+        const hit = hitTestNode(
+          instances, x, y, nt,
+          showLabels ? { zoom, markerSize, nodeLabelSize } : undefined
+        );
         if (hit && !instances[hit.instanceIdx]?.isPredicted) {
           // Node hit in pan mode — fall through to normal node drag handling below
         } else {
@@ -1465,8 +1503,11 @@ export function VideoPlayer() {
       const nodeThreshold = (markerSize * 2) / (baseScale * zoom);
       const instanceThreshold = 30 / (baseScale * zoom);
 
-      // Try to hit a node first
-      const nodeHit = hitTestNode(instances, x, y, nodeThreshold);
+      // Try to hit a node first (marker or, if shown, its name label)
+      const nodeHit = hitTestNode(
+        instances, x, y, nodeThreshold,
+        showLabels ? { zoom, markerSize, nodeLabelSize } : undefined
+      );
       if (nodeHit) {
         const key = makeNodeKey(nodeHit.instanceIdx, nodeHit.nodeIdx);
         const lf = useAppStore.getState().labeledFrame;
@@ -1495,11 +1536,18 @@ export function VideoPlayer() {
         const inst = instances[nodeHit.instanceIdx];
         if (!inst.isPredicted) {
           commandContext.execute(BeginEdit);
+          // Clicking a node marks it "complete" (confirmed by the user), same
+          // as PyQt SLEAP's QtNode.mousePressEvent -- turns its label green.
+          const targetPoint = lf?.instances[nodeHit.instanceIdx]?.points[nodeHit.nodeIdx];
+          if (targetPoint) targetPoint.complete = true;
           setDragNodeInfo(nodeHit);
           setIsDragging(true);
           setInteractionMode("dragging");
           lastDragPos.current = { x, y };
           dragStartClient.current = { clientX: e.clientX, clientY: e.clientY };
+          useAppStore.getState().markChanged();
+          useAppStore.getState().touchFrame();
+          useAppStore.getState().bumpOverlayVersion();
         }
         return;
       }
@@ -1534,7 +1582,7 @@ export function VideoPlayer() {
       setMarqueeStart({ x, y });
       setMarqueeEnd({ x, y });
     },
-    [canvasToScene, markerSize, panX, panY, zoom, baseScale, shouldPan, isCmdHeld, offsetX, offsetY, selectedNodes, areaDeleteMode, imageFeatureRoiDrawActive]
+    [canvasToScene, markerSize, nodeLabelSize, showLabels, panX, panY, zoom, baseScale, shouldPan, isCmdHeld, offsetX, offsetY, selectedNodes, areaDeleteMode, imageFeatureRoiDrawActive]
   );
 
   const handleMouseMove = useCallback(
@@ -1633,13 +1681,14 @@ export function VideoPlayer() {
             }
           }
         } else {
-          // Single node drag
+          // Single node drag. Visibility is untouched -- matches PyQt SLEAP's
+          // QtNode.updatePoint(), which only updates x/y on drag; visibility
+          // only changes via the explicit toggle action.
           const instance = lf.instances[dragNodeInfo.instanceIdx];
           const point = instance?.points[dragNodeInfo.nodeIdx];
           if (point) {
             // Drag position is crop-local; store back in source coords.
             point.xy = toSourceCoords(useAppStore.getState().video, x, y);
-            point.visible = true;
           }
         }
 
@@ -1669,7 +1718,10 @@ export function VideoPlayer() {
 
       const instances = renderedInstancesRef.current;
       const nodeThreshold = (markerSize * 2) / (baseScale * zoom);
-      const hit = hitTestNode(instances, x, y, nodeThreshold);
+      const hit = hitTestNode(
+        instances, x, y, nodeThreshold,
+        showLabels ? { zoom, markerSize, nodeLabelSize } : undefined
+      );
 
       if (hit) {
         const prevIdx = hoveredNode?.instanceIdx;
@@ -1688,7 +1740,7 @@ export function VideoPlayer() {
         useAppStore.getState().bumpOverlayVersion();
       }
     },
-    [isDragging, isPanning, isZoomDragging, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom, baseScale, interactionMode, selectedNodes, markerSize, hoveredNode, offsetX, offsetY, isPlacingNodes, isShiftHeld, isAreaDeleting, areaDeleteStart]
+    [isDragging, isPanning, isZoomDragging, dragNodeInfo, canvasToScene, panStart, constrainPan, zoom, baseScale, interactionMode, selectedNodes, markerSize, nodeLabelSize, showLabels, hoveredNode, offsetX, offsetY, isPlacingNodes, isShiftHeld, isAreaDeleting, areaDeleteStart]
   );
 
   const handleMouseUp = useCallback(() => {
@@ -1862,8 +1914,11 @@ export function VideoPlayer() {
       const nodeThreshold = (markerSize * 2) / (baseScale * zoom);
       const instanceThreshold = 30 / (baseScale * zoom);
 
-      // Check if double-clicking on a node
-      const nodeHit = hitTestNode(instances, x, y, nodeThreshold);
+      // Check if double-clicking on a node (marker or, if shown, its name label)
+      const nodeHit = hitTestNode(
+        instances, x, y, nodeThreshold,
+        showLabels ? { zoom, markerSize, nodeLabelSize } : undefined
+      );
       if (nodeHit) {
         const inst = instances[nodeHit.instanceIdx];
         // Predicted: convert to user instance
@@ -1910,7 +1965,7 @@ export function VideoPlayer() {
         setPanY(0);
       }
     },
-    [canvasToScene, markerSize, zoom, baseScale, shouldPan]
+    [canvasToScene, markerSize, nodeLabelSize, showLabels, zoom, baseScale, shouldPan]
   );
 
   // Right-click context menu
@@ -1918,10 +1973,14 @@ export function VideoPlayer() {
     (e: React.MouseEvent) => {
       e.preventDefault();
       const { x, y } = canvasToScene(e.clientX, e.clientY);
+      const sceneLocation = toSourceCoords(useAppStore.getState().video, x, y);
       const instances = renderedInstancesRef.current;
 
       // Check if right-clicking on a node
-      const nodeHit = hitTestNode(instances, x, y, (markerSize * 2) / (baseScale * zoom));
+      const nodeHit = hitTestNode(
+        instances, x, y, (markerSize * 2) / (baseScale * zoom),
+        showLabels ? { zoom, markerSize, nodeLabelSize } : undefined
+      );
       if (nodeHit) {
         const lf = useAppStore.getState().labeledFrame;
         const inst = lf?.instances[nodeHit.instanceIdx];
@@ -1951,6 +2010,7 @@ export function VideoPlayer() {
         setContextMenu({
           x: e.clientX,
           y: e.clientY,
+          sceneLocation,
           instanceIdx: nodeHit.instanceIdx,
           nodeIdx: nodeHit.nodeIdx,
         });
@@ -1967,6 +2027,7 @@ export function VideoPlayer() {
         setContextMenu({
           x: e.clientX,
           y: e.clientY,
+          sceneLocation,
           instanceIdx: instHit,
           nodeIdx: null,
         });
@@ -1977,11 +2038,12 @@ export function VideoPlayer() {
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
+        sceneLocation,
         instanceIdx: null,
         nodeIdx: null,
       });
     },
-    [canvasToScene, markerSize, zoom, baseScale, selectedNodes]
+    [canvasToScene, markerSize, nodeLabelSize, showLabels, zoom, baseScale, selectedNodes]
   );
 
   // Full-canvas crosshair while zoomed (View ▸ "Crosshair When Zoomed"). Only
@@ -2287,6 +2349,7 @@ export function VideoPlayer() {
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          sceneLocation={contextMenu.sceneLocation}
           instanceIdx={contextMenu.instanceIdx}
           nodeIdx={contextMenu.nodeIdx}
           selectedNodes={selectedNodes}
