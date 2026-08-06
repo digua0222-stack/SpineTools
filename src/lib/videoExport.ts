@@ -74,6 +74,242 @@ export function resolveClipFrameRange(
   return { ok: true, range: { start, end, count: end - start + 1 } };
 }
 
+/**
+ * Initial [start, end] to seed the Export Clip dialog. Uses the active timeline
+ * selection (`frameRange`, 0-based inclusive) when present, otherwise the whole
+ * video. Sorts + floors + clamps to [0, nFrames-1] so a reverse drag or a
+ * stale/out-of-range selection can never produce an invalid initial range. Pure.
+ */
+export function computeInitialClipRange(
+  frameRange: readonly [number, number] | null | undefined,
+  nFrames: number
+): { start: number; end: number } {
+  const maxIdx = Math.max(0, Math.floor(nFrames) - 1);
+  if (!frameRange) return { start: 0, end: maxIdx };
+  const clamp = (n: number) => Math.max(0, Math.min(Math.floor(n), maxIdx));
+  const a = clamp(frameRange[0]);
+  const b = clamp(frameRange[1]);
+  return { start: Math.min(a, b), end: Math.max(a, b) };
+}
+
+/**
+ * Map a pixel x on a scrubbar track of width `trackPx` to a frame index in
+ * [0, len-1]. Clamps out-of-track pixels; returns 0 for a single-frame video
+ * or a zero-width track. Pure — used by the export preview scrubbar.
+ */
+export function pixelToFrame(px: number, trackPx: number, len: number): number {
+  if (len <= 1 || trackPx <= 0) return 0;
+  const frac = Math.max(0, Math.min(1, px / trackPx));
+  return Math.max(0, Math.min(len - 1, Math.round(frac * (len - 1))));
+}
+
+/**
+ * Inverse of {@link pixelToFrame}: the pixel x for a frame on a track of width
+ * `trackPx`. Returns 0 for a single-frame video. Pure.
+ */
+export function frameToPixel(frame: number, trackPx: number, len: number): number {
+  if (len <= 1) return 0;
+  const f = Math.max(0, Math.min(len - 1, frame));
+  return (f / (len - 1)) * trackPx;
+}
+
+/**
+ * Clamp a dragged in/out handle to a valid frame. The "start" handle is confined
+ * to [0, end]; the "end" handle to [start, len-1]. Floored to whole frames. Pure.
+ */
+export function clampHandleDrag(
+  endpoint: "start" | "end",
+  value: number,
+  bounds: { start: number; end: number; len: number }
+): number {
+  const v = Math.floor(value);
+  if (endpoint === "start") return Math.max(0, Math.min(v, bounds.end));
+  return Math.max(bounds.start, Math.min(v, bounds.len - 1));
+}
+
+// ---------------------------------------------------------------------------
+// Multi-video export config + reducer (per-video ranges & settings)
+// ---------------------------------------------------------------------------
+
+/** Per-video export configuration — every setting is per-video (by design). */
+export interface ClipConfig {
+  video: Video;
+  include: boolean;
+  start: number;
+  end: number;
+  fps: number;
+  scale: number;
+  background: ClipBackground;
+}
+
+/** The export dialog's per-video state: one config per video + which is focused. */
+export interface ClipExportState {
+  configs: ClipConfig[];
+  focused: Video | null;
+}
+
+/** Actions for {@link clipExportReducer}. */
+export type ClipExportAction =
+  | { type: "focus"; video: Video }
+  | { type: "toggleInclude"; video: Video }
+  | { type: "setAllIncluded"; include: boolean }
+  | { type: "setRange"; video: Video; start: number; end: number }
+  | { type: "setFps"; video: Video; fps: number }
+  | { type: "setScale"; video: Video; scale: number }
+  | { type: "setBackground"; video: Video; background: ClipBackground }
+  | { type: "reset"; state: ClipExportState };
+
+/**
+ * Seed per-video export configs: the current video is included + focused with
+ * its range seeded from the timeline selection (via {@link computeInitialClipRange});
+ * every other video defaults to its whole range and is unchecked. fps defaults
+ * to the video's native rate (fallback 30). Pure.
+ */
+export function buildInitialClipConfigs(
+  videos: readonly Video[],
+  currentVideo: Video | null,
+  frameRange: readonly [number, number] | null
+): ClipExportState {
+  const configs: ClipConfig[] = videos.map((video) => {
+    const len = video.shape?.[0] ?? 0;
+    const isCurrent = video === currentVideo;
+    const { start, end } = isCurrent
+      ? computeInitialClipRange(frameRange, len)
+      : { start: 0, end: Math.max(0, len - 1) };
+    const fps = video.fps && video.fps > 0 ? Math.round(video.fps) : 30;
+    return {
+      video,
+      include: isCurrent,
+      start,
+      end,
+      fps,
+      scale: 1,
+      background: "original" as ClipBackground,
+    };
+  });
+  return { configs, focused: currentVideo ?? videos[0] ?? null };
+}
+
+/** Pure reducer for the export dialog's per-video config state. */
+export function clipExportReducer(
+  state: ClipExportState,
+  action: ClipExportAction
+): ClipExportState {
+  const patch = (video: Video, fields: Partial<ClipConfig>): ClipExportState => ({
+    ...state,
+    configs: state.configs.map((c) => (c.video === video ? { ...c, ...fields } : c)),
+  });
+  switch (action.type) {
+    case "focus":
+      return { ...state, focused: action.video };
+    case "setAllIncluded":
+      return { ...state, configs: state.configs.map((c) => ({ ...c, include: action.include })) };
+    case "toggleInclude":
+      return {
+        ...state,
+        configs: state.configs.map((c) =>
+          c.video === action.video ? { ...c, include: !c.include } : c
+        ),
+      };
+    case "setRange":
+      return patch(action.video, { start: action.start, end: action.end });
+    case "setFps":
+      return patch(action.video, { fps: action.fps });
+    case "setScale":
+      return patch(action.video, { scale: action.scale });
+    case "setBackground":
+      return patch(action.video, { background: action.background });
+    case "reset":
+      return action.state;
+    default:
+      return state;
+  }
+}
+
+/** Per-video status during a batch export. */
+export type ClipJobStatus = "queued" | "encoding" | "done" | "error" | "cancelled";
+
+/** Injected side-effects for {@link runClipExportBatch} (real encode/save, or fakes in tests). */
+export interface ClipBatchDeps {
+  /** Encode one config's clip → mp4 bytes (throws ClipExportCancelled on cancel). */
+  exportOne: (
+    config: ClipConfig,
+    cb: { signal: AbortSignal; onProgress: (done: number, total: number) => void }
+  ) => Promise<Uint8Array>;
+  /** Persist one config's bytes; returns a path/name, or null if it couldn't be saved. */
+  saveOne: (config: ClipConfig, bytes: Uint8Array) => Promise<string | null>;
+  /** Report a per-video status transition. */
+  onStatus: (
+    video: Video,
+    status: ClipJobStatus,
+    extra?: { progress?: { done: number; total: number }; error?: string }
+  ) => void;
+  /** Abort signal for the whole batch (Cancel). */
+  signal: AbortSignal;
+}
+
+/** Outcome tally for a batch export. */
+export interface ClipBatchSummary {
+  done: number;
+  failed: number;
+  cancelled: number;
+}
+
+/**
+ * Export the INCLUDED configs one at a time (sequential — one encoder at a
+ * time). A failed video is isolated (marked error, the batch continues); a
+ * cancelled video (ClipExportCancelled, or an already-aborted signal) cancels
+ * the rest. Pure orchestration — all encoding/saving is injected via
+ * {@link ClipBatchDeps}, so the sequencing/isolation/cancel logic is testable
+ * with fakes.
+ */
+export async function runClipExportBatch(
+  configs: readonly ClipConfig[],
+  deps: ClipBatchDeps
+): Promise<ClipBatchSummary> {
+  const included = configs.filter((c) => c.include);
+  const summary: ClipBatchSummary = { done: 0, failed: 0, cancelled: 0 };
+  let aborted = false;
+  for (const config of included) {
+    if (aborted || deps.signal.aborted) {
+      deps.onStatus(config.video, "cancelled");
+      summary.cancelled++;
+      continue;
+    }
+    deps.onStatus(config.video, "encoding", { progress: { done: 0, total: 0 } });
+    try {
+      const bytes = await deps.exportOne(config, {
+        signal: deps.signal,
+        onProgress: (done, total) =>
+          deps.onStatus(config.video, "encoding", { progress: { done, total } }),
+      });
+      const saved = await deps.saveOne(config, bytes);
+      if (saved === null) {
+        deps.onStatus(config.video, "error", { error: "Could not save the exported clip." });
+        summary.failed++;
+      } else {
+        deps.onStatus(config.video, "done");
+        summary.done++;
+      }
+    } catch (err) {
+      const cancelled =
+        err instanceof ClipExportCancelled ||
+        (err instanceof Error && err.name === "ClipExportCancelled");
+      if (cancelled) {
+        deps.onStatus(config.video, "cancelled");
+        summary.cancelled++;
+        aborted = true;
+      } else {
+        deps.onStatus(config.video, "error", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        summary.failed++;
+      }
+    }
+  }
+  return summary;
+}
+
 /** Output dimensions in pixels for a given scale factor. */
 export interface OutputDimensions {
   width: number;
@@ -207,12 +443,18 @@ export function clipBackgroundColor(bg: ClipBackground): string | undefined {
  */
 export function deriveClipFilename(
   projectFilename: string | null | undefined,
-  range: { start: number; end: number }
+  range: { start: number; end: number },
+  videoLabel?: string
 ): string {
   const base = projectFilename
     ? projectFilename.replace(/\.(slp|json)$/i, "")
     : "labels";
-  return `${base}.clip_${range.start}-${range.end}.mp4`;
+  // Optional per-video segment (batch export): strip the video's extension and
+  // sanitize to filename-safe chars so `<project>.<video>.clip_<a>-<b>.mp4`.
+  const vid = videoLabel
+    ? "." + videoLabel.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_")
+    : "";
+  return `${base}${vid}.clip_${range.start}-${range.end}.mp4`;
 }
 
 /** A single planned output frame: which source frame, and its mp4 timestamp. */

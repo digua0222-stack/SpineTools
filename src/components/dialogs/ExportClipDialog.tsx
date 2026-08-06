@@ -1,20 +1,24 @@
 /**
- * Export Labeled Clip dialog.
+ * Export Clips dialog — batch export manager.
  *
- * Renders a range of the currently-open video with the skeleton/instance
- * overlay composited on top and encodes it to an H.264 mp4 (parity with PyQt
- * SLEAP's File → Export labeled clip). MVP scope: current video, a frame range,
- * fps, a scale factor (clamped to [0.1, 1.0] — no upscaling, PyQt parity), and a
- * background choice (original video / black / white / grey). Marker size / edges
- * / colours follow the current View settings. See {@link module:@/lib/videoExport}
- * for the pipeline.
+ * Lists the project's videos with a per-video include checkbox and per-video
+ * range/fps/scale/background, a scrubbable WYSIWYG preview of the focused video,
+ * and encodes each to an H.264 mp4 (skeleton overlay burned in; PyQt parity).
+ * Every setting is per-video; overlay appearance follows the current View
+ * settings. Export runs SEQUENTIALLY (one encoder at a time) with per-video
+ * progress, failure-isolation, and a single Cancel. Desktop writes every clip
+ * into one chosen destination folder; the browser downloads them per file.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useAppStore } from "../../stores/appStore";
-import { saveBytesFile } from "../../commands/fileCommands";
+import {
+  saveBytesFile,
+  saveBytesToDir,
+  pickClipDestination,
+} from "../../commands/fileCommands";
 import { toast } from "@/lib/notify";
-import type { LabeledFrame } from "@/types";
+import type { LabeledFrame, Video } from "@/types";
 import {
   Dialog,
   DialogContent,
@@ -23,17 +27,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   resolveClipFrameRange,
   computeClipOutputDimensions,
@@ -41,15 +36,38 @@ import {
   evaluateClipEncodeSupport,
   buildExportRenderedInstances,
   runClipExport,
+  runClipExportBatch,
   clampClipScale,
   clipBackgroundColor,
-  CLIP_SCALE_MIN,
-  CLIP_SCALE_MAX,
-  ClipExportCancelled,
-  type ClipBackground,
+  buildInitialClipConfigs,
+  clipExportReducer,
+  type ClipConfig,
 } from "@/lib/videoExport";
+import { ClipPreview } from "./ClipPreview";
+import { ClipVideoList, type ClipJobInfo } from "./ClipVideoList";
+import { ClipSettings } from "./ClipSettings";
 
 type Phase = "form" | "checking" | "unsupported" | "encoding";
+
+/** Ensure a video's dimensions are known (probe getFrame(0) once). */
+async function ensureProbed(video: Video): Promise<void> {
+  const shape = video.shape;
+  if ((!shape || !shape[1] || !shape[2]) && video.backend) {
+    try {
+      await video.backend.getFrame(0);
+      if (video.backend.shape) video.shape = video.backend.shape;
+    } catch {
+      // Dimensions stay unavailable; the preview shows its fallback.
+    }
+  }
+}
+
+/** Basename for a video's filename (ImageVideo filenames are string[]). */
+function videoLabel(video: Video): string {
+  const f = Array.isArray(video.filename) ? (video.filename[0] ?? "") : video.filename;
+  const parts = String(f).split(/[\\/]/);
+  return parts[parts.length - 1] || "video";
+}
 
 export function ExportClipDialog() {
   const open = useAppStore((s) => s.exportClipDialogOpen);
@@ -70,60 +88,39 @@ export function ExportClipDialog() {
   const nodeLabelSize = useAppStore((s) => s.nodeLabelSize);
   const edgeStyle = useAppStore((s) => s.edgeStyle);
 
-  const totalFrames = video?.shape?.[0] ?? 0;
-  const sourceHeight = video?.shape?.[1] ?? 0;
-  const sourceWidth = video?.shape?.[2] ?? 0;
-
-  const [startInput, setStartInput] = useState("0");
-  const [endInput, setEndInput] = useState("0");
-  const [fpsInput, setFpsInput] = useState("30");
-  const [scaleInput, setScaleInput] = useState("1");
-  const [background, setBackground] = useState<ClipBackground>("original");
-  const [phase, setPhase] = useState<Phase>("form");
+  const [state, dispatch] = useReducer(clipExportReducer, { configs: [], focused: null });
+  const [phase, setPhase] = useState<Phase>("checking");
   const [supportMessage, setSupportMessage] = useState("");
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
-
+  const [jobs, setJobs] = useState<Map<Video, ClipJobInfo>>(new Map());
+  // Bumped after a focused video is probed, to re-render the preview with dims.
+  const [, bumpProbe] = useReducer((n: number) => n + 1, 0);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Seed defaults + run the capability probe each time the dialog opens.
+  const focused = state.focused;
+  const focusedConfig = state.configs.find((c) => c.video === focused) ?? null;
+  const focusedIndex = state.configs.findIndex((c) => c.video === focused);
+
+  // Seed configs + run the capability probe each time the dialog opens.
   useEffect(() => {
-    if (!open || !video) return;
+    if (!open || !labels || !video) return;
     setPhase("checking");
     setSupportMessage("");
-    setProgress({ done: 0, total: 0 });
-    setStartInput("0");
-    setScaleInput("1");
-    setBackground("original");
+    setJobs(new Map());
+    dispatch({
+      type: "reset",
+      state: buildInitialClipConfigs(
+        labels.videos ?? [],
+        video,
+        useAppStore.getState().frameRange
+      ),
+    });
 
     let cancelled = false;
     (async () => {
-      // A freshly-added video may not have been probed yet, so `video.shape` can
-      // be missing at dialog-open time. Ensure the backend's dimensions are known
-      // BEFORE the encode-capability check — otherwise the source dims are 0, the
-      // output floors to 2×2 (computeClipOutputDimensions), and canEncodeVideo
-      // wrongly reports "unsupported" for an otherwise-supported codec. Mirrors
-      // the resolveVideos probe (getFrame(0) → backend.shape).
-      let shape = video.shape;
-      if ((!shape || !shape[1] || !shape[2]) && video.backend) {
-        try {
-          await video.backend.getFrame(0);
-          if (video.backend.shape) video.shape = video.backend.shape;
-          shape = video.shape;
-        } catch {
-          // Fall through to the "dimensions unavailable" message below.
-        }
-      }
+      await ensureProbed(video);
       if (cancelled) return;
-
-      const nFrames = shape?.[0] ?? 0;
-      const srcH = shape?.[1] ?? 0;
-      const srcW = shape?.[2] ?? 0;
-      const fps = video.fps ?? null;
-
-      // Seed range/fps from the (possibly just-probed) dimensions.
-      setEndInput(String(Math.max(0, nFrames - 1)));
-      setFpsInput(String(fps && fps > 0 ? Math.round(fps) : 30));
-
+      const srcW = video.shape?.[2] ?? 0;
+      const srcH = video.shape?.[1] ?? 0;
       if (!srcW || !srcH) {
         setPhase("unsupported");
         setSupportMessage(
@@ -131,7 +128,6 @@ export function ExportClipDialog() {
         );
         return;
       }
-
       const dims = computeClipOutputDimensions(srcW, srcH, 1);
       // Lazy-load the mediabunny-backed pipeline so its WebCodecs wrapper isn't
       // in the app-startup bundle — only when the export dialog is opened.
@@ -148,7 +144,20 @@ export function ExportClipDialog() {
     return () => {
       cancelled = true;
     };
-  }, [open, video]);
+  }, [open, labels, video]);
+
+  // Probe the focused video's dimensions so the preview can render it.
+  useEffect(() => {
+    if (!open || !focused) return;
+    let cancelled = false;
+    (async () => {
+      await ensureProbed(focused);
+      if (!cancelled) bumpProbe();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, focused]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -167,80 +176,59 @@ export function ExportClipDialog() {
     setOpen(false);
   }, [phase, setOpen]);
 
-  const handleExport = useCallback(async () => {
-    if (!video || !labels) return;
+  // Encode ONE video's clip → mp4 bytes (throws on invalid range / cancel).
+  const encodeOne = useCallback(
+    async (
+      cfg: ClipConfig,
+      cb: { signal: AbortSignal; onProgress: (done: number, total: number) => void }
+    ): Promise<Uint8Array> => {
+      if (!labels) throw new Error("No project loaded.");
+      const fvideo = cfg.video;
+      await ensureProbed(fvideo);
+      const len = fvideo.shape?.[0] ?? 0;
+      const srcW = fvideo.shape?.[2] ?? 0;
+      const srcH = fvideo.shape?.[1] ?? 0;
+      const rr = resolveClipFrameRange(cfg.start, cfg.end, len);
+      if (!rr.ok) throw new Error(rr.error);
+      if (!Number.isFinite(cfg.fps) || cfg.fps <= 0) throw new Error("Invalid frame rate.");
+      const scale = clampClipScale(cfg.scale);
+      const output = computeClipOutputDimensions(srcW, srcH, scale);
 
-    const rangeResult = resolveClipFrameRange(
-      parseInt(startInput, 10),
-      parseInt(endInput, 10),
-      totalFrames
-    );
-    if (!rangeResult.ok) {
-      toast.error("Invalid frame range", { description: rangeResult.error });
-      return;
-    }
-    const range = rangeResult.range;
+      const frameToLf = new Map<number, LabeledFrame>();
+      for (const lf of labels.find({ video: fvideo })) frameToLf.set(lf.frameIdx, lf);
+      const tracks = labels.tracks;
+      const overlayForFrame = (frameIdx: number) => {
+        const lf = frameToLf.get(frameIdx);
+        if (!lf) return [];
+        return buildExportRenderedInstances(lf.instances, {
+          palette,
+          distinctlyColor,
+          colorPredicted,
+          showNonVisibleNodes,
+          tracks,
+          video: fvideo,
+        });
+      };
 
-    const fps = parseFloat(fpsInput);
-    if (!Number.isFinite(fps) || fps <= 0) {
-      toast.error("Invalid frame rate", { description: "Enter an fps greater than 0." });
-      return;
-    }
-    const parsedScale = parseFloat(scaleInput);
-    if (!Number.isFinite(parsedScale) || parsedScale <= 0) {
-      toast.error("Invalid scale", { description: "Enter a scale factor greater than 0." });
-      return;
-    }
-    // No upscaling (PyQt parity): clamp the value actually used to [0.1, 1.0].
-    const scale = clampClipScale(parsedScale);
-
-    const output = computeClipOutputDimensions(sourceWidth, sourceHeight, scale);
-
-    // Pre-enumerate this video's labeled frames so overlay lookup is O(1) per
-    // frame (labels.find is O(n)). Frames with no labels get an empty overlay.
-    const frameToLf = new Map<number, LabeledFrame>();
-    for (const lf of labels.find({ video })) frameToLf.set(lf.frameIdx, lf);
-
-    const tracks = labels.tracks;
-    const overlayForFrame = (frameIdx: number) => {
-      const lf = frameToLf.get(frameIdx);
-      if (!lf) return [];
-      return buildExportRenderedInstances(lf.instances, {
-        palette,
-        distinctlyColor,
-        colorPredicted,
-        showNonVisibleNodes,
-        tracks,
-        video,
-      });
-    };
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setPhase("encoding");
-    setProgress({ done: 0, total: range.count });
-
-    try {
       const { buildClipExportPipeline, decodeExportFrame } = await import(
         "@/lib/videoExportPipeline"
       );
       const deps = buildClipExportPipeline({
         output,
-        fps,
-        video,
-        decodeFrame: (frameIdx) => decodeExportFrame(video, frameIdx),
+        fps: cfg.fps,
+        video: fvideo,
+        decodeFrame: (frameIdx) => decodeExportFrame(fvideo, frameIdx),
         overlayForFrame,
       });
-
-      const bytes = await runClipExport(
+      return runClipExport(
         {
-          range,
-          fps,
+          range: rr.range,
+          fps: cfg.fps,
           scale,
-          sourceWidth,
-          sourceHeight,
+          sourceWidth: srcW,
+          sourceHeight: srcH,
           output,
-          background: clipBackgroundColor(background),
+          background: clipBackgroundColor(cfg.background),
           renderOptions: {
             markerSize,
             nodeLabelSize,
@@ -253,174 +241,201 @@ export function ExportClipDialog() {
           },
         },
         deps,
-        {
-          signal: controller.signal,
-          onProgress: (done, total) => setProgress({ done, total }),
-        }
+        { signal: cb.signal, onProgress: cb.onProgress }
       );
+    },
+    [
+      labels,
+      palette,
+      distinctlyColor,
+      colorPredicted,
+      showNonVisibleNodes,
+      showInstances,
+      showLabels,
+      showEdges,
+      markerSize,
+      nodeLabelSize,
+      edgeStyle,
+    ]
+  );
 
-      const suggested = deriveClipFilename(filename, range);
-      const saved = await saveBytesFile(bytes, suggested, {
-        name: "MP4 Video",
-        ext: "mp4",
-      });
-      if (saved) {
-        toast.success("Clip exported", { description: saved });
-        setOpen(false);
+  const handleExportBatch = useCallback(
+    async (all: boolean) => {
+      if (!labels) return;
+      const toExport = (
+        all ? state.configs.map((c) => ({ ...c, include: true })) : state.configs
+      ).filter((c) => c.include);
+      if (toExport.length === 0) {
+        toast.error("No videos selected", {
+          description: "Select at least one video to export.",
+        });
+        return;
       }
-    } catch (err) {
-      if (err instanceof ClipExportCancelled) {
-        toast.info("Clip export cancelled");
-      } else {
-        const msg = err instanceof Error ? err.message : String(err);
-        toast.error("Failed to export clip", { description: msg });
-        console.error("[ExportClip] Failed to export:", err);
+
+      // Choose the destination once (desktop folder) or per-file (browser).
+      const dest = await pickClipDestination();
+      if (dest.mode === "cancelled") return;
+      const dir = dest.mode === "dir" ? dest.dir : null;
+
+      const queued = new Map<Video, ClipJobInfo>();
+      for (const c of toExport) queued.set(c.video, { status: "queued" });
+      setJobs(queued);
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setPhase("encoding");
+      try {
+        const summary = await runClipExportBatch(toExport, {
+          exportOne: (cfg, cbk) => encodeOne(cfg, cbk),
+          saveOne: async (cfg, bytes) => {
+            const len = cfg.video.shape?.[0] ?? 0;
+            const rr = resolveClipFrameRange(cfg.start, cfg.end, len);
+            const range = rr.ok ? rr.range : { start: cfg.start, end: cfg.end };
+            const name = deriveClipFilename(filename, range, videoLabel(cfg.video));
+            return dir
+              ? saveBytesToDir(dir, name, bytes)
+              : saveBytesFile(bytes, name, { name: "MP4 Video", ext: "mp4" });
+          },
+          onStatus: (v, status, extra) =>
+            setJobs((prev) => {
+              const m = new Map(prev);
+              m.set(v, { status, progress: extra?.progress });
+              return m;
+            }),
+          signal: controller.signal,
+        });
+
+        const { done, failed, cancelled } = summary;
+        if (failed === 0 && cancelled === 0) {
+          toast.success(`Exported ${done} clip${done === 1 ? "" : "s"}`, {
+            description: dir ?? undefined,
+          });
+        } else if (cancelled > 0) {
+          toast.info(`Export cancelled — ${done} done, ${cancelled} skipped`);
+        } else {
+          toast.error(`Exported ${done} of ${done + failed} — ${failed} failed`);
+        }
+      } finally {
+        abortRef.current = null;
+        setPhase((p) => (p === "encoding" ? "form" : p));
       }
-    } finally {
-      abortRef.current = null;
-      setPhase((p) => (p === "encoding" ? "form" : p));
-    }
-  }, [
-    video,
-    labels,
-    startInput,
-    endInput,
-    fpsInput,
-    scaleInput,
-    background,
-    totalFrames,
-    sourceWidth,
-    sourceHeight,
-    filename,
-    palette,
-    distinctlyColor,
-    colorPredicted,
-    showNonVisibleNodes,
-    showInstances,
-    showLabels,
-    showEdges,
-    markerSize,
-    nodeLabelSize,
-    edgeStyle,
-    setOpen,
-  ]);
+    },
+    [labels, state.configs, filename, encodeOne]
+  );
 
-  if (!video) return null;
+  if (!video || !labels) return null;
 
-  const pct =
-    progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
   const encoding = phase === "encoding";
   const unsupported = phase === "unsupported";
   const checking = phase === "checking";
+  const nIncluded = state.configs.filter((c) => c.include).length;
+
+  // Overall + current-video progress derived from job state.
+  const jobsArr = [...jobs.values()];
+  const finished = jobsArr.filter(
+    (j) => j.status === "done" || j.status === "error" || j.status === "cancelled"
+  ).length;
+  const current = jobsArr.find((j) => j.status === "encoding");
+  const curPct =
+    current?.progress && current.progress.total
+      ? Math.round((current.progress.done / current.progress.total) * 100)
+      : 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
-        <DialogHeader>
-          <DialogTitle>Export Labeled Clip</DialogTitle>
+      <DialogContent className="sm:max-w-[760px] max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
+          <DialogTitle>Export Clips</DialogTitle>
           <DialogDescription>
-            Render a range of the current video with the skeleton overlay to an
-            mp4.
+            Export labeled clips (skeleton overlay burned in) to mp4. Pick a
+            range per video by scrubbing the preview or editing the fields, then
+            export the selected videos.
           </DialogDescription>
         </DialogHeader>
 
         {unsupported ? (
           <div className="py-2 text-sm text-muted-foreground">{supportMessage}</div>
         ) : (
-          <div className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="clip-start">Start frame</Label>
-                <Input
-                  id="clip-start"
-                  type="number"
-                  min={0}
-                  max={Math.max(0, totalFrames - 1)}
-                  value={startInput}
-                  onChange={(e) => setStartInput(e.target.value)}
-                  disabled={encoding}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="clip-end">End frame</Label>
-                <Input
-                  id="clip-end"
-                  type="number"
-                  min={0}
-                  max={Math.max(0, totalFrames - 1)}
-                  value={endInput}
-                  onChange={(e) => setEndInput(e.target.value)}
-                  disabled={encoding}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="clip-fps">Frame rate (fps)</Label>
-                <Input
-                  id="clip-fps"
-                  type="number"
-                  min={1}
-                  value={fpsInput}
-                  onChange={(e) => setFpsInput(e.target.value)}
-                  disabled={encoding}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="clip-scale">Scale factor</Label>
-                <Input
-                  id="clip-scale"
-                  type="number"
-                  min={CLIP_SCALE_MIN}
-                  max={CLIP_SCALE_MAX}
-                  step={0.1}
-                  value={scaleInput}
-                  onChange={(e) => setScaleInput(e.target.value)}
-                  disabled={encoding}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="clip-background">Background</Label>
-                <Select
-                  value={background}
-                  onValueChange={(v) => setBackground(v as ClipBackground)}
-                  disabled={encoding}
-                >
-                  <SelectTrigger id="clip-background" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="original">Original video</SelectItem>
-                    <SelectItem value="black">Black</SelectItem>
-                    <SelectItem value="white">White</SelectItem>
-                    <SelectItem value="grey">Grey</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="flex gap-3 py-2 flex-1 min-h-0">
+            {/* Left: video list */}
+            <div className="w-56 shrink-0 min-h-0">
+              <ClipVideoList
+                configs={state.configs}
+                focused={focused}
+                jobs={jobs}
+                disabled={encoding}
+                onFocus={(v) => dispatch({ type: "focus", video: v })}
+                onToggleInclude={(v) => dispatch({ type: "toggleInclude", video: v })}
+                onSetAll={(include) => dispatch({ type: "setAllIncluded", include })}
+              />
             </div>
-            <p className="text-xs text-muted-foreground">
-              {totalFrames} frames &middot; {sourceWidth}&times;{sourceHeight}px source.
-              Overlay marker size, edges, and colours follow the current View
-              settings.
-            </p>
 
-            {encoding && (
-              <div className="space-y-1 pt-1">
-                <Progress value={pct} />
-                <p className="text-xs text-muted-foreground">
-                  Encoding frame {progress.done} of {progress.total} ({pct}%)
-                </p>
-              </div>
-            )}
+            {/* Right: preview + per-video settings */}
+            <div className="flex-1 min-w-0 min-h-0 space-y-3 overflow-y-auto">
+              {focused && focusedConfig && !encoding && (
+                <ClipPreview
+                  key={focusedIndex}
+                  video={focused}
+                  start={focusedConfig.start}
+                  end={focusedConfig.end}
+                  onRangeChange={(s, e) =>
+                    dispatch({ type: "setRange", video: focused, start: s, end: e })
+                  }
+                />
+              )}
+              {focusedConfig && (
+                <ClipSettings
+                  config={focusedConfig}
+                  disabled={encoding}
+                  onRange={(s, e) =>
+                    dispatch({ type: "setRange", video: focusedConfig.video, start: s, end: e })
+                  }
+                  onFps={(fps) => dispatch({ type: "setFps", video: focusedConfig.video, fps })}
+                  onScale={(scale) =>
+                    dispatch({ type: "setScale", video: focusedConfig.video, scale })
+                  }
+                  onBackground={(background) =>
+                    dispatch({ type: "setBackground", video: focusedConfig.video, background })
+                  }
+                />
+              )}
+              {encoding && (
+                <div className="space-y-1 pt-1">
+                  <Progress value={curPct} />
+                  <p className="text-xs text-muted-foreground">
+                    Exporting video {Math.min(finished + 1, jobs.size)} of {jobs.size} ({curPct}%)
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="items-center shrink-0">
+          {!unsupported && !encoding && (
+            <span className="text-xs text-muted-foreground mr-auto">
+              {nIncluded} of {state.configs.length} selected
+            </span>
+          )}
           <Button variant="ghost" onClick={handleCancel}>
             Cancel
           </Button>
           {!unsupported && (
-            <Button onClick={handleExport} disabled={encoding || checking}>
-              {encoding ? "Exporting…" : "Export"}
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => handleExportBatch(true)}
+                disabled={encoding || checking || state.configs.length === 0}
+              >
+                Export all
+              </Button>
+              <Button
+                onClick={() => handleExportBatch(false)}
+                disabled={encoding || checking || nIncluded === 0}
+              >
+                {encoding ? "Exporting…" : `Export selected (${nIncluded})`}
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>

@@ -8,6 +8,14 @@ import {
 } from "@talmolab/sleap-io.js";
 import {
   resolveClipFrameRange,
+  computeInitialClipRange,
+  pixelToFrame,
+  frameToPixel,
+  clampHandleDrag,
+  buildInitialClipConfigs,
+  clipExportReducer,
+  runClipExportBatch,
+  type ClipConfig,
   computeClipOutputDimensions,
   deriveClipFilename,
   planClipTimeline,
@@ -72,6 +80,267 @@ describe("resolveClipFrameRange", () => {
   it("rejects NaN inputs", () => {
     const r = resolveClipFrameRange(NaN, 10, 100);
     expect(r.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pure: initial dialog range seeded from the timeline selection
+// ---------------------------------------------------------------------------
+
+describe("computeInitialClipRange", () => {
+  it("defaults to the whole video when there is no selection", () => {
+    expect(computeInitialClipRange(null, 100)).toEqual({ start: 0, end: 99 });
+  });
+
+  it("seeds from an active timeline selection (0-based inclusive)", () => {
+    expect(computeInitialClipRange([10, 20], 100)).toEqual({ start: 10, end: 20 });
+  });
+
+  it("normalizes a reverse selection", () => {
+    expect(computeInitialClipRange([20, 10], 100)).toEqual({ start: 10, end: 20 });
+  });
+
+  it("clamps a stale/out-of-range selection into [0, nFrames-1]", () => {
+    expect(computeInitialClipRange([-5, 999], 100)).toEqual({ start: 0, end: 99 });
+  });
+
+  it("floors fractional selection bounds", () => {
+    expect(computeInitialClipRange([2.9, 5.1], 100)).toEqual({ start: 2, end: 5 });
+  });
+
+  it("handles a video with no frames", () => {
+    expect(computeInitialClipRange(null, 0)).toEqual({ start: 0, end: 0 });
+    expect(computeInitialClipRange([3, 7], 0)).toEqual({ start: 0, end: 0 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pure: scrubbar pixel<->frame mapping + handle clamping (preview)
+// ---------------------------------------------------------------------------
+
+describe("pixelToFrame", () => {
+  it("maps track ends to first/last frame", () => {
+    expect(pixelToFrame(0, 100, 101)).toBe(0);
+    expect(pixelToFrame(100, 100, 101)).toBe(100);
+  });
+  it("maps the midpoint to the middle frame", () => {
+    expect(pixelToFrame(50, 100, 101)).toBe(50);
+  });
+  it("clamps out-of-track pixels", () => {
+    expect(pixelToFrame(-10, 100, 101)).toBe(0);
+    expect(pixelToFrame(200, 100, 101)).toBe(100);
+  });
+  it("returns 0 for a single-frame video or zero-width track", () => {
+    expect(pixelToFrame(50, 100, 1)).toBe(0);
+    expect(pixelToFrame(50, 0, 101)).toBe(0);
+  });
+});
+
+describe("frameToPixel", () => {
+  it("maps first/last frame to track ends", () => {
+    expect(frameToPixel(0, 100, 101)).toBe(0);
+    expect(frameToPixel(100, 100, 101)).toBe(100);
+  });
+  it("maps the middle frame to the midpoint", () => {
+    expect(frameToPixel(50, 100, 101)).toBe(50);
+  });
+  it("returns 0 for a single-frame video", () => {
+    expect(frameToPixel(0, 100, 1)).toBe(0);
+  });
+});
+
+describe("clampHandleDrag", () => {
+  it("passes an in-range start/end through (floored)", () => {
+    expect(clampHandleDrag("start", 30.9, { start: 20, end: 80, len: 100 })).toBe(30);
+    expect(clampHandleDrag("end", 60.9, { start: 20, end: 80, len: 100 })).toBe(60);
+  });
+  it("clamps the start handle to [0, end]", () => {
+    expect(clampHandleDrag("start", -5, { start: 20, end: 80, len: 100 })).toBe(0);
+    expect(clampHandleDrag("start", 90, { start: 20, end: 80, len: 100 })).toBe(80);
+  });
+  it("clamps the end handle to [start, len-1]", () => {
+    expect(clampHandleDrag("end", 10, { start: 20, end: 80, len: 100 })).toBe(20);
+    expect(clampHandleDrag("end", 200, { start: 20, end: 80, len: 100 })).toBe(99);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pure: multi-video config seeding + reducer (Phase 2)
+// ---------------------------------------------------------------------------
+
+function vid(len: number, name: string): Video {
+  return new Video({
+    filename: name,
+    backendMetadata: { shape: [len, 480, 640, 3] },
+    openBackend: false,
+  });
+}
+
+describe("buildInitialClipConfigs", () => {
+  it("seeds the current video from the selection, others full; only current included", () => {
+    const a = vid(100, "a.mp4");
+    const b = vid(200, "b.mp4");
+    const st = buildInitialClipConfigs([a, b], a, [10, 20]);
+    expect(st.focused).toBe(a);
+    expect(st.configs.length).toBe(2);
+    const ca = st.configs[0];
+    expect(ca.video).toBe(a);
+    expect(ca.include).toBe(true);
+    expect(ca.start).toBe(10);
+    expect(ca.end).toBe(20);
+    expect(ca.fps).toBe(30);
+    expect(ca.scale).toBe(1);
+    expect(ca.background).toBe("original");
+    const cb = st.configs[1];
+    expect(cb.include).toBe(false);
+    expect(cb.start).toBe(0);
+    expect(cb.end).toBe(199);
+  });
+
+  it("defaults the current video to the whole video when there is no selection", () => {
+    const a = vid(100, "a.mp4");
+    const st = buildInitialClipConfigs([a], a, null);
+    expect(st.configs[0].start).toBe(0);
+    expect(st.configs[0].end).toBe(99);
+    expect(st.configs[0].include).toBe(true);
+  });
+
+  it("focuses the first video and includes none when there is no current video", () => {
+    const a = vid(100, "a.mp4");
+    const b = vid(200, "b.mp4");
+    const st = buildInitialClipConfigs([a, b], null, null);
+    expect(st.focused).toBe(a);
+    expect(st.configs.every((c) => !c.include)).toBe(true);
+  });
+});
+
+describe("clipExportReducer", () => {
+  const mk = () =>
+    buildInitialClipConfigs([vid(100, "a.mp4"), vid(200, "b.mp4")], null, null);
+
+  it("focuses a video", () => {
+    const st = mk();
+    const b = st.configs[1].video;
+    expect(clipExportReducer(st, { type: "focus", video: b }).focused).toBe(b);
+  });
+
+  it("toggles include for one video without mutating the input", () => {
+    const st = mk();
+    const b = st.configs[1].video;
+    const ns = clipExportReducer(st, { type: "toggleInclude", video: b });
+    expect(ns.configs[1].include).toBe(true);
+    expect(st.configs[1].include).toBe(false);
+  });
+
+  it("sets all included on and off", () => {
+    const st = mk();
+    expect(
+      clipExportReducer(st, { type: "setAllIncluded", include: true }).configs.every((c) => c.include)
+    ).toBe(true);
+    expect(
+      clipExportReducer(st, { type: "setAllIncluded", include: false }).configs.every((c) => !c.include)
+    ).toBe(true);
+  });
+
+  it("sets range / fps / scale / background for a video", () => {
+    const st = mk();
+    const a = st.configs[0].video;
+    expect(clipExportReducer(st, { type: "setRange", video: a, start: 5, end: 50 }).configs[0].start).toBe(5);
+    expect(clipExportReducer(st, { type: "setRange", video: a, start: 5, end: 50 }).configs[0].end).toBe(50);
+    expect(clipExportReducer(st, { type: "setFps", video: a, fps: 24 }).configs[0].fps).toBe(24);
+    expect(clipExportReducer(st, { type: "setScale", video: a, scale: 0.5 }).configs[0].scale).toBe(0.5);
+    expect(clipExportReducer(st, { type: "setBackground", video: a, background: "black" }).configs[0].background).toBe("black");
+  });
+
+  it("resets the whole state (re-seed on dialog open)", () => {
+    const st = mk();
+    const other = buildInitialClipConfigs([vid(50, "c.mp4")], null, null);
+    expect(clipExportReducer(st, { type: "reset", state: other })).toBe(other);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pure: per-video filename + sequential batch runner (Phase 3)
+// ---------------------------------------------------------------------------
+
+describe("deriveClipFilename with a per-video label", () => {
+  it("keeps the plain form when no video label is given", () => {
+    expect(deriveClipFilename("proj.slp", { start: 10, end: 20 })).toBe("proj.clip_10-20.mp4");
+  });
+  it("inserts a sanitized video label (extension stripped)", () => {
+    expect(deriveClipFilename("proj.slp", { start: 10, end: 20 }, "0001.jpg")).toBe("proj.0001.clip_10-20.mp4");
+    expect(deriveClipFilename("proj.slp", { start: 0, end: 5 }, "my video.mp4")).toBe("proj.my_video.clip_0-5.mp4");
+  });
+});
+
+describe("runClipExportBatch", () => {
+  const cfg = (video: Video, include: boolean): ClipConfig => ({
+    video,
+    include,
+    start: 0,
+    end: 10,
+    fps: 30,
+    scale: 1,
+    background: "original",
+  });
+
+  it("exports only the included videos, in order, reporting done", async () => {
+    const a = vid(100, "a");
+    const b = vid(100, "b");
+    const c = vid(100, "c");
+    const statuses: Array<[string, string]> = [];
+    const summary = await runClipExportBatch([cfg(a, true), cfg(b, false), cfg(c, true)], {
+      exportOne: async () => new Uint8Array([1]),
+      saveOne: async () => "/out/x.mp4",
+      onStatus: (v, s) => statuses.push([v.filename as string, s]),
+      signal: new AbortController().signal,
+    });
+    expect(summary).toEqual({ done: 2, failed: 0, cancelled: 0 });
+    expect(statuses.some(([f]) => f === "b")).toBe(false);
+    expect(statuses.filter(([, s]) => s === "done").map(([f]) => f)).toEqual(["a", "c"]);
+  });
+
+  it("isolates a failure and continues (failure-isolation)", async () => {
+    const a = vid(100, "a");
+    const b = vid(100, "b");
+    const summary = await runClipExportBatch([cfg(a, true), cfg(b, true)], {
+      exportOne: async (config) => {
+        if (config.video === a) throw new Error("boom");
+        return new Uint8Array([1]);
+      },
+      saveOne: async () => "/out/x.mp4",
+      onStatus: () => {},
+      signal: new AbortController().signal,
+    });
+    expect(summary).toEqual({ done: 1, failed: 1, cancelled: 0 });
+  });
+
+  it("cancels the remaining videos when a job is cancelled", async () => {
+    const a = vid(100, "a");
+    const b = vid(100, "b");
+    const summary = await runClipExportBatch([cfg(a, true), cfg(b, true)], {
+      exportOne: async () => {
+        throw new ClipExportCancelled();
+      },
+      saveOne: async () => "/out/x.mp4",
+      onStatus: () => {},
+      signal: new AbortController().signal,
+    });
+    expect(summary).toEqual({ done: 0, failed: 0, cancelled: 2 });
+  });
+
+  it("marks all cancelled when the signal is already aborted", async () => {
+    const a = vid(100, "a");
+    const b = vid(100, "b");
+    const ac = new AbortController();
+    ac.abort();
+    const summary = await runClipExportBatch([cfg(a, true), cfg(b, true)], {
+      exportOne: async () => new Uint8Array([1]),
+      saveOne: async () => "/out/x.mp4",
+      onStatus: () => {},
+      signal: ac.signal,
+    });
+    expect(summary).toEqual({ done: 0, failed: 0, cancelled: 2 });
   });
 });
 
