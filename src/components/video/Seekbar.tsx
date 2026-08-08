@@ -17,6 +17,7 @@ import {
   computeStatisticSeries,
   getGraphSpec,
   GRAPH_SPECS,
+  reconcileReduction,
   type StatisticGraphType,
 } from "@/lib/statisticSeries";
 import type {
@@ -24,7 +25,12 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from "@/lib/statisticSeriesWorkerCore";
-import { drawHeaderSeries } from "@/lib/headerSeriesRender";
+import {
+  drawHeaderSeries,
+  frameTickInterval,
+  HEADER_FILL,
+} from "@/lib/headerSeriesRender";
+import { resizeHeaderHeight } from "@/lib/seekbarHeaderHeight";
 import { isUserLabeledFrame } from "@/lib/frameLabeling";
 import { navigableDomain, nearestFrameInDomain } from "@/lib/navigableFrames";
 import {
@@ -63,9 +69,6 @@ const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
 /** Snap threshold in pixels for snapping to labeled frames. */
 const SNAP_THRESHOLD_PX = 12;
 
-/** Height of the instance count header graph in pixels. */
-const HEADER_HEIGHT = 16;
-
 /**
  * Frame-count threshold past which the 3 heavy header graphs (point
  * displacement, primary point displacement, min centroid proximity) are
@@ -81,6 +84,62 @@ const WORKER_GRAPHS: ReadonlySet<StatisticGraphType> = new Set<StatisticGraphTyp
   "min-centroid-proximity",
 ]);
 
+/**
+ * Draw frame-index gridlines + labels onto the header canvas every N frames
+ * (PyQt-style ticks — see frameTickInterval), so a stretched header stays
+ * legible: subtle full-height verticals + small frame numbers at the top.
+ */
+function drawHeaderFrameMarkers(
+  ctx: CanvasRenderingContext2D,
+  totalFrames: number,
+  w: number,
+  h: number,
+): void {
+  if (totalFrames <= 1) return;
+  const step = frameTickInterval(totalFrames);
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.textBaseline = "top";
+  for (let f = step; f < totalFrames; f += step) {
+    const x = (f / (totalFrames - 1)) * w;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+    // Frame number moved down (y=4) so the drag handle straddling the top seam
+    // doesn't overshadow it, and enlarged for legibility.
+    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.fillText(String(f), x + 3, 4);
+  }
+  ctx.restore();
+}
+
+/**
+ * Draw a minimal Y-axis scale (the graph's max at the top of the plot band, min
+ * at the baseline) on the left edge, so the height has a readable scale. Only
+ * when the header is tall enough to fit the labels without crowding the graph.
+ */
+function drawHeaderYScale(
+  ctx: CanvasRenderingContext2D,
+  min: number,
+  max: number,
+  h: number,
+  topPad: number,
+): void {
+  if (h < 44) return;
+  const fmt = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  ctx.save();
+  ctx.font = "10px system-ui, sans-serif";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.textBaseline = "top";
+  ctx.fillText(fmt(max), 3, topPad + 2);
+  ctx.textBaseline = "bottom";
+  ctx.fillText(fmt(min), 3, h - 2);
+  ctx.restore();
+}
+
 export function Seekbar() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const headerCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -95,6 +154,7 @@ export function Seekbar() {
   const frameRange = useAppStore((s) => s.frameRange);
   const seekbarHeaderGraph = useAppStore((s) => s.seekbarHeaderGraph);
   const seekbarHeaderReduction = useAppStore((s) => s.seekbarHeaderReduction);
+  const seekbarHeaderHeight = useAppStore((s) => s.seekbarHeaderHeight);
   const overlayVersion = useAppStore((s) => s.overlayVersion);
   const videoRevision = useAppStore((s) => s.videoRevision);
   const setKey = useAppStore((s) => s.set);
@@ -286,17 +346,53 @@ export function Seekbar() {
   const selectGraph = useCallback(
     (next: StatisticGraphType) => {
       setKey("seekbarHeaderGraph", next);
-      const spec = getGraphSpec(next);
-      if (
-        spec &&
-        spec.reductions.length > 0 &&
-        !spec.reductions.includes(seekbarHeaderReduction)
-      ) {
-        setKey("seekbarHeaderReduction", spec.defaultReduction);
-      }
+      const r = reconcileReduction(next, seekbarHeaderReduction);
+      if (r !== seekbarHeaderReduction) setKey("seekbarHeaderReduction", r);
     },
     [setKey, seekbarHeaderReduction]
   );
+
+  // --- Seekbar header vertical resize (drag handle on the header's top edge) ---
+  // Dragging up grows the header, down shrinks it (clamped). The chosen height
+  // is written straight to the persisted store so the graph re-renders live and
+  // the preference survives reloads. Pure px->height math lives in
+  // seekbarHeaderHeight.ts (unit-tested).
+  const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  const handleResizePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      resizeRef.current = {
+        startY: e.clientY,
+        startHeight: useAppStore.getState().seekbarHeaderHeight,
+      };
+      // Pointer capture keeps move/up events flowing to the handle even when the
+      // cursor leaves it. Some WebViews throw on setPointerCapture — guard it.
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        // ignore — dragging still works via the element's own pointer events
+      }
+    },
+    []
+  );
+
+  const handleResizePointerMove = useCallback((e: React.PointerEvent) => {
+    const st = resizeRef.current;
+    if (!st) return;
+    const next = resizeHeaderHeight(st.startHeight, st.startY, e.clientY);
+    useAppStore.getState().set("seekbarHeaderHeight", next);
+  }, []);
+
+  const handleResizePointerUp = useCallback((e: React.PointerEvent) => {
+    if (!resizeRef.current) return;
+    resizeRef.current = null;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const [isDragging, setIsDragging] = useState(false);
   const [hoverFrame, setHoverFrame] = useState<number | null>(null);
@@ -530,18 +626,30 @@ export function Seekbar() {
 
     const rect = container.getBoundingClientRect();
     canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = HEADER_HEIGHT * window.devicePixelRatio;
+    canvas.height = seekbarHeaderHeight * window.devicePixelRatio;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     const w = rect.width;
-    const h = HEADER_HEIGHT;
+    // Draw against the current (user-resizable) header height so a taller
+    // header spreads values out — bars/polylines scale with `h`.
+    const h = seekbarHeaderHeight;
 
     ctx.clearRect(0, 0, w, h);
 
     if (totalFrames === 0 || !labels || !video) return;
+
+    if (seekbarHeaderGraph === "none") return;
+
+    // Reserve a top band for the frame-number labels + headroom so peaks don't
+    // touch the very top edge (scales with height, capped).
+    const topPad = Math.round(Math.min(18, h * 0.35));
+    const usable = Math.max(1, h - topPad);
+
+    // The graph's value range, for the Y-axis scale labels.
+    let scale: { min: number; max: number } | null = null;
 
     if (seekbarHeaderGraph === "instance-count") {
       // Build instance count per frame
@@ -554,22 +662,25 @@ export function Seekbar() {
         if (lf.instances.length > maxCount) maxCount = lf.instances.length;
       }
 
-      if (maxCount === 0) return;
-
-      // Draw bar chart
-      ctx.fillStyle = "rgba(100, 149, 237, 0.5)";
-      for (const [fi, count] of counts) {
-        const x = (fi / (totalFrames - 1)) * w;
-        const barH = (count / maxCount) * h;
-        ctx.fillRect(x, h - barH, Math.max(1, w / totalFrames), barH);
+      // Draw bar chart (skip if no instances; markers still draw below).
+      if (maxCount > 0) {
+        ctx.fillStyle = HEADER_FILL;
+        for (const [fi, count] of counts) {
+          const x = (fi / (totalFrames - 1)) * w;
+          const barH = (count / maxCount) * usable; // leave `topPad` headroom
+          ctx.fillRect(x, h - barH, Math.max(1, w / totalFrames), barH);
+        }
+        scale = { min: 0, max: maxCount };
       }
-      return;
+    } else if (headerSeries) {
+      scale = drawHeaderSeries(ctx, headerSeries, totalFrames, w, h, topPad);
     }
 
-    if (seekbarHeaderGraph === "none" || !headerSeries) return;
-
-    drawHeaderSeries(ctx, headerSeries, totalFrames, w, h);
-  }, [totalFrames, labels, video, seekbarHeaderGraph, headerSeries]);
+    // Frame-index markers (gridlines + labels) + a left-edge Y-axis scale, both
+    // on top of the graph — PyQt parity + readability.
+    drawHeaderFrameMarkers(ctx, totalFrames, w, h);
+    if (scale) drawHeaderYScale(ctx, scale.min, scale.max, h, topPad);
+  }, [totalFrames, labels, video, seekbarHeaderGraph, headerSeries, seekbarHeaderHeight]);
 
   // Precompute the seekbar header's static content (per-track occupied frames +
   // labeled-frame marks) ONCE per data change — NOT per frame. The draw effect
@@ -714,16 +825,40 @@ export function Seekbar() {
 
   return (
     <div className="grid grid-cols-[1fr_auto] shrink-0">
-      {/* Instance count header graph - subgrid aligns canvas with seekbar below */}
-      <div className="grid grid-cols-subgrid col-span-full items-center h-4 bg-card border-t border-border px-2 gap-2">
-        <div ref={headerContainerRef} className="overflow-hidden min-w-0">
+      {/* Instance count header graph - subgrid aligns canvas with seekbar below.
+          Height is user-resizable via the drag handle on its top edge. */}
+      <div
+        className="relative grid grid-cols-subgrid col-span-full items-center bg-card border-t border-border px-2 gap-2"
+        style={{ height: seekbarHeaderHeight }}
+      >
+        {/* Drag handle on the top edge — drag up to grow the header, down to
+            shrink. Sits on the border seam; shows a visible bar (like the
+            sidebar resize handle) that highlights on hover/drag. */}
+        <div
+          className="group absolute inset-x-0 top-0 z-10 flex h-3 -translate-y-1/2 cursor-ns-resize items-center justify-center"
+          onPointerDown={handleResizePointerDown}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={handleResizePointerUp}
+          onPointerCancel={handleResizePointerUp}
+          title="Drag to resize the seekbar header"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize seekbar header"
+        >
+          <div className="h-1.5 w-full bg-border transition-colors group-hover:bg-primary/50 group-active:bg-primary" />
+        </div>
+        <div
+          ref={headerContainerRef}
+          className="overflow-hidden min-w-0 h-full"
+          style={{ height: seekbarHeaderHeight }}
+        >
           <canvas
             ref={headerCanvasRef}
             className="w-full h-full"
             style={{ display: "block" }}
           />
         </div>
-        <div className="flex gap-1 shrink-0 items-center justify-self-end">
+        <div className="flex gap-1 shrink-0 items-center justify-self-end self-start">
           {/* Graph-type picker */}
           <Popover>
             <PopoverTrigger asChild>
