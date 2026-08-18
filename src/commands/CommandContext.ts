@@ -8,8 +8,11 @@
 
 import { Instance, LabeledFrame, PredictedInstance } from "@talmolab/sleap-io.js";
 import { useAppStore, type AppState } from "../stores/appStore";
-import type { UpdateTopic, Track, Video } from "../types";
+import { UpdateTopic } from "../types";
+import type { Skeleton, SuggestionFrame, Track, Video } from "../types";
 import type { Command } from "./types";
+import { toast } from "@/lib/notify";
+import { humanizeCommandName } from "@/lib/humanizeCommand";
 
 /** Record of an executed command for change tracking. */
 export interface ChangeRecord {
@@ -38,6 +41,14 @@ interface UndoSnapshot {
   tracks: Track[];
   /** Track names captured by value, so a rename (SetTrackName) is undoable. */
   trackNames: string[];
+  /**
+   * Project-level collections a bulk op (e.g. `Labels.merge`) can grow but that
+   * live outside individual frames. Snapshotted by reference so undo reverts a
+   * merge that added a video/skeleton/suggestion — not just its frames+tracks.
+   */
+  videos: Video[];
+  skeletons: Skeleton[];
+  suggestions: SuggestionFrame[];
   /** Index of selected instance in the current frame's instances array. */
   selectedIdx: number;
   /** The video that was active when the snapshot was taken. */
@@ -132,6 +143,9 @@ export class CommandContext {
       allFrames: null,
       tracks: labels ? [...labels.tracks] : [],
       trackNames: labels ? labels.tracks.map((t) => t.name) : [],
+      videos: labels ? [...labels.videos] : [],
+      skeletons: labels ? [...labels.skeletons] : [],
+      suggestions: labels ? [...labels.suggestions] : [],
       selectedIdx,
       activeVideo: video,
       activeFrameIdx: frameIdx,
@@ -167,6 +181,9 @@ export class CommandContext {
       allFrames,
       tracks: labels ? [...labels.tracks] : [],
       trackNames: labels ? labels.tracks.map((t) => t.name) : [],
+      videos: labels ? [...labels.videos] : [],
+      skeletons: labels ? [...labels.skeletons] : [],
+      suggestions: labels ? [...labels.suggestions] : [],
       selectedIdx,
       activeVideo: video,
       activeFrameIdx: frameIdx,
@@ -192,11 +209,17 @@ export class CommandContext {
       ? this.takeAllFramesSnapshot(snapshot.commandName)
       : this.takeSnapshot(snapshot.commandName);
 
-    // Restore tracks
+    // Restore tracks + the project-level collections a merge can grow (videos,
+    // skeletons, suggestions), so undoing a merge that added a video/skeleton
+    // reverts them instead of leaving an orphan (e.g. status bar stuck on
+    // "Video 1 / 2" after undo).
     labels.tracks = [...snapshot.tracks];
     snapshot.tracks.forEach((t, i) => {
       if (i < snapshot.trackNames.length) t.name = snapshot.trackNames[i];
     });
+    labels.videos = [...snapshot.videos];
+    labels.skeletons = [...snapshot.skeletons];
+    labels.suggestions = [...snapshot.suggestions];
 
     if (snapshot.allFrames) {
       // Multi-frame restore: rebuild all labeled frames
@@ -213,6 +236,14 @@ export class CommandContext {
         lf.isNegative = frameData.isNegative;
         labels.labeledFrames.push(lf);
       }
+      // We rebuilt `labeledFrames` in place (not via io's mutators), so io's
+      // internal frame/track indices are stale. They're guarded only by frame
+      // COUNT, so when a merge left the count unchanged (e.g. keep_both on an
+      // overlapping frame: donor frames all matched existing ones) the guard
+      // never fires and `find()` below hands back the pre-undo (merged) frames.
+      // Force a rebuild so the view-restore find — and every later find — sees
+      // the restored frames.
+      labels.reindex();
 
       // Restore view to the active frame
       if (snapshot.activeVideo) {
@@ -278,6 +309,13 @@ export class CommandContext {
       this.state.setInstance(null);
     }
 
+    // The single-frame branches above also mutate `labeledFrames` directly
+    // (re-creating a deleted frame, or splicing one out) or swap a frame's
+    // `instances`, any of which can desync io's count-guarded indices. Rebuild
+    // once more so subsequent finds/track lookups are correct. (Idempotent with
+    // the multi-frame branch's reindex — it just nulls the caches.)
+    labels.reindex();
+
     this.state.markChanged();
     return before;
   }
@@ -326,6 +364,23 @@ export class CommandContext {
 
     const redoSnapshot = this.restoreSnapshot(snapshot);
     this.redoStack.push(redoSnapshot);
+    // restoreSnapshot reverts the data, but the canvas instance overlay repaints
+    // only when `overlayVersion` changes (VideoPlayer's draw effect depends on it)
+    // — nothing in the undo path bumped it, so instances a merge added to the
+    // current frame stayed drawn after undo. Force the overlay to redraw.
+    this.state.bumpOverlayVersion();
+    this.signalUpdate([
+      UpdateTopic.Labels,
+      UpdateTopic.Frame,
+      UpdateTopic.Instance,
+      UpdateTopic.Tracks,
+    ]);
+    // Undo/redo are otherwise silent (only the status bar changes) — surface a
+    // short, self-replacing toast naming the action so ⌘Z has visible feedback.
+    toast.info(`Undid ${humanizeCommandName(snapshot.commandName)}`, {
+      id: "undo-redo",
+      duration: 1400,
+    });
     return true;
   }
 
@@ -336,6 +391,17 @@ export class CommandContext {
 
     const undoSnapshot = this.restoreSnapshot(snapshot);
     this.undoStack.push(undoSnapshot);
+    this.state.bumpOverlayVersion();
+    this.signalUpdate([
+      UpdateTopic.Labels,
+      UpdateTopic.Frame,
+      UpdateTopic.Instance,
+      UpdateTopic.Tracks,
+    ]);
+    toast.info(`Redid ${humanizeCommandName(snapshot.commandName)}`, {
+      id: "undo-redo",
+      duration: 1400,
+    });
     return true;
   }
 
