@@ -23,6 +23,8 @@ interface SingleFrameData {
   videoRef: Video;
   frameIdx: number;
   instances: Instance[];
+  /** Negative (background) flag, so Mark-Frame-as-Negative is undoable. */
+  isNegative: boolean;
 }
 
 /** Snapshot of frame state for undo/redo. */
@@ -34,6 +36,8 @@ interface UndoSnapshot {
   allFrames: SingleFrameData[] | null;
   /** Tracks array snapshot (by reference, order matters). */
   tracks: Track[];
+  /** Track names captured by value, so a rename (SetTrackName) is undoable. */
+  trackNames: string[];
   /** Index of selected instance in the current frame's instances array. */
   selectedIdx: number;
   /** The video that was active when the snapshot was taken. */
@@ -114,6 +118,7 @@ export class CommandContext {
           videoRef: video,
           frameIdx,
           instances: cloneInstances(lf.instances),
+          isNegative: lf.isNegative,
         };
         if (instance) {
           selectedIdx = lf.instances.indexOf(instance);
@@ -126,6 +131,7 @@ export class CommandContext {
       frame,
       allFrames: null,
       tracks: labels ? [...labels.tracks] : [],
+      trackNames: labels ? labels.tracks.map((t) => t.name) : [],
       selectedIdx,
       activeVideo: video,
       activeFrameIdx: frameIdx,
@@ -144,6 +150,7 @@ export class CommandContext {
           videoRef: lf.video,
           frameIdx: lf.frameIdx,
           instances: cloneInstances(lf.instances),
+          isNegative: lf.isNegative,
         });
       }
       if (video && instance) {
@@ -159,6 +166,7 @@ export class CommandContext {
       frame: null,
       allFrames,
       tracks: labels ? [...labels.tracks] : [],
+      trackNames: labels ? labels.tracks.map((t) => t.name) : [],
       selectedIdx,
       activeVideo: video,
       activeFrameIdx: frameIdx,
@@ -186,6 +194,9 @@ export class CommandContext {
 
     // Restore tracks
     labels.tracks = [...snapshot.tracks];
+    snapshot.tracks.forEach((t, i) => {
+      if (i < snapshot.trackNames.length) t.name = snapshot.trackNames[i];
+    });
 
     if (snapshot.allFrames) {
       // Multi-frame restore: rebuild all labeled frames
@@ -199,6 +210,7 @@ export class CommandContext {
           frameIdx: frameData.frameIdx,
         });
         lf.instances = cloneInstances(frameData.instances);
+        lf.isNegative = frameData.isNegative;
         labels.labeledFrames.push(lf);
       }
 
@@ -228,6 +240,7 @@ export class CommandContext {
         // Restore instances on existing frame
         const lf = frames[0];
         lf.instances = cloneInstances(snapshot.frame.instances);
+        lf.isNegative = snapshot.frame.isNegative;
         this.state.setLabeledFrame(lf);
 
         // Restore selection
@@ -246,6 +259,7 @@ export class CommandContext {
           frameIdx: snapshot.frame.frameIdx,
         });
         lf.instances = cloneInstances(snapshot.frame.instances);
+        lf.isNegative = snapshot.frame.isNegative;
         labels.labeledFrames.push(lf);
         this.state.setLabeledFrame(lf);
         this.state.setInstance(null);

@@ -19,6 +19,7 @@ import {
   AddInstance,
   DeleteSelectedInstance,
   AddInstancesFromAllPredictions,
+  SetTrackName,
 } from "../../commands";
 import { cn } from "@/lib/utils";
 import {
@@ -164,6 +165,20 @@ function InstanceRow({
   const totalNodes = instance.points.length;
   const score = predicted ? (instance as PredictedInstance).score : null;
 
+  // Inline track rename (double-click the name; propagates to all instances).
+  const [editingTrack, setEditingTrack] = useState(false);
+  const [trackDraft, setTrackDraft] = useState("");
+  const canRenameTrack = !!instance.track && !readOnly;
+  const commitTrackName = () => {
+    setEditingTrack(false);
+    if (instance.track) {
+      commandContext.execute(SetTrackName, {
+        track: instance.track,
+        name: trackDraft,
+      });
+    }
+  };
+
   return (
     <TableRow
       onClick={onSelect}
@@ -180,7 +195,39 @@ function InstanceRow({
           style={{ backgroundColor: rgbToCSS(color) }}
         />
       </TableCell>
-      <TableCell className="py-0.5 px-2 text-xs">{trackName}</TableCell>
+      <TableCell className="py-0.5 px-2 text-xs">
+        {editingTrack ? (
+          <input
+            autoFocus
+            value={trackDraft}
+            onChange={(e) => setTrackDraft(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitTrackName();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setEditingTrack(false);
+              }
+            }}
+            onBlur={commitTrackName}
+            className="w-full rounded border border-border bg-background px-1 py-0 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        ) : (
+          <span
+            onDoubleClick={(e) => {
+              if (!canRenameTrack) return;
+              e.stopPropagation();
+              setTrackDraft(instance.track?.name ?? "");
+              setEditingTrack(true);
+            }}
+            title={canRenameTrack ? "Double-click to rename track" : undefined}
+          >
+            {trackName}
+          </span>
+        )}
+      </TableCell>
       <TableCell className="py-0.5 px-2 text-xs">
         <Badge
           variant={predicted ? "secondary" : "outline"}
@@ -304,6 +351,12 @@ export function InstancesPanel() {
   const frameIdx = useAppStore((s) => s.frameIdx);
   const currentInstance = useAppStore((s) => s.instance);
   const setInstance = useAppStore((s) => s.setInstance);
+  // Re-render on every label edit. Track-mutating commands (AddTrack,
+  // SetInstanceTrack, SetTrackName, TransposeInstances) change instance/track
+  // data IN PLACE without swapping a subscribed reference, so without this the
+  // panel only updates by luck via some other re-render (and not at all on a
+  // frame with no incidental repaint — e.g. a negative frame).
+  useAppStore((s) => s.editSeq);
   // Instances require a skeleton with at least one node; a node-less skeleton
   // would yield a null instance. Re-evaluates when the node count changes
   // (skeleton commands bump overlayVersion, which notifies this selector).

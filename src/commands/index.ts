@@ -77,6 +77,7 @@ export {
 // Edit commands
 export {
   AddInstance,
+  ToggleNegativeFrame,
   DeleteSelectedInstance,
   SetPointLocation,
   CopyInstance,
@@ -104,6 +105,7 @@ export {
   DeleteTrack,
   DeleteUnusedTracks,
   DeleteAllTracks,
+  SetTrackName,
 } from "./trackCommands";
 
 // Skeleton commands
@@ -112,6 +114,8 @@ export {
   DeleteNodeCommand,
   AddEdgeCommand,
   DeleteEdgeCommand,
+  AddSymmetryCommand,
+  RemoveSymmetryCommand,
   RenameNodeCommand,
   LoadSkeletonTemplateCommand,
   OpenSkeletonCommand,
