@@ -256,6 +256,27 @@ export interface AppState {
   labelingMode: "select" | "place";
   placementNodeIdx: number | null;
 
+  // === Skeleton-builder state (transient, not persisted) ===
+  // Visual skeleton builder: place nodes on the canvas, then connect them into
+  // edges. This is a pure scratch buffer -- the clicked node POSITIONS live
+  // only here (never inserted into labels.labeledFrames), so no phantom labeled
+  // instance is ever saved. The skeleton graph itself is persisted separately
+  // via the existing skeleton commands. `builderPositions` is index-aligned to
+  // `skeleton.nodes` and holds scene/source-coord positions (null = unplaced).
+  skeletonBuildMode: boolean;
+  skeletonBuildStage: "place" | "connect";
+  builderPositions: ({ x: number; y: number } | null)[];
+  /**
+   * Session-only "template layout": a snapshot of the node positions the user
+   * DREW in the visual skeleton builder (IMAGE space, index-aligned to
+   * `skeleton.nodes`), captured on the builder's Done. When set, the
+   * center-based Add Instance placement methods (best / template /
+   * force_directed) seed their geometry from this drawn layout instead of the
+   * scrambled circle. Transient like the other build-mode fields (NOT in
+   * PERSISTED_KEYS) — a fresh session starts back on the circle default.
+   */
+  skeletonTemplateLayout: ({ x: number; y: number } | null)[] | null;
+
   // === Frame range ===
   frameRange: [number, number] | null;
   hasFrameRange: boolean;
@@ -343,6 +364,24 @@ export interface AppState {
   setMenuSearchDialogOpen: (open: boolean) => void;
   enterPlacementMode: () => void;
   exitPlacementMode: () => void;
+
+  // Skeleton-builder actions (scratch buffer; see field docs above).
+  enterSkeletonBuild: () => void;
+  exitSkeletonBuild: () => void;
+  setSkeletonBuildStage: (stage: "place" | "connect") => void;
+  setBuilderPosition: (
+    nodeIdx: number,
+    p: { x: number; y: number } | null
+  ) => void;
+  syncBuilderPositions: () => void;
+  /**
+   * Snapshot the current `builderPositions` into `skeletonTemplateLayout` (a
+   * distinct array copy). Empty positions → `null`. Called on the builder's
+   * Done so the drawn layout becomes the session seed for Add Instance.
+   */
+  captureSkeletonTemplateLayout: () => void;
+  /** Discard the captured template layout (back to the circle default). */
+  clearSkeletonTemplateLayout: () => void;
   togglePanelVisibility: (panelId: string) => void;
   resetPanels: () => void;
   /** Rail click: uncollapse the column and open `panelId` if it's collapsed;
@@ -497,6 +536,12 @@ export const useAppStore = create<AppState>()(
       // Labeling mode state (transient)
       labelingMode: "select" as "select" | "place",
       placementNodeIdx: null as number | null,
+
+      // Skeleton-builder state (transient scratch buffer)
+      skeletonBuildMode: false,
+      skeletonBuildStage: "place" as "place" | "connect",
+      builderPositions: [] as ({ x: number; y: number } | null)[],
+      skeletonTemplateLayout: null as ({ x: number; y: number } | null)[] | null,
 
       // Frame range
       frameRange: null,
@@ -853,6 +898,72 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           state.labelingMode = "select";
           state.placementNodeIdx = null;
+        }),
+
+      // Enter the visual skeleton builder. Seeds one null slot per skeleton
+      // node (scratch positions, index-aligned). Also clears place-labeling so
+      // the two modes never fight over canvas clicks.
+      enterSkeletonBuild: () =>
+        set((state) => {
+          state.skeletonBuildMode = true;
+          state.skeletonBuildStage = "place";
+          state.builderPositions = state.skeleton
+            ? state.skeleton.nodes.map(() => null)
+            : [];
+          state.labelingMode = "select";
+          state.placementNodeIdx = null;
+        }),
+
+      // Exit the builder and discard the scratch buffer. MUST NOT touch labels
+      // or skeleton -- the net-neutral invariant (no phantom labeled instance).
+      exitSkeletonBuild: () =>
+        set((state) => {
+          state.skeletonBuildMode = false;
+          state.skeletonBuildStage = "place";
+          state.builderPositions = [];
+        }),
+
+      setSkeletonBuildStage: (stage) =>
+        set((state) => {
+          state.skeletonBuildStage = stage;
+        }),
+
+      // Replace one scratch position immutably (new array so React/Zustand sees
+      // the change). Growing past the current length back-fills with nulls.
+      setBuilderPosition: (nodeIdx, p) =>
+        set((state) => {
+          const next = state.builderPositions.slice();
+          for (let i = next.length; i < nodeIdx; i++) next[i] = null;
+          next[nodeIdx] = p;
+          state.builderPositions = next;
+        }),
+
+      // Reconcile the scratch buffer length with the current skeleton: append
+      // null for newly added nodes, drop extras for removed ones, preserving
+      // surviving entries by index.
+      syncBuilderPositions: () =>
+        set((state) => {
+          const n = state.skeleton ? state.skeleton.nodes.length : 0;
+          const next = state.builderPositions.slice(0, n);
+          for (let i = next.length; i < n; i++) next[i] = null;
+          state.builderPositions = next;
+        }),
+
+      // Capture the drawn builder layout as a session-only template (a distinct
+      // deep copy, so later builder edits don't mutate the snapshot). Empty
+      // positions → null. The center-based Add Instance methods seed from this
+      // in place of the scrambled circle (see @/lib/instancePlacement).
+      captureSkeletonTemplateLayout: () =>
+        set((state) => {
+          state.skeletonTemplateLayout =
+            state.builderPositions.length > 0
+              ? state.builderPositions.map((p) => (p ? { x: p.x, y: p.y } : null))
+              : null;
+        }),
+
+      clearSkeletonTemplateLayout: () =>
+        set((state) => {
+          state.skeletonTemplateLayout = null;
         }),
 
       // Toggle a sidebar panel's visibility (#135). Hiding the currently-active
