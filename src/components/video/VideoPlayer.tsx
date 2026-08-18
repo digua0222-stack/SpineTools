@@ -1923,6 +1923,32 @@ export function VideoPlayer() {
       // Reset rotation snapshot tracking when not using alt
       rotationSnapshotTaken.current = false;
 
+      // Decide the gesture — ZOOM or PAN (#278/#282). Plain scroll PANS (mouse
+      // wheel and trackpad two-finger alike); only Ctrl+scroll ZOOMS. Fully
+      // deterministic and device-agnostic — no trying to tell a mouse wheel from
+      // a trackpad pan. A trackpad *pinch* also zooms because the browser
+      // synthesizes ctrlKey for it.
+      if (!e.ctrlKey) {
+        // Pan by the raw scroll delta (mouse wheel / side wheel / trackpad
+        // two-finger). Reuse constrainPan so the image can't be flung
+        // off-canvas, matching click-drag panning.
+        const prev = viewRef.current;
+        const constrained = constrainPan(
+          prev.panX - e.deltaX,
+          prev.panY - e.deltaY,
+          prev.zoom
+        );
+        viewRef.current = {
+          zoom: prev.zoom,
+          panX: constrained.x,
+          panY: constrained.y,
+        };
+        setPanX(constrained.x);
+        setPanY(constrained.y);
+        return;
+      }
+
+      // ZOOM (Ctrl+scroll or trackpad pinch), anchored at the cursor.
       // Normalize deltaY for different input devices
       let delta = e.deltaY;
       if (e.deltaMode === 1) delta *= 40; // line mode
@@ -1955,7 +1981,7 @@ export function VideoPlayer() {
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
-  }, [offsetX, offsetY]);
+  }, [offsetX, offsetY, constrainPan]);
 
   // Double-click: convert predicted instance, or reset zoom/pan
   const handleDoubleClick = useCallback(

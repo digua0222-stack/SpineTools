@@ -281,6 +281,7 @@ export interface AppState {
   exportPackageDialogOpen: boolean;
   shortcutsDialogOpen: boolean;
   helpDialogOpen: boolean;
+  menuSearchDialogOpen: boolean;
   quitConfirmOpen: boolean;
 
   // === Area delete mode ===
@@ -336,6 +337,7 @@ export interface AppState {
   setExportPackageDialogOpen: (open: boolean) => void;
   setShortcutsDialogOpen: (open: boolean) => void;
   setHelpDialogOpen: (open: boolean) => void;
+  setMenuSearchDialogOpen: (open: boolean) => void;
   enterPlacementMode: () => void;
   exitPlacementMode: () => void;
   togglePanelVisibility: (panelId: string) => void;
@@ -459,7 +461,7 @@ export const useAppStore = create<AppState>()(
       markerSize: 4,
       nodeLabelSize: 12,
       insetSize: 400,
-      insetZoom: 4,
+      insetZoom: 2,
       trailLength: 0,
       trailShade: "Normal",
       lutMin: 0,
@@ -513,6 +515,7 @@ export const useAppStore = create<AppState>()(
       exportPackageDialogOpen: false,
       shortcutsDialogOpen: false,
       helpDialogOpen: false,
+      menuSearchDialogOpen: false,
       quitConfirmOpen: false,
 
       // Area delete mode
@@ -813,6 +816,11 @@ export const useAppStore = create<AppState>()(
       setShortcutsDialogOpen: (open) =>
         set((state) => {
           state.shortcutsDialogOpen = open;
+        }),
+
+      setMenuSearchDialogOpen: (open) =>
+        set((state) => {
+          state.menuSearchDialogOpen = open;
         }),
 
       setHelpDialogOpen: (open) =>
