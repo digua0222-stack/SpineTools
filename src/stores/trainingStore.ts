@@ -59,16 +59,19 @@ export type Backbone = "unet" | "convnext" | "swint";
 /** UI-level data-pipeline choice; maps to sleap-nn's `data_config.data_pipeline_fw`. */
 export type DataPipeline = "stream" | "memory" | "disk";
 
-/** UI enum ↔ sleap-nn `data_pipeline_fw` value. */
+/** UI-level color-conversion choice; maps to sleap-nn's `data_config.preprocessing.{ensure_rgb,ensure_grayscale}`. */
+export type ColorMode = "auto" | "rgb" | "grayscale";
+
+/**
+ * UI enum → sleap-nn `data_pipeline_fw` value. One-directional only — never
+ * read back out of an uploaded config; see the "machine-specific settings"
+ * comment in `parseYamlConfig` (dataPipeline is treated the same as
+ * accelerator/numDevices/dataloaderWorkers: always a fresh default).
+ */
 const DATA_PIPELINE_FW: Record<DataPipeline, string> = {
   stream: "torch_dataset",
   memory: "torch_dataset_cache_img_memory",
   disk: "torch_dataset_cache_img_disk",
-};
-const DATA_PIPELINE_FROM_FW: Record<string, DataPipeline> = {
-  torch_dataset: "stream",
-  torch_dataset_cache_img_memory: "memory",
-  torch_dataset_cache_img_disk: "disk",
 };
 
 export interface TrainingConfig {
@@ -144,6 +147,21 @@ export interface ConfigHyperparams {
   dataPipeline: DataPipeline;
   dataloaderWorkers: number;
   numDevices: number | "auto";
+  // Output — checkpoint saving
+  saveBestModel: boolean;
+  saveLastModel: boolean;
+  // Output — visualization
+  visualizePredictions: boolean;
+  keepVizImages: boolean;
+  // Data — color conversion
+  colorMode: ColorMode;
+  // Epoch-end evaluation (distinct from the regular per-epoch validation loop)
+  evalEnabled: boolean;
+  evalFrequency: number;
+  // W&B extras (entity/project are above, near useWandb)
+  wandbUploadViz: boolean;
+  wandbPrevRunId: string;
+  wandbGroup: string;
 }
 
 export const defaultHyperparams: ConfigHyperparams = {
@@ -200,6 +218,20 @@ export const defaultHyperparams: ConfigHyperparams = {
   dataPipeline: "memory",
   dataloaderWorkers: 2,
   numDevices: "auto",
+  saveBestModel: true,
+  saveLastModel: false,
+  // Deliberately true (sleap-nn's own defaults are both false): this is what
+  // actually makes the app's own epoch-viz-scrubber feature work out of the
+  // box — see the `keep_viz`/`visualize_preds_during_training` comment in
+  // applyHyperparamsToYaml below for why they must go together.
+  visualizePredictions: true,
+  keepVizImages: true,
+  colorMode: "auto",
+  evalEnabled: false,
+  evalFrequency: 1,
+  wandbUploadViz: false,
+  wandbPrevRunId: "",
+  wandbGroup: "",
 };
 
 export interface ConfigFile {
@@ -366,11 +398,35 @@ export function applyHyperparamsToYaml(yamlText: string, hp: ConfigHyperparams):
 
   // Basic training params
   trainer.max_epochs = hp.maxEpochs;
-  // Keep per-epoch visualization PNGs so the viz viewer's epoch scrubber can
-  // review any epoch during AND after training (sleap-nn deletes them otherwise).
-  trainer.keep_viz = true;
+
+  // Checkpoint saving. The UI only exposes a binary choice for "best model"
+  // (sleap-nn's save_top_k is a count; 1 = on, 0 = off — there's no control
+  // for saving more than the single best).
+  if (!trainer.model_ckpt) trainer.model_ckpt = {};
+  const modelCkpt = trainer.model_ckpt as Record<string, unknown>;
+  modelCkpt.save_top_k = hp.saveBestModel ? 1 : 0;
+  modelCkpt.save_last = hp.saveLastModel;
+
+  // Visualization — keep_viz only has any effect when
+  // visualize_preds_during_training is also true (per sleap-nn's docstring:
+  // "Only applies when visualize_preds_during_training is True"), so it's
+  // gated on it here rather than being independently forced true. This is
+  // what makes the app's own epoch-viz-scrubber feature (which needs the viz
+  // folder to survive training) actually work.
+  trainer.visualize_preds_during_training = hp.visualizePredictions;
+  trainer.keep_viz = hp.visualizePredictions && hp.keepVizImages;
+
   if (!trainer.train_data_loader) trainer.train_data_loader = {};
   (trainer.train_data_loader as Record<string, unknown>).batch_size = hp.batchSize;
+
+  // Erase any skeleton baked into an imported/baseline config — it may
+  // belong to an entirely different project. sleap-nn always re-derives the
+  // real skeleton from the actual training data (`labels[0].skeletons`) and
+  // overwrites this field before saving its own `training_config.yaml`
+  // (sleap_nn/training/model_trainer.py), so this never carries a stale
+  // definition through to training; it just keeps the intermediate config we
+  // generate from showing a foreign skeleton before that overwrite happens.
+  data.skeletons = [];
 
   // Performance — data pipeline + dataloader workers
   const dataPipelineFw = DATA_PIPELINE_FW[hp.dataPipeline] ?? DATA_PIPELINE_FW.stream;
@@ -393,6 +449,16 @@ export function applyHyperparamsToYaml(yamlText: string, hp: ConfigHyperparams):
     const wandb = trainer.wandb as Record<string, unknown>;
     if (hp.wandbEntity) wandb.entity = hp.wandbEntity;
     if (hp.wandbProject) wandb.project = hp.wandbProject;
+    wandb.save_viz_imgs_wandb = hp.wandbUploadViz;
+    if (hp.wandbPrevRunId) wandb.prv_runid = hp.wandbPrevRunId;
+    if (hp.wandbGroup) wandb.group = hp.wandbGroup;
+  }
+  // wandb.name has no corresponding UI field, so a value baked into an
+  // uploaded/hand-edited config would otherwise ride through untouched and
+  // silently point W&B at a stale prior run. Always clear it — mirrors
+  // legacy SLEAP's belt-and-suspenders clear of trainer_config.wandb.name.
+  if (trainer.wandb && typeof trainer.wandb === "object") {
+    delete (trainer.wandb as Record<string, unknown>).name;
   }
 
   // Data config
@@ -404,6 +470,15 @@ export function applyHyperparamsToYaml(yamlText: string, hp: ConfigHyperparams):
   const preprocessing = data.preprocessing as Record<string, unknown>;
   preprocessing.scale = hp.scale;
   preprocessing.crop_size = hp.cropSize;
+  preprocessing.ensure_rgb = hp.colorMode === "rgb";
+  preprocessing.ensure_grayscale = hp.colorMode === "grayscale";
+
+  // Epoch-end evaluation — a distinct mechanism from the regular per-epoch
+  // validation loop (runs full pose metrics like mOKS/mAP/PCK on a cadence).
+  if (!trainer.eval) trainer.eval = {};
+  const evalConfig = trainer.eval as Record<string, unknown>;
+  evalConfig.enabled = hp.evalEnabled;
+  evalConfig.frequency = hp.evalFrequency;
 
   // Seed
   trainer.seed = hp.randomSeed;
@@ -651,6 +726,10 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
       // Extract preprocessing config
       const preprocessing = (dataConfig.preprocessing ?? {}) as Record<string, unknown>;
 
+      // Extract checkpoint + epoch-end-evaluation config
+      const modelCkpt = (trainer.model_ckpt ?? {}) as Record<string, unknown>;
+      const evalConfig = (trainer.eval ?? {}) as Record<string, unknown>;
+
       // Extract online hard keypoint mining config
       const ohkmCfg = (trainer.online_hard_keypoint_mining ?? {}) as Record<string, unknown>;
 
@@ -745,7 +824,14 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
           : typeof trainer.batch_size === "number" ? trainer.batch_size : 4,
         learningRate: typeof optimizer.lr === "number" ? optimizer.lr
           : typeof trainer.learning_rate === "number" ? trainer.learning_rate : 0.0001,
-        runName: typeof trainer.run_name === "string" ? trainer.run_name : "",
+        // Always blank on import — a run name should be freshly auto-generated
+        // for a new run, never leak in from whatever profile was uploaded
+        // (mirrors legacy SLEAP's TrainingEditorWidget._load_config, which
+        // force-clears trainer_config.run_name for the same reason). Note
+        // `hasTrainedModel` below is still derived from the raw parsed value,
+        // since detecting "this file is from a completed run" is a distinct
+        // concern from "what should the run name FIELD show."
+        runName: "",
         useWandb: trainer.use_wandb === true,
         wandbEntity: typeof wandb.entity === "string" ? wandb.entity : "",
         wandbProject: typeof wandb.project === "string" ? wandb.project : "",
@@ -792,24 +878,47 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
         minHardKeypoints: typeof ohkmCfg.min_hard_keypoints === "number" ? ohkmCfg.min_hard_keypoints : 2,
         maxHardKeypoints: typeof ohkmCfg.max_hard_keypoints === "number" ? ohkmCfg.max_hard_keypoints : null,
         trainingMode: "reuse_config" as const,
-        accelerator: (typeof trainer.trainer_accelerator === "string" ? trainer.trainer_accelerator : "auto") as ConfigHyperparams["accelerator"],
-        dataPipeline: (typeof dataConfig.data_pipeline_fw === "string"
-          ? DATA_PIPELINE_FROM_FW[dataConfig.data_pipeline_fw]
-          : undefined) ?? defaultHyperparams.dataPipeline,
-        dataloaderWorkers: typeof trainLoader.num_workers === "number" ? trainLoader.num_workers : 0,
-        numDevices: typeof trainer.trainer_devices === "number" ? trainer.trainer_devices : "auto",
+        // Performance/machine-specific settings — never taken from the
+        // uploaded file, always the app's own defaults. A profile trained on
+        // someone else's machine (e.g. `trainer_accelerator: mps` from a Mac,
+        // or a data_pipeline_fw/num_workers tuned for a different machine's
+        // RAM/disk/CPU) shouldn't silently populate these here (same
+        // rationale as legacy's `_load_config` stripping accelerator/devices/
+        // workers as "system_specific_keys" — dataPipeline gets the same
+        // treatment for the same reason, even though legacy doesn't call it
+        // out by that name).
+        accelerator: defaultHyperparams.accelerator,
+        dataPipeline: defaultHyperparams.dataPipeline,
+        dataloaderWorkers: defaultHyperparams.dataloaderWorkers,
+        numDevices: defaultHyperparams.numDevices,
+        // Checkpoint saving — sleap-nn's own default is save_top_k=1 (best
+        // model on), save_last=None (off), so an absent key means "on"/"off"
+        // respectively, matching those real defaults.
+        saveBestModel: typeof modelCkpt.save_top_k === "number" ? modelCkpt.save_top_k > 0 : true,
+        saveLastModel: modelCkpt.save_last === true,
+        // Visualization — absent means "on" here (this app's own default,
+        // not sleap-nn's raw False default — see defaultHyperparams above).
+        visualizePredictions: trainer.visualize_preds_during_training !== false,
+        keepVizImages: trainer.keep_viz !== false,
+        colorMode: preprocessing.ensure_rgb === true
+          ? "rgb"
+          : preprocessing.ensure_grayscale === true
+            ? "grayscale"
+            : "auto",
+        evalEnabled: evalConfig.enabled === true,
+        evalFrequency: typeof evalConfig.frequency === "number" ? evalConfig.frequency : 1,
+        wandbUploadViz: wandb.save_viz_imgs_wandb === true,
+        wandbPrevRunId: typeof wandb.prv_runid === "string" ? wandb.prv_runid : "",
+        wandbGroup: typeof wandb.group === "string" ? wandb.group : "",
       };
 
-      // Also auto-fill data paths into the global config
-      const trainLabels = dataConfig.train_labels_path;
-      const valLabels = dataConfig.val_labels_path;
-      const configUpdates: Partial<TrainingConfig> = {};
-      if (typeof trainLabels === "string") configUpdates.trainingLabelsPath = trainLabels;
-      if (Array.isArray(trainLabels) && trainLabels.length > 0) configUpdates.trainingLabelsPath = trainLabels[0];
-      if (typeof valLabels === "string") configUpdates.validationLabelsPath = valLabels;
-      if (Object.keys(configUpdates).length > 0) {
-        set((state) => ({ config: { ...state.config, ...configUpdates } }));
-      }
+      // Deliberately NOT auto-filling trainingLabelsPath/validationLabelsPath
+      // from the uploaded config's data_config.*_labels_path here — those are
+      // specific to whatever machine/project the config came from (same
+      // "machine/session-specific, never taken from the file" rationale as
+      // runName/accelerator/numDevices above). Training data should always
+      // come from the currently loaded project, not a stale path baked into
+      // an imported profile.
 
       return {
         filename,
@@ -925,10 +1034,30 @@ export const useTrainingStore = create<TrainingState>()((set, get) => ({
       // Use the resolved labels path (first entry is always the labels/data path)
       const resolvedLabelsPath = confirmedPaths[0]?.worker ?? remoteOpts.labelsPath;
 
-      // Build TrainJobSpec with path_mappings — apply hyperparam overrides to YAML
+      // Build TrainJobSpec with path_mappings — apply hyperparam overrides to YAML.
+      // Unlike local training, there's no Hydra CLI-override safety net here
+      // (the worker runs whatever's baked into config_contents verbatim), so
+      // run_name must be resolved to a fresh value BEFORE serializing — it's
+      // always blank on `hyperparams` post-import (see parseYamlConfig), and
+      // applyHyperparamsToYaml only writes run_name when it's non-empty, so
+      // without this an imported config's stale run_name would otherwise ride
+      // straight through into the remote job.
+      const userLabeledFrameCount = countUserLabeledFrames(labels);
+      const runTimestamp = formatRunTimestamp();
+      const resolveRunName = (hp: ConfigHyperparams, modelType: string) =>
+        hp.runName ||
+        (userLabeledFrameCount !== null
+          ? `${runTimestamp}.${modelType}.n=${userLabeledFrameCount}`
+          : `${runTimestamp}.${modelType}`);
+
       const spec = {
         type: "train" as const,
-        config_contents: config.configs.map((c) => applyHyperparamsToYaml(c.content, c.hyperparams)),
+        config_contents: config.configs.map((c) =>
+          applyHyperparamsToYaml(c.content, {
+            ...c.hyperparams,
+            runName: resolveRunName(c.hyperparams, c.modelType),
+          }),
+        ),
         model_types: config.configs.map((c) => c.modelType),
         labels_path: resolvedLabelsPath,
         val_labels_path: remoteOpts.valLabelsPath || undefined,

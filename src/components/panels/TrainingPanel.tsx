@@ -9,7 +9,7 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { useTrainingStore, getConfigSlots, getSlotLabel } from "@/stores/trainingStore";
+import { useTrainingStore, getConfigSlots, getSlotLabel, countUserLabeledFrames } from "@/stores/trainingStore";
 import type { ModelType, ConfigFile, ConfigHyperparams } from "@/stores/trainingStore";
 import { useConnectStore } from "@/stores/connectStore";
 import { RemoteFileBrowser } from "@/components/dialogs/RemoteFileBrowser";
@@ -79,6 +79,15 @@ interface PipelineRecommendation {
 }
 
 const BOTTOM_UP_TYPES: ModelType[] = ["bottom_up", "bottom_up_id"];
+
+async function openExternal(url: string) {
+  if (isTauri) {
+    const { open } = await import("@tauri-apps/plugin-shell");
+    await open(url);
+  } else {
+    window.open(url, "_blank");
+  }
+}
 
 function isSkeletonConnected(
   nodes: { name: string }[],
@@ -297,15 +306,25 @@ function ConfigSlot({
   if (configFile) {
     return (
       <div className="border border-green-500/50 bg-green-500/5 rounded-md p-2 text-left">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium">{configFile.filename}</span>
-          <button
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => onRemove(slot)}
-            disabled={disabled}
-          >
-            <X className="h-3 w-3" />
-          </button>
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-xs font-medium truncate">{configFile.filename}</span>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => onAdd(slot)}
+              disabled={disabled}
+            >
+              Browse...
+            </Button>
+            <button
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => onRemove(slot)}
+              disabled={disabled}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
           head: {configFile.modelType}
@@ -335,8 +354,20 @@ function ConfigSlot({
       }}
     >
       <div className="text-[11px] text-muted-foreground">
-        Drop YAML config here or click to browse
+        Drop YAML config here
       </div>
+      <Button
+        variant="outline"
+        size="xs"
+        className="mt-1.5"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) onAdd(slot);
+        }}
+        disabled={disabled}
+      >
+        Browse...
+      </Button>
       <div className="text-[10px] text-muted-foreground mt-1">
         Accepts .yaml files
       </div>
@@ -662,6 +693,16 @@ export function TrainingPanel() {
   const [sampleCount, setSampleCount] = useState(20);
   const [skipUserLabeled, setSkipUserLabeled] = useState(false);
   const [existingPredictions, setExistingPredictions] = useState<"clear_all" | "replace" | "keep">("replace");
+  // Client-side only — no sleap-nn schema field for this (see trainingStore.ts).
+  const [autoOpenWandb, setAutoOpenWandb] = useState(false);
+  // Auto-open the W&B run page once its URL becomes available, if requested.
+  const openedWandbUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!wandbUrl || !autoOpenWandb) return;
+    if (openedWandbUrlRef.current === wandbUrl) return;
+    openedWandbUrlRef.current = wandbUrl;
+    void openExternal(wandbUrl);
+  }, [wandbUrl, autoOpenWandb]);
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const [fileBrowserCallback, setFileBrowserCallback] = useState<
     ((path: string) => void) | null
@@ -712,6 +753,12 @@ export function TrainingPanel() {
   const hasData = remoteEnabled
     ? !!remoteLabelsPath
     : !!config.trainingLabelsPath || !!projectPath;
+  // Remote training points at a path on the worker's filesystem, which this
+  // client can't read to count frames — only guard the local-project path,
+  // where an empty project would otherwise start a doomed training run.
+  const hasLabeledFrames = remoteEnabled
+    ? true
+    : (countUserLabeledFrames(labels) ?? 0) > 0;
   const hasValidLossWeights = config.configs.every((cf) =>
     cf.hyperparams.confmapsLossWeight > 0 &&
     cf.hyperparams.pafsLossWeight > 0 &&
@@ -721,6 +768,7 @@ export function TrainingPanel() {
   const canStart =
     hasAllConfigs &&
     hasData &&
+    hasLabeledFrames &&
     hasValidLossWeights &&
     !isModelTypeIncompatible &&
     status === "idle" &&
@@ -1173,9 +1221,11 @@ export function TrainingPanel() {
                   ? "Upload config file(s) to begin"
                   : !hasData
                     ? "Select training data"
-                    : remoteEnabled && !selectedWorkerId
-                      ? "Select a worker"
-                      : ""}
+                    : !hasLabeledFrames
+                      ? "Label at least one frame before training"
+                      : remoteEnabled && !selectedWorkerId
+                        ? "Select a worker"
+                        : ""}
               </p>
             )}
           </>
@@ -1517,6 +1567,8 @@ export function TrainingPanel() {
         onSkipUserLabeledChange={setSkipUserLabeled}
         existingPredictions={existingPredictions}
         onExistingPredictionsChange={setExistingPredictions}
+        autoOpenWandb={autoOpenWandb}
+        onAutoOpenWandbChange={setAutoOpenWandb}
       />
     </div>
   );
