@@ -455,6 +455,7 @@ fn sleap_plugin<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             open_preferences_directory,
             environment::detect_uv,
             environment::detect_gpu,
+            environment::gpu_stats,
             environment::list_uv_tools,
             environment::list_python_interpreters,
             environment::list_downloadable_pythons,
@@ -646,6 +647,13 @@ pub fn run() {
       if let tauri::WindowEvent::Destroyed = event {
         use tauri::Manager;
         window.state::<WindowFiles>().0.lock().unwrap().remove(window.label());
+        // Mark the diagnostics session clean on graceful window destroy by
+        // removing the "running" sentinel. A crash / freeze / force-kill never
+        // runs this handler, so the sentinel survives → the next launch offers
+        // to send diagnostics. (Sync + fast, so it lands before the process exits.)
+        if let Ok(dir) = window.app_handle().path().app_local_data_dir() {
+          let _ = std::fs::remove_file(dir.join("sleap-logs").join("session.running"));
+        }
       }
     })
     // All native commands live in the inlined `sleap` plugin (see sleap_plugin()) so they

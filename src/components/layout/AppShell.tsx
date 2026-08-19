@@ -26,6 +26,8 @@ import { VideoPlayer } from "../video/VideoPlayer";
 import { PANELS } from "./panelRegistry";
 import { reorderById, visibleOpenPanels } from "@/lib/panelLayout";
 import { hasUnsavedWork } from "@/lib/unsavedGuard";
+import { toast } from "@/lib/notify";
+import { diagnosticsReady, getPriorCrashInfo } from "@/lib/diagnostics";
 import { setupLabelsAutosave } from "@/lib/labelsAutosave";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { GoToFrameDialog } from "../dialogs/GoToFrameDialog";
@@ -39,6 +41,7 @@ import { ModelMetricsDialog } from "../dialogs/ModelMetricsDialog";
 import { ExportPackageDialog } from "../dialogs/ExportPackageDialog";
 import { ShortcutsDialog } from "../dialogs/ShortcutsDialog";
 import { HelpDialog } from "../dialogs/HelpDialog";
+import { DiagnosticsDialog } from "../dialogs/DiagnosticsDialog";
 import { MenuSearchDialog } from "../dialogs/MenuSearchDialog";
 import { useAppStore } from "../../stores/appStore";
 import { useTrainingStore } from "../../stores/trainingStore";
@@ -144,6 +147,10 @@ export function AppShell() {
   const setShortcutsDialogOpen = useAppStore((s) => s.setShortcutsDialogOpen);
   const helpDialogOpen = useAppStore((s) => s.helpDialogOpen);
   const setHelpDialogOpen = useAppStore((s) => s.setHelpDialogOpen);
+  const diagnosticsDialogOpen = useAppStore((s) => s.diagnosticsDialogOpen);
+  const setDiagnosticsDialogOpen = useAppStore(
+    (s) => s.setDiagnosticsDialogOpen,
+  );
 
   // Unsaved changes protection: warn before closing/refreshing when there are
   // in-memory edits (hasChanges) OR a large-pkg labels draft saved locally but
@@ -158,6 +165,29 @@ export function AppShell() {
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // Crash-recovery prompt: if the PREVIOUS session ended without a clean
+  // shutdown (crash / freeze / force-quit), offer to send diagnostics on this
+  // fresh, responsive launch — a frozen UI can't reach the Help menu. Waits for
+  // diagnosticsReady so the sentinel check has run before we read it.
+  useEffect(() => {
+    let cancelled = false;
+    void diagnosticsReady.then(() => {
+      if (cancelled || !getPriorCrashInfo()) return;
+      toast("SLEAP didn't close properly last time", {
+        description: "Send diagnostics so we can look into what happened.",
+        duration: Infinity,
+        action: {
+          label: "Send diagnostics",
+          onClick: () =>
+            useAppStore.getState().setDiagnosticsDialogOpen(true),
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Auto-save the labels draft a beat after edits settle (instant, silent) —
@@ -252,6 +282,10 @@ export function AppShell() {
       <HelpDialog
         open={helpDialogOpen}
         onOpenChange={setHelpDialogOpen}
+      />
+      <DiagnosticsDialog
+        open={diagnosticsDialogOpen}
+        onOpenChange={setDiagnosticsDialogOpen}
       />
       <MenuSearchDialog />
       <PathResolutionHost />
