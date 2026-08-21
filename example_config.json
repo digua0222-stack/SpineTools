@@ -1,0 +1,26 @@
+{
+  "output_name": "character_actions",
+  "spine_version": "4.2.43",
+  "columns": 10,
+  "padding": 2,
+  "animations": [
+    {
+      "name": "idle",
+      "fps": 12,
+      "input": "./frames/idle",
+      "glob": "frame_*.png",
+      "auto_sheet": false
+    },
+    {
+      "name": "attack",
+      "fps": 15,
+      "input": "./frames/attack",
+      "glob": "frame_*.png",
+      "auto_sheet": false,
+      "event": {
+        "name": "hit",
+        "frame": 9
+      }
+    }
+  ]
+}

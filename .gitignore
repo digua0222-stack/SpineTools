@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+export/
+*.report.json
+.DS_Store
+Thumbs.db
