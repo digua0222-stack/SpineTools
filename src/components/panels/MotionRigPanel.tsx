@@ -107,6 +107,13 @@ export function MotionRigPanel() {
   } | null>(null);
 
   const videoId = videoIdentifier(video?.filename);
+  const configuredReferenceUrl = video?.backendMetadata.motionRigReferenceUrl;
+  const referenceUrl =
+    typeof configuredReferenceUrl === "string" && configuredReferenceUrl
+      ? configuredReferenceUrl
+      : videoId.includes("demo/zhaoyun/zhaoyun.mp4")
+        ? DEFAULT_TPOSE_URL
+        : null;
   const storageKey = reviewStorageKey(videoId);
   const nodeNames = useMemo(
     () => {
@@ -167,6 +174,8 @@ export function MotionRigPanel() {
       setReviewState(emptyMotionRigReviewState());
     }
   }, [storageKey, video]);
+
+  useEffect(() => setReferenceFailed(false), [referenceUrl]);
 
   const persistReview = (
     update: (current: MotionRigReviewState) => MotionRigReviewState,
@@ -255,11 +264,11 @@ export function MotionRigPanel() {
             className="space-y-2 px-3 pb-3"
             data-testid="motion-rig-tpose-reference"
           >
-            {!referenceFailed ? (
+            {referenceUrl && !referenceFailed ? (
               <div className="overflow-hidden rounded-md border border-border bg-black/20">
                 <img
-                  src={DEFAULT_TPOSE_URL}
-                  alt="Zhao Yun T-Pose reference"
+                  src={referenceUrl}
+                  alt="Motion Rig T-Pose reference"
                   className="mx-auto max-h-52 w-full object-contain"
                   data-testid="motion-rig-tpose"
                   onError={() => setReferenceFailed(true)}
@@ -268,7 +277,9 @@ export function MotionRigPanel() {
               </div>
             ) : (
               <p className="rounded border border-dashed border-border p-2 text-[11px] text-muted-foreground">
-                T-Pose reference is unavailable. Pose review remains active.
+                {referenceUrl
+                  ? "T-Pose reference is unavailable. Pose review remains active."
+                  : "No T-Pose reference is attached. Pose review remains active."}
               </p>
             )}
             <p className="text-[10px] text-muted-foreground">

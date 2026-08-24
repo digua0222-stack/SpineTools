@@ -9,15 +9,17 @@
  * an automatic pop-up, so it can't double-fire and is trivially escapable.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFileIO } from "../../hooks/useFileIO";
 import { useAppStore } from "../../stores/appStore";
 import { Button } from "@/components/ui/button";
-import { Plus, FolderOpen } from "lucide-react";
+import { Plus, FolderOpen, Sparkles, Files } from "lucide-react";
 import {
   loadRecoverableDrafts,
   type RecoverableDraft,
 } from "@/lib/recoverableDrafts";
+import { loadMotionRigFiles, loadZhaoyunDemo } from "@/lib/zhaoyunDemo";
+import { toast } from "@/lib/notify";
 
 /** Compact "saved N ago" for the restore list. */
 function timeAgo(ms: number): string {
@@ -34,6 +36,8 @@ function timeAgo(ms: number): string {
 export function WelcomeScreen() {
   const { openProject, openFromDrop, loading, error } = useFileIO();
   const [drafts, setDrafts] = useState<RecoverableDraft[]>([]);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const motionRigInputRef = useRef<HTMLInputElement>(null);
   // Which draft (if any) is mid "discard — are you sure?". An in-app inline
   // confirm (keyed by draft path) that replaces the old window.confirm.
   const [confirmingKey, setConfirmingKey] = useState<string | null>(null);
@@ -172,7 +176,7 @@ export function WelcomeScreen() {
           </Button>
           <Button
             onClick={openProject}
-            disabled={loading}
+            disabled={loading || demoLoading}
             variant="outline"
             size="lg"
           >
@@ -181,8 +185,76 @@ export function WelcomeScreen() {
           </Button>
         </div>
 
+        <Button
+          data-testid="load-zhaoyun-demo"
+          variant="secondary"
+          className="w-full max-w-md justify-between shadow-lg"
+          disabled={loading || demoLoading}
+          onClick={() => {
+            setDemoLoading(true);
+            void loadZhaoyunDemo()
+              .catch(() => {
+                // The loader reports the actionable error in a toast.
+              })
+              .finally(() => setDemoLoading(false));
+          }}
+        >
+          <span className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            {demoLoading ? "Loading Zhao Yun Demo…" : "Open Zhao Yun Motion Rig Demo"}
+          </span>
+          <span className="text-xs text-muted-foreground">Video + T-Pose</span>
+        </Button>
+
+        <input
+          ref={motionRigInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          accept=".json,.mp4,.mov,.webm,.mkv,.png,.jpg,.jpeg"
+          data-testid="motion-rig-file-input"
+          onChange={(event) => {
+            const input = event.currentTarget;
+            const files = Array.from(input.files ?? []);
+            input.value = "";
+            const projectFile = files.find((file) => file.name.toLowerCase().endsWith(".json"));
+            const videoFile = files.find(
+              (file) => file.type.startsWith("video/") || /\.(mp4|mov|webm|mkv)$/i.test(file.name),
+            );
+            const referenceFile = files.find(
+              (file) => file.type.startsWith("image/") || /\.(png|jpe?g)$/i.test(file.name),
+            );
+            if (!projectFile || !videoFile) {
+              toast.error("Select a Motion Rig JSON and its video together", {
+                description: "A PNG/JPEG T-Pose reference is optional.",
+              });
+              return;
+            }
+            setDemoLoading(true);
+            void loadMotionRigFiles(projectFile, videoFile, referenceFile)
+              .catch(() => {
+                // The loader reports the actionable error in a toast.
+              })
+              .finally(() => setDemoLoading(false));
+          }}
+        />
+
+        <Button
+          data-testid="import-motion-rig-files"
+          variant="outline"
+          className="w-full max-w-md justify-between bg-card/95 shadow-lg"
+          disabled={loading || demoLoading}
+          onClick={() => motionRigInputRef.current?.click()}
+        >
+          <span className="flex items-center gap-2">
+            <Files className="h-4 w-4" />
+            Import Motion Rig Files
+          </span>
+          <span className="text-xs text-muted-foreground">JSON + video + optional T-Pose</span>
+        </Button>
+
         <p className="text-xs text-muted-foreground/80">
-          Drag &amp; drop a .slp file anywhere
+          Drag &amp; drop a .slp file, or start with the bundled correction demo
         </p>
       </div>
     </div>

@@ -4,6 +4,42 @@ Pose estimation and tracking app for [SLEAP](https://sleap.ai).
 
 A modern rewrite of SLEAP's Qt/Python desktop labeling interface as a web app, with an optional [Tauri v2](https://v2.tauri.app/) desktop shell for native file access. Runs entirely in the browser -- no server or Python required.
 
+## Motion Rig Lab — video-to-rig correction workflow
+
+This checkout adds a focused, Spine-independent review workflow for turning
+video tracking results into clean 2D motion landmarks. The bundled Zhao Yun
+demo loads a real 107-frame attack video, 18 editable landmarks and a T-Pose
+parts reference from one button on the welcome screen.
+
+Windows quick start (Node.js):
+
+```powershell
+Set-Location H:\spine_research\MotionRigLab
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`, then click **Open Zhao Yun Motion Rig Demo**.
+Use the **Motion Rig** panel to visit suspicious frames, drag points on the
+canvas, lock reviewed points, add notes and copy the portable review JSON.
+
+To regenerate the deterministic OpenCV prelabels and Web demo assets:
+
+```powershell
+python -m pip install -r scripts\requirements-motion-rig.txt
+python scripts\build_zhaoyun_demo.py
+```
+
+Chinese documentation:
+
+- [上手指南](docs/zh/GETTING_STARTED.md)
+- [赵云 Demo 验收](docs/zh/VALIDATION.md)
+
+Scope boundary: this editor produces and corrects generic image-pixel
+landmarks. It does not include Spine Editor/CLI or generate the proprietary
+`.spine` project format. T-Pose binding, attachment hierarchy, mesh weights and
+final Spine animation solving remain downstream steps.
+
 ## Install the desktop app
 
 Until the first release with attached builds exists, use the `/dev/` URLs below
