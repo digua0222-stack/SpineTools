@@ -15,6 +15,11 @@
       "path": "角色立绘拆分_1.png",
       "bytes": 895224,
       "sha256": "ce42587c0bc3863fe9db8fc2b856410273c89be740e8a3081b42ac42ba03521b"
+    },
+    {
+      "path": "tpose_detailed_checkerboard_source.png",
+      "bytes": 907598,
+      "sha256": "e7321eb57be54fc8c992c49e4a3a3bd5aa8400664e69ea28a2d44e4ebcbf3a43"
     }
   ]
 }

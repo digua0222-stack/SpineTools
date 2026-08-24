@@ -23,7 +23,9 @@ import { toast } from "@/lib/notify";
 
 export const ZHAOYUN_DEMO_JSON = "demo/zhaoyun/zhaoyun.motionrig.json";
 export const ZHAOYUN_DEMO_VIDEO = "demo/zhaoyun/zhaoyun.mp4";
-export const ZHAOYUN_DEMO_TPOSE = "demo/zhaoyun/tpose_parts.png";
+export const ZHAOYUN_DEMO_TPOSE = "demo/zhaoyun/tpose-detailed/atlas.png";
+export const ZHAOYUN_DEMO_TPOSE_BINDING =
+  "demo/zhaoyun/zhaoyun.tpose-bind.json";
 
 export interface MotionRigPointData {
   x: number;
@@ -353,12 +355,15 @@ export async function loadZhaoyunDemo(): Promise<void> {
     store.setLoading(true, "Opening demo video…", 45);
     const video = await loadVideo(publicUrl(ZHAOYUN_DEMO_VIDEO));
     video.backendMetadata.motionRigReferenceUrl = publicUrl(ZHAOYUN_DEMO_TPOSE);
-    video.backendMetadata.motionRigReferenceName = "Zhao Yun T-Pose parts";
+    video.backendMetadata.motionRigReferenceName = "Zhao Yun detailed 23-part T-Pose";
+    video.backendMetadata.motionRigTposeBindingUrl = publicUrl(
+      ZHAOYUN_DEMO_TPOSE_BINDING,
+    );
     video.backendMetadata.motionRigProject = project.project;
     store.setLoading(true, "Building editable landmarks…", 80);
     installMotionRigProject(project, video, "zhaoyun.motionrig.slp");
     toast.success("Zhao Yun demo loaded", {
-      description: `${project.frames.length} editable frames · ${project.skeleton.nodes.length} points · T-Pose reference included`,
+      description: `${project.frames.length} editable frames · ${project.skeleton.nodes.length} points · 23 bound T-Pose parts`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

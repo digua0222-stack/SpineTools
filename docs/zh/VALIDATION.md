@@ -13,6 +13,7 @@
 | `assets/银枪三连刺.mp4` | H.264，768 × 768，24 fps，107 帧，4.458333 秒 | `05B9BE105DFE9253506C7346FD7C14233E4201B9FE6D1848EC374A4B61F06FA1` |
 | `assets/tpos分离部件.png` | PNG，1024 × 1024 | `2D0AB78F3C273C9C8C065269299B15CC9E14E301A03829066D241E276471F68E` |
 | `assets/角色立绘拆分_1.png` | PNG，1024 × 1024 | `CE42587C0BC3863FE9DB8FC2B856410273C89BE740E8A3081B42AC42BA03521B` |
+| `assets/tpose_detailed_checkerboard_source.png` | PNG，1024 × 1024，RGB 三通道、无 alpha | `E7321EB57BE54FC8C992C49E4A3A3BD5AA8400664E69EA28A2D44E4EBCBF3A43` |
 
 任何固定输入哈希变化都应视为一组新基线，并重新运行全部验证。
 
@@ -37,13 +38,39 @@ python scripts/build_zhaoyun_demo.py
 
 Web 三件套是浏览器一键 Demo 的输入；可用 `--skip-web-assets` 跳过同步，但此时一键入口不会得到最新产物。
 
-### 2.2 Demo 数据测试
+### 2.2 生成透明附件与绑定
+
+```powershell
+python scripts/extract_tpose_parts.py
+python scripts/build_zhaoyun_tpose_binding.py
+npx bun scripts/validate_zhaoyun_tpose_binding.ts
+python scripts/render_zhaoyun_tpose_preview.py
+```
+
+预期结果：
+
+- `motion-rig/tpose-components-v1` 资产 manifest 记录 23 个互不遗漏的部件；
+- `atlas.png` 和 `parts/*.png` 的 alpha 只有 0/255，前景共 171077 像素；
+- 18 个启发式命名部件进入 `requiresHumanConfirmationIds`；
+- `tpose-bind/v1` 覆盖全部 23 个部件且每个只出现一次；
+- `tpose-validation/v1` 覆盖 107 帧，并汇总状态、RMSE、最大误差和超限附件；
+- `zhaoyun.tpose-rig.preview.gif` 和 `zhaoyun.tpose-rig.comparison.webm` 分别提供附件绑定动图与浏览器可播放的 VP9 左右对比视频；
+- 绑定所引用的骨点都存在于赵云 18 点骨架；
+- 研究目录和 `public/demo/zhaoyun/` Web 副本一致。
+
+两种预览媒体用于检查通用附件变换，不是 Spine Runtime 渲染、`.spine` 工程或网格蒙皮结果。
+
+### 2.3 Python 数据测试
 
 ```powershell
 python -m unittest scripts.tests.test_zhaoyun_demo -v
+python -m unittest scripts.tests.test_extract_tpose_parts -v
+python -m unittest scripts.tests.test_zhaoyun_tpose_binding -v
 ```
 
-本基线实测结果为 6/6 通过；点置信度均值为 0.8560、最小值为 0.0200。
+动作 Demo 与拆片测试合计实测 12/12 通过；绑定生成器另有 4/4 通过。也可用 `python -m unittest discover -s scripts/tests -v` 一次运行全部 16 项。
+
+动作点置信度均值为 0.8560、最小值为 0.0200。
 
 最低断言：
 
@@ -55,7 +82,7 @@ python -m unittest scripts.tests.test_zhaoyun_demo -v
 - 建议帧索引在合法范围内；
 - 输入文件引用和 SHA-256 与固定基线一致。
 
-### 2.3 Web 应用测试
+### 2.4 Web 应用测试
 
 推荐的 Bun 路径：
 
@@ -63,6 +90,7 @@ python -m unittest scripts.tests.test_zhaoyun_demo -v
 bun install --frozen-lockfile
 bun run build
 bun test tests/unit/motionRigReview.test.ts tests/unit/zhaoyunDemo.test.ts --isolate
+bun test tests/unit/tposeBinding.test.ts tests/unit/tposeBindingPreview.test.tsx tests/unit/tposeBindingSection.test.tsx --isolate
 bunx playwright install chromium
 bun run test:e2e -- tests/e2e/motionRigDemo.spec.ts
 ```
@@ -73,13 +101,14 @@ bun run test:e2e -- tests/e2e/motionRigDemo.spec.ts
 npm install
 npm run build
 npx bun test tests/unit/motionRigReview.test.ts tests/unit/zhaoyunDemo.test.ts --isolate
+npx bun test tests/unit/tposeBinding.test.ts tests/unit/tposeBindingPreview.test.tsx tests/unit/tposeBindingSection.test.tsx --isolate
 npx playwright install chromium
 npm run test:e2e -- tests/e2e/motionRigDemo.spec.ts
 ```
 
-去掉最后一条命令中的测试文件参数即可运行完整 Playwright 套件。Motion Rig 的单元测试应覆盖告警分类、阈值边界、骨长容差、持枪距离、锁点状态序列化和 review JSON 导出。
+T-Pose solver 与 UI 定向单测实测 21/21 通过；Python 三组定向测试合计 17/17。去掉最后一条命令中的测试文件参数即可运行完整 Playwright 套件。Motion Rig 的单元测试应覆盖告警分类、阈值边界、骨长容差、持枪距离、锁点状态序列化和 review JSON 导出。
 
-赵云定向 E2E 包含两条路径：欢迎页一键 Demo，以及在一次多选中导入 Motion Rig JSON + 本地视频 + 可选 T-Pose。后者还应验证无参照图的通用项目不会错误显示赵云 T-Pose。
+Motion Rig Playwright 仍为两条用例：第一条欢迎页一键 Demo 还验证真实 23-part manifest/atlas、23/23 resolved、组件显隐从 23 变 22 再恢复、绑定 SVG、跳到 Frame 66 后 RMSE 为 13.0 px，以及直接跳到 Frame 52 后能重建 previous-frame fallback；第二条在一次多选中导入 Motion Rig JSON + 本地视频 + 可选 T-Pose，并验证通用项目不会错误加载赵云 T-Pose 或绑定。这里的 `Frame N` 对应从 0 开始的 `frameIndex=N`。
 
 ## 3. 浏览器人工验收
 
@@ -106,7 +135,25 @@ bun run dev
 | UI-11 | 播放整个动作 | 没有明显的单帧长距离跳点；前后肢身份在遮挡后保持一致 |
 | UI-12 | 检查 T-Pose 交接 | 能明确指出 18 点到目标骨骼/武器的映射；未把 T-Pose 当作动作帧 |
 
-## 4. 赵云动作专项抽检
+## 4. T-Pose 绑定专项验收
+
+| 编号 | 操作 | 通过标准 |
+|---|---|---|
+| TP-01 | 展开 `T-Pose Binding` | 显示 23 parts，atlas 和绑定 manifest 加载无错误 |
+| TP-02 | 检查首帧摘要 | 23/23 resolved；12 solved、11 degraded、0 unresolved；RMSE 显示 0.7 px；missing anchors 为 0 |
+| TP-03 | 在 `Components` 逐个选择 | 共 23 个唯一 ID；每行显示 bone、slot、z 和 solve 状态 |
+| TP-04 | 隐藏/显示单个组件 | `Bound character preview` 对应层即时消失/恢复，不影响骨点数据 |
+| TP-05 | 切换 `Binding` / `Overlays` | 可整体隐藏附件或诊断叠层 |
+| TP-06 | 切换 `Bones` / `Anchors` / `Errors` | 三类诊断图层分别响应；选择组件后显示其锚点误差 |
+| TP-07 | 逐帧检查武器 | 99 帧 solved；Frame 17/18/20/22/24/28/38/58 因 `weapon_tip` 不可见而 degraded；没有 fallback/unresolved |
+| TP-08 | 检查透明边缘和遮挡 | 记录棋盘残色、封闭孔、部件命名和 z 顺序问题，不把二值蒙版当原始 alpha |
+| TP-09 | 运行全序列 validation | 107 帧全部可解析；报告 mean/max RMSE、状态总数、8 px 超限帧和最差帧，不因 23/23 resolved 忽略高误差 |
+
+TP-02 的 11 个 degraded 主要是单锚点附件按设计使用固定缩放与 `driverNodes` 方向，并非加载失败。TP-07 的武器虽然其余 99 帧可由 `wrist_front` + `weapon_tip` 两点求解，但这仍不是双手握枪或枪身完整约束。
+
+当前 TP-09 基线：107/107 帧均为 23/23 resolved，累计 solved 1266、degraded 1189、fallback 6、unresolved 0；平均 RMSE 9.6672 px，最大 RMSE 25.3387 px（Frame 74），Frame 17–106 共 90 帧超过 8 px。`resolved` 只代表存在可绘制变换，不代表视觉正确。Frame 52 的 1 个 fallback 可用于验证直接跳帧与顺序播放得到同样结果。
+
+## 5. 赵云动作专项抽检
 
 至少检查以下区段，而不是只看动作首帧：
 
@@ -119,7 +166,7 @@ bun run dev
 
 对于自动结果，每段至少抽检首、中、末三帧；所有告警帧必须逐项确认。即使没有告警，也要播放观察连续性，因为“连续地跟错”不一定触发单帧异常。
 
-## 5. 数据交接验收
+## 6. 数据交接验收
 
 通过 UI 验收后，检查交付目录至少包含：
 
@@ -143,9 +190,10 @@ reports/
 - 前/后肢命名没有被屏幕左右误解；
 - 锁点由下游读取并保护；
 - T-Pose 骨骼原点、父子关系和部件层级另有配置；
+- 资产 manifest 与绑定 manifest 没有混用；
 - 仍需人工处理的柔性部件和遮挡已列明。
 
-## 6. 通过标准
+## 7. 通过标准
 
 MVP 可判定通过，当且仅当：
 
@@ -153,15 +201,16 @@ MVP 可判定通过，当且仅当：
 - 浏览器可完成 UI-01 至 UI-10；
 - UI-11 没有明显未说明的跳点；
 - UI-12 的 T-Pose 映射边界已写清楚；
+- TP-01 至 TP-09 已执行，启发式命名、alpha 缺陷和高误差帧有人工结论；
 - 保存后的项目能够重新打开；
 - 三类交付文件（项目、标签、review）均可读取；
 - 已知缺陷不会被描述为“已经自动解决”。
 
-若尚未实现自动局部重跟踪、Spine 骨骼求解或 T-Pose 绑定，不影响“人工纠偏编辑器 MVP”通过，但必须在验收报告中明确标为后续工作。
+当前已经实现刚性附件级 T-Pose 绑定与预览，但完整 Spine 骨骼层级、网格蒙皮和导出仍是后续工作。这不影响“人工纠偏 + 组件绑定预览 MVP”通过，但验收报告不得把它描述为最终 Spine 动画。
 
 当前构建的实测状态和未完成项见 [VALIDATION_REPORT.md](VALIDATION_REPORT.md)。
 
-## 7. 失败判定与记录模板
+## 8. 失败判定与记录模板
 
 以下任一情况应判定当前构建失败：
 
@@ -170,6 +219,8 @@ MVP 可判定通过，当且仅当：
 - 锁定状态导出丢失；
 - 导出 JSON 无法解析或坐标越界；
 - 告警点击跳到错误帧；
+- 23 个附件缺失、重复或引用不存在的骨点；
+- 通用项目错误加载赵云绑定，或绑定 atlas URL 无法解析；
 - 同一版本输入哈希不一致却仍沿用旧验收结论。
 
 建议用以下格式记录：

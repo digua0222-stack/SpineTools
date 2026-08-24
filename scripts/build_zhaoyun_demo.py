@@ -30,6 +30,7 @@ TOOL_VERSION = "0.1.0"
 VIDEO_NAME = "银枪三连刺.mp4"
 TPOS_NAME = "tpos分离部件.png"
 PARTS_NAME = "角色立绘拆分_1.png"
+DETAILED_TPOSE_SOURCE_NAME = "tpose_detailed_checkerboard_source.png"
 
 
 @dataclass(frozen=True)
@@ -406,7 +407,13 @@ def write_asset_manifest(demo_dir: Path) -> None:
                 "bytes": path.stat().st_size,
                 "sha256": sha256(path),
             }
-            for path in (assets_dir / VIDEO_NAME, assets_dir / TPOS_NAME, assets_dir / PARTS_NAME)
+            for path in (
+                assets_dir / VIDEO_NAME,
+                assets_dir / TPOS_NAME,
+                assets_dir / PARTS_NAME,
+                assets_dir / DETAILED_TPOSE_SOURCE_NAME,
+            )
+            if path.is_file()
         ],
     }
     write_json(assets_dir / "SHA256SUMS.json", manifest)

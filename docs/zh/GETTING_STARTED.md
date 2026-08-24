@@ -13,7 +13,8 @@ Motion Rig Lab 是一个“视频动作骨点预标注 + 人工纠偏”的最�
 3. 在视频画布上逐帧拖动骨点。
 4. 将确认过的点标记为锁定，填写审阅备注。
 5. 保存点位修改，导出标签 JSON 和 Motion Rig 审阅 JSON。
-6. 把纠偏后的数据交给后续 T-Pose/Spine 求解步骤。
+6. 从细分 T-Pose 图重建透明部件，并预览 23 个刚性附件随骨点运动。
+7. 把纠偏后的数据和 `tpose-bind/v1` 绑定交给后续 Spine 导出步骤。
 
 当前 MVP 不承诺：
 
@@ -60,23 +61,36 @@ Demo 源文件位于 `demo/zhaoyun/assets/`：
 
 - `银枪三连刺.mp4`：768 × 768、24 fps、107 帧；
 - `tpos分离部件.png`：1024 × 1024，拆开的基础部件；
-- `角色立绘拆分_1.png`：1024 × 1024，角色立绘和部分拆分素材。
+- `角色立绘拆分_1.png`：1024 × 1024，角色立绘和部分拆分素材；
+- `tpose_detailed_checkerboard_source.png`：1024 × 1024 新细分图，RGB 三通道、没有 alpha，棋盘格已烘焙进像素。
 
 在仓库根目录运行：
 
 ```powershell
 python -m pip install -r scripts\requirements-motion-rig.txt
 python scripts/build_zhaoyun_demo.py
+python scripts/extract_tpose_parts.py
+python scripts/build_zhaoyun_tpose_binding.py
+npx bun scripts/validate_zhaoyun_tpose_binding.ts
+python scripts/render_zhaoyun_tpose_preview.py
 ```
 
 生成器输出：
 
 - `demo/zhaoyun/zhaoyun.motionrig.json`：编辑器交换数据；
 - `demo/zhaoyun/zhaoyun.prelabels.contact-sheet.png`：九帧骨架叠加预览；
-- `demo/zhaoyun/assets/SHA256SUMS.json`：三个原始输入的哈希清单；
+- `demo/zhaoyun/assets/SHA256SUMS.json`：四个原始输入的哈希清单；
 - `public/demo/zhaoyun/` 下的 JSON、`zhaoyun.mp4` 和 `tpose_parts.png`：一键 Demo 使用的 Web 副本。
 
-不想同步 Web 副本时增加 `--skip-web-assets`。生成器为每帧写入 18 个语义点、置信度、来源、锁定状态、帧质量和低置信帧建议。当前基线有 44 个建议帧，点置信度均值为 0.8560、最小值为 0.0200。置信度只用于安排人工审阅优先级，不是人工真值或校准后的正确概率；武器快速移动、遮挡和前后肢交叉处通常需要纠偏。
+后四条命令另外生成：
+
+- `demo/zhaoyun/tpose-detailed/`：透明 atlas、资产 manifest、文本 atlas 和 23 张部件 PNG；
+- `demo/zhaoyun/zhaoyun.tpose-bind.json`：23 个附件到 18 点动作骨架的绑定；
+- `demo/zhaoyun/zhaoyun.tpose-validation.json`：全 107 帧的求解状态与误差；
+- `demo/zhaoyun/zhaoyun.tpose-rig.preview.gif` 和 `zhaoyun.tpose-rig.comparison.webm`：附件绑定动图与浏览器可播放的 VP9 左右对比视频；
+- `public/demo/zhaoyun/tpose-detailed/`、`zhaoyun.tpose-bind.json`、`zhaoyun.tpose-validation.json` 和两种预览媒体：浏览器预览与验证使用的副本。
+
+这两种预览媒体是通用 JSON/PNG 附件绑定的检查渲染，不是 Spine Runtime 输出，也不是 `.spine` 工程。只运行 `build_zhaoyun_demo.py` 且不想同步其 Web 三件套时可增加 `--skip-web-assets`。生成器为每帧写入 18 个语义点、置信度、来源、锁定状态、帧质量和低置信帧建议。当前基线有 44 个建议帧，点置信度均值为 0.8560、最小值为 0.0200。置信度只用于安排人工审阅优先级，不是人工真值或校准后的正确概率；武器快速移动、遮挡和前后肢交叉处通常需要纠偏。
 
 ## 4. 打开项目
 
@@ -86,7 +100,8 @@ python scripts/build_zhaoyun_demo.py
 2. 在欢迎页点击 `Open Zhao Yun Motion Rig Demo`。
 3. 等待视频、107 帧预标注和 18 点骨架载入；应用会自动打开右侧 `Motion Rig` 面板。
 4. 展开 `Reference / T-Pose`，确认 1024 × 1024 参照图可见，并核对 `Coordinate space: image pixels (origin: top-left)`。
-5. 在 `View` 中打开节点名和骨骼边，确认点名、前后肢和枪尖方向与画面一致。
+5. 展开 `T-Pose Binding`，确认显示 `23 parts`、`23/23 resolved` 和组件化角色预览。
+6. 在 `View` 中打开节点名和骨骼边，确认点名、前后肢和枪尖方向与画面一致。
 
 一键入口读取 `public/demo/zhaoyun/`，因此修改生成器或输入后要重新运行 Demo 命令。不要把 T-Pose PNG 当作视频帧导入；它是后续绑定参照，而不是动作源。
 
@@ -102,9 +117,29 @@ JSON 和视频缺一不可，图片可不选；不要分三次点击导入。入
 
 导入成功后，应用以 JSON 文件名创建可编辑项目、自动打开 `Motion Rig` 面板，并把所选参照图仅关联到当前视频。外部 AI/跟踪器只要输出相同交换 schema，即可复用这条人工纠偏路径。
 
-## 5. 推荐的人工纠偏顺序
+注意：通用导入入口目前接收动作 JSON、视频和可选参照图，不接收 `tpose-bind/v1` 文件。内置赵云 Demo 会自动关联绑定 manifest；其他项目需要在集成层为视频设置绑定 manifest URL，或后续补充绑定文件选择器。
 
-### 5.1 先看异常队列
+## 5. 检查 T-Pose 组件绑定
+
+`T-Pose Binding` 展开区提供两个视图：`Source T-Pose parts` 显示透明 atlas 和当前选中区域，`Bound character preview` 把附件变换到当前视频帧的 768 × 768 坐标空间。
+
+建议按以下顺序检查：
+
+1. 看顶部摘要是否为 `23/23 resolved`，记录 RMSE 和 missing anchors；
+2. 在 `Components` 中逐个选择附件，核对名称、`bone`、`slot`、`z` 和 solve 状态；
+3. 用组件行的显隐按钮检查遮挡顺序；
+4. 用 `Binding` / `Overlays` 开关整体显示，用 `Bones` / `Anchors` / `Errors` 分别检查骨架、目标锚点和重投影误差；
+5. 切换到动作极值帧，确认附件随当前骨点更新，而不是只在首帧正确。
+
+首帧基线为 23/23 resolved，其中 12 个 `solved`、11 个单锚点 `degraded`，RMSE 0.7298 px（UI 显示 0.7 px），没有 missing anchors。`degraded` 不等于不可见：肩甲、手、脚、髋甲、膝甲和披风等单锚点附件还能依靠固定缩放与 `driverNodes` 朝向显示，但约束弱于双锚点附件。
+
+以下帧号与 UI 和 JSON 一致，采用从 0 开始的 `frameIndex`。不要只看 Frame 0（首帧）。全序列验证的平均 RMSE 为 9.6672 px，最大为 25.3387 px（Frame 74）；按 8 px 容差，有 90 帧超限，范围为 Frame 17–106。浏览器抽检中 Frame 11 仍较合理（1.5 px），Frame 66（13.0 px）和 Frame 92（21.7 px）已出现明显肢体/比例错位。这说明绑定预览成功暴露了后段骨点漂移，并不代表绑定质量已经通过。直接跳到 Frame 52 时，UI 会从 Frame 0 顺序重算并得到 previous-frame fallback，仍显示 23/23 resolved。
+
+预览中的组件选择、显隐和 overlay 开关是检查工具，不会回写 pivot/anchor，也不是蒙皮编辑器。需要调整绑定时，修改生成脚本或 `tpose-bind/v1` manifest 后重新载入。详细数据约定见 [TPOSE_BINDING.md](TPOSE_BINDING.md)。
+
+## 6. 推荐的人工纠偏顺序
+
+### 6.1 先看异常队列
 
 在 `Motion Rig` 面板中：
 
@@ -118,7 +153,7 @@ JSON 和视频缺一不可，图片可不选；不要分三次点击导入。入
 
 当前赵云 18 点骨架只有 `weapon_tip`，缺少武器尾点和前/后握点，所以 `Weapon constraints` 正确显示 `Needs anchors`。在补齐 `weapon_tail`、`front_grip`、`rear_grip`（或受支持的中英文别名）以前，该项不能证明双手始终贴合枪身。
 
-### 5.2 拖动骨点
+### 6.2 拖动骨点
 
 1. 在 `Review queue` 点击一条异常，跳到对应帧。
 2. 在视频画布中选中角色实例。
@@ -134,7 +169,7 @@ JSON 和视频缺一不可，图片可不选；不要分三次点击导入。入
 - 前后膝盖互相遮挡时的左右身份；
 - 动作首尾能否平滑衔接。
 
-### 5.3 锁点与备注
+### 6.3 锁点与备注
 
 在 `Current frame` 的节点行使用 `Lock` / `Unlock`。锁定表示“这是人工确认过的约束”，供后续重跟踪或求解器保护；它不会让错误点自动变正确，也不会在当前 MVP 中自动启动重跟踪。
 
@@ -142,7 +177,7 @@ JSON 和视频缺一不可，图片可不选；不要分三次点击导入。入
 
 当前构建把锁点和备注自动保存在浏览器 `localStorage`，键名为 `motion-rig-review:v1:<videoId>`；它们不会嵌入 `.slp`。`Copy review JSON` 输出的 schema 是 `motion-rig-review@1`，包含坐标系、骨架、阈值、推断角色、锁点和备注。清除站点数据、切换浏览器/地址或改变 `videoId` 都可能让原会话状态不可见，因此必须把剪贴板内容另存为 `.review.json`。标签点位仍通过应用的项目保存流程持久化。
 
-## 6. 保存与导出
+## 7. 保存与导出
 
 建议每次审阅形成三个文件：
 
@@ -160,20 +195,20 @@ zhaoyun_three_thrust_v001.review.json
 
 修订版本号而不是覆盖旧版。至少保留一个可回滚版本，并在文件名或备注中记录审阅范围。
 
-## 7. T-Pose 与 Spine 求解边界
+## 8. T-Pose 与 Spine 求解边界
 
 视频点位与 T-Pose 的职责不同：
 
 - 视频点位描述“这一帧关节在哪里”；
 - T-Pose 部件描述“要被哪根骨骼驱动的图像是什么”；
-- 求解器负责把视频中的相对位移/角度转换为 T-Pose 骨骼的旋转、平移、缩放和约束；
+- 当前 `tpose-bind/v1` 求解器负责把视频骨点转换为每个刚性附件的平移、旋转和统一缩放；
 - 绑定阶段还需要原点、父子骨骼、绘制层级、插槽、附件、网格/权重等信息。
 
-因此，本编辑器的完成标准是得到一致、可审计的动作骨点，而不是宣称已经得到最终 Spine 动画。当前 `SpineTools` 的序列帧方案仍可作为像素级基线；骨骼方案需要后续求解器把已纠偏点位映射到 `tpos分离部件.png`。
+现在已经能从新细分图得到 23 个透明部件，并在编辑器中按当前帧骨点预览刚性绑定；这完成了“附件级动作佐证”，但仍不是最终 Spine 动画。manifest 中的 `bone` 是语义驱动字段，`slot`/`z` 是预览绘制顺序，并未建立完整的 Spine 父子骨骼、约束、插槽皮肤或网格权重。当前 `SpineTools` 的序列帧方案仍可作为像素级基线。
 
 如果 T-Pose 缺少侧面、背面或被遮挡部件，先提出明确的图片生成 prompt，再由 MiniMax H3 生成补充素材。不要让图像模型直接猜关节坐标；坐标应由跟踪器、约束和人工审阅共同确定。
 
-## 8. 无 Spine Editor 时的授权边界
+## 9. 无 Spine Editor 时的授权边界
 
 Motion Rig Lab 基于 BSD-3-Clause 的 SLEAP App 修改，不包含 Spine Editor，也不应捆绑官方 Spine Runtimes。它可以整理通用的二维骨点和项目数据，但不会伪造 Spine Editor 的专有 `.spine` 工程。
 
@@ -181,7 +216,7 @@ Motion Rig Lab 基于 BSD-3-Clause 的 SLEAP App 修改，不包含 Spine Editor
 
 素材版权也与软件许可分开：视频、T-Pose、生成图和最终动画必须分别确认使用权。本仓库中的赵云素材仅作为本次受控 Demo 输入，不自动授予第三方再分发权。
 
-## 9. 常见问题
+## 10. 常见问题
 
 ### 视频黑屏或无法解码
 
@@ -210,12 +245,22 @@ Motion Rig Lab 基于 BSD-3-Clause 的 SLEAP App 修改，不包含 Spine Editor
 
 优先判断差异来自点位、骨骼长度、绑定原点、层级/遮挡还是柔性部件。点位正确但披风和枪穗不自然时，应增加辅助骨或形变素材，而不是反复移动人体关节点。
 
-## 10. 推荐交付物
+### 透明 atlas 边缘仍有棋盘格或白边
+
+新细分源图没有 alpha，棋盘格已经进入 RGB。当前工具只能重建 0/255 二值蒙版，无法恢复原始半透明抗锯齿；边界可能残留棋盘颜色，封闭的透明孔也可能被填实。生产质量需要真正带 alpha 的原图，或向 MiniMax H3 提出“透明背景、不得绘制棋盘格、每个部件不接触”的重新生成 prompt。
+
+### `T-Pose Binding` 显示 degraded
+
+先看该附件有几个可见锚点。当前 manifest 中单锚点附件会使用固定比例和驱动骨方向，状态按设计标为 `degraded`；武器在 `weapon_tip` 不可见时也会只用 `wrist_front` 降级。若状态为 `unresolved`，说明当前帧没有可用锚点且 UI 没有可用回退变换。
+
+## 11. 推荐交付物
 
 一次可复核的动作交付至少包含：
 
 - 原始视频及 SHA-256；
 - T-Pose/拆分图及 SHA-256；
+- `motion-rig/tpose-components-v1` 资产 manifest、透明 atlas 和 23 张附件；
+- `tpose-bind/v1` 绑定 manifest；
 - 预标注生成命令和工具版本；
 - 可编辑项目、标签 JSON、review JSON；
 - 异常队列清零或保留项说明；

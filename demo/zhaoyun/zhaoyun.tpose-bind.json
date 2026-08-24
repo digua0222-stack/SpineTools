@@ -1,0 +1,888 @@
+{
+  "schema": "tpose-bind/v1",
+  "atlas": {
+    "file": "tpose-detailed/atlas.png",
+    "width": 1024,
+    "height": 1024,
+    "background": "transparent",
+    "transparent": true
+  },
+  "settings": {
+    "scaleClamp": [
+      0.35,
+      1.8
+    ]
+  },
+  "parts": [
+    {
+      "id": "cape",
+      "name": "Cape",
+      "rect": [
+        586,
+        47,
+        310,
+        277
+      ],
+      "pivot": [
+        155.0,
+        15.2
+      ],
+      "anchors": [
+        {
+          "node": "neck",
+          "local": [
+            155.0,
+            15.2
+          ]
+        }
+      ],
+      "bone": "torso",
+      "slot": "cape",
+      "z": 0,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.78
+      },
+      "driverNodes": [
+        "neck",
+        "pelvis"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "upper_arm_back",
+      "name": "Upper Arm Back",
+      "rect": [
+        300,
+        437,
+        52,
+        80
+      ],
+      "pivot": [
+        26.0,
+        4.8
+      ],
+      "anchors": [
+        {
+          "node": "shoulder_back",
+          "local": [
+            26.0,
+            4.8
+          ]
+        },
+        {
+          "node": "elbow_back",
+          "local": [
+            26.0,
+            75.2
+          ]
+        }
+      ],
+      "bone": "shoulder_back",
+      "slot": "upper-arm-back",
+      "z": 10,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "forearm_back",
+      "name": "Forearm Back",
+      "rect": [
+        292,
+        529,
+        46,
+        86
+      ],
+      "pivot": [
+        23.0,
+        4.3
+      ],
+      "anchors": [
+        {
+          "node": "elbow_back",
+          "local": [
+            23.0,
+            4.3
+          ]
+        },
+        {
+          "node": "wrist_back",
+          "local": [
+            23.0,
+            80.8
+          ]
+        }
+      ],
+      "bone": "elbow_back",
+      "slot": "forearm-back",
+      "z": 11,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "hand_back",
+      "name": "Hand Back",
+      "rect": [
+        292,
+        626,
+        35,
+        40
+      ],
+      "pivot": [
+        17.5,
+        4.0
+      ],
+      "anchors": [
+        {
+          "node": "wrist_back",
+          "local": [
+            17.5,
+            4.0
+          ]
+        }
+      ],
+      "bone": "wrist_back",
+      "slot": "hand-back",
+      "z": 12,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.65
+      },
+      "driverNodes": [
+        "elbow_back",
+        "wrist_back"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "shoulder_back",
+      "name": "Shoulder Back",
+      "rect": [
+        301,
+        364,
+        58,
+        60
+      ],
+      "pivot": [
+        29.0,
+        30.0
+      ],
+      "anchors": [
+        {
+          "node": "shoulder_back",
+          "local": [
+            29.0,
+            30.0
+          ]
+        }
+      ],
+      "bone": "shoulder_back",
+      "slot": "shoulder-cover-back",
+      "z": 13,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.72
+      },
+      "driverNodes": [
+        "shoulder_back",
+        "elbow_back"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "thigh_back",
+      "name": "Thigh Back",
+      "rect": [
+        289,
+        694,
+        54,
+        104
+      ],
+      "pivot": [
+        27.0,
+        5.2
+      ],
+      "anchors": [
+        {
+          "node": "hip_back",
+          "local": [
+            27.0,
+            5.2
+          ]
+        },
+        {
+          "node": "knee_back",
+          "local": [
+            27.0,
+            97.8
+          ]
+        }
+      ],
+      "bone": "hip_back",
+      "slot": "thigh-back",
+      "z": 10,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "shin_back",
+      "name": "Shin Back",
+      "rect": [
+        295,
+        815,
+        52,
+        129
+      ],
+      "pivot": [
+        26.0,
+        5.2
+      ],
+      "anchors": [
+        {
+          "node": "knee_back",
+          "local": [
+            26.0,
+            5.2
+          ]
+        },
+        {
+          "node": "ankle_back",
+          "local": [
+            26.0,
+            118.7
+          ]
+        }
+      ],
+      "bone": "knee_back",
+      "slot": "shin-back",
+      "z": 11,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "foot_back",
+      "name": "Foot Back",
+      "rect": [
+        282,
+        958,
+        49,
+        55
+      ],
+      "pivot": [
+        24.5,
+        4.4
+      ],
+      "anchors": [
+        {
+          "node": "ankle_back",
+          "local": [
+            24.5,
+            4.4
+          ]
+        }
+      ],
+      "bone": "ankle_back",
+      "slot": "foot-back",
+      "z": 12,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.7
+      },
+      "driverNodes": [
+        "knee_back",
+        "ankle_back"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "hip_cover_back",
+      "name": "Hip Cover Back",
+      "rect": [
+        416,
+        621,
+        47,
+        66
+      ],
+      "pivot": [
+        23.5,
+        33.0
+      ],
+      "anchors": [
+        {
+          "node": "hip_back",
+          "local": [
+            23.5,
+            33.0
+          ]
+        }
+      ],
+      "bone": "hip_back",
+      "slot": "hip-cover-back",
+      "z": 14,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.68
+      },
+      "driverNodes": [
+        "hip_back",
+        "knee_back"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "knee_cover_back",
+      "name": "Knee Cover Back",
+      "rect": [
+        416,
+        739,
+        47,
+        66
+      ],
+      "pivot": [
+        23.5,
+        33.0
+      ],
+      "anchors": [
+        {
+          "node": "knee_back",
+          "local": [
+            23.5,
+            33.0
+          ]
+        }
+      ],
+      "bone": "knee_back",
+      "slot": "knee-cover-back",
+      "z": 14,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.68
+      },
+      "driverNodes": [
+        "hip_back",
+        "knee_back"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "upper_arm_front",
+      "name": "Upper Arm Front",
+      "rect": [
+        671,
+        437,
+        50,
+        80
+      ],
+      "pivot": [
+        25.0,
+        4.8
+      ],
+      "anchors": [
+        {
+          "node": "shoulder_front",
+          "local": [
+            25.0,
+            4.8
+          ]
+        },
+        {
+          "node": "elbow_front",
+          "local": [
+            25.0,
+            75.2
+          ]
+        }
+      ],
+      "bone": "shoulder_front",
+      "slot": "upper-arm-front",
+      "z": 32,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "forearm_front",
+      "name": "Forearm Front",
+      "rect": [
+        684,
+        529,
+        45,
+        86
+      ],
+      "pivot": [
+        22.5,
+        4.3
+      ],
+      "anchors": [
+        {
+          "node": "elbow_front",
+          "local": [
+            22.5,
+            4.3
+          ]
+        },
+        {
+          "node": "wrist_front",
+          "local": [
+            22.5,
+            80.8
+          ]
+        }
+      ],
+      "bone": "elbow_front",
+      "slot": "forearm-front",
+      "z": 33,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "hand_front",
+      "name": "Hand Front",
+      "rect": [
+        692,
+        626,
+        35,
+        40
+      ],
+      "pivot": [
+        17.5,
+        4.0
+      ],
+      "anchors": [
+        {
+          "node": "wrist_front",
+          "local": [
+            17.5,
+            4.0
+          ]
+        }
+      ],
+      "bone": "wrist_front",
+      "slot": "hand-front",
+      "z": 34,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.65
+      },
+      "driverNodes": [
+        "elbow_front",
+        "wrist_front"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "shoulder_front",
+      "name": "Shoulder Front",
+      "rect": [
+        669,
+        364,
+        58,
+        60
+      ],
+      "pivot": [
+        29.0,
+        30.0
+      ],
+      "anchors": [
+        {
+          "node": "shoulder_front",
+          "local": [
+            29.0,
+            30.0
+          ]
+        }
+      ],
+      "bone": "shoulder_front",
+      "slot": "shoulder-cover-front",
+      "z": 35,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.72
+      },
+      "driverNodes": [
+        "shoulder_front",
+        "elbow_front"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "thigh_front",
+      "name": "Thigh Front",
+      "rect": [
+        677,
+        694,
+        54,
+        104
+      ],
+      "pivot": [
+        27.0,
+        5.2
+      ],
+      "anchors": [
+        {
+          "node": "hip_front",
+          "local": [
+            27.0,
+            5.2
+          ]
+        },
+        {
+          "node": "knee_front",
+          "local": [
+            27.0,
+            97.8
+          ]
+        }
+      ],
+      "bone": "hip_front",
+      "slot": "thigh-front",
+      "z": 32,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "shin_front",
+      "name": "Shin Front",
+      "rect": [
+        673,
+        815,
+        52,
+        129
+      ],
+      "pivot": [
+        26.0,
+        5.2
+      ],
+      "anchors": [
+        {
+          "node": "knee_front",
+          "local": [
+            26.0,
+            5.2
+          ]
+        },
+        {
+          "node": "ankle_front",
+          "local": [
+            26.0,
+            118.7
+          ]
+        }
+      ],
+      "bone": "knee_front",
+      "slot": "shin-front",
+      "z": 33,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "foot_front",
+      "name": "Foot Front",
+      "rect": [
+        691,
+        958,
+        50,
+        55
+      ],
+      "pivot": [
+        25.0,
+        4.4
+      ],
+      "anchors": [
+        {
+          "node": "ankle_front",
+          "local": [
+            25.0,
+            4.4
+          ]
+        }
+      ],
+      "bone": "ankle_front",
+      "slot": "foot-front",
+      "z": 34,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.7
+      },
+      "driverNodes": [
+        "knee_front",
+        "ankle_front"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "hip_cover_front",
+      "name": "Hip Cover Front",
+      "rect": [
+        549,
+        621,
+        47,
+        65
+      ],
+      "pivot": [
+        23.5,
+        32.5
+      ],
+      "anchors": [
+        {
+          "node": "hip_front",
+          "local": [
+            23.5,
+            32.5
+          ]
+        }
+      ],
+      "bone": "hip_front",
+      "slot": "hip-cover-front",
+      "z": 36,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.68
+      },
+      "driverNodes": [
+        "hip_front",
+        "knee_front"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "knee_cover_front",
+      "name": "Knee Cover Front",
+      "rect": [
+        549,
+        739,
+        47,
+        66
+      ],
+      "pivot": [
+        23.5,
+        33.0
+      ],
+      "anchors": [
+        {
+          "node": "knee_front",
+          "local": [
+            23.5,
+            33.0
+          ]
+        }
+      ],
+      "bone": "knee_front",
+      "slot": "knee-cover-front",
+      "z": 36,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8,
+        "fixed": 0.68
+      },
+      "driverNodes": [
+        "hip_front",
+        "knee_front"
+      ],
+      "rotationOffset": -1.57079633
+    },
+    {
+      "id": "torso",
+      "name": "Torso",
+      "rect": [
+        420,
+        367,
+        172,
+        213
+      ],
+      "pivot": [
+        86.0,
+        123.5
+      ],
+      "anchors": [
+        {
+          "node": "neck",
+          "local": [
+            86.0,
+            4.3
+          ]
+        },
+        {
+          "node": "torso",
+          "local": [
+            86.0,
+            57.5
+          ]
+        },
+        {
+          "node": "pelvis",
+          "local": [
+            86.0,
+            123.5
+          ]
+        }
+      ],
+      "bone": "torso",
+      "slot": "torso",
+      "z": 24,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.55,
+        "max": 1.25
+      }
+    },
+    {
+      "id": "head",
+      "name": "Head",
+      "rect": [
+        403,
+        202,
+        112,
+        101
+      ],
+      "pivot": [
+        56.0,
+        97.0
+      ],
+      "anchors": [
+        {
+          "node": "head",
+          "local": [
+            56.0,
+            45.5
+          ]
+        },
+        {
+          "node": "neck",
+          "local": [
+            56.0,
+            97.0
+          ]
+        }
+      ],
+      "bone": "head",
+      "slot": "face",
+      "z": 42,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "helmet",
+      "name": "Helmet",
+      "rect": [
+        383,
+        17,
+        205,
+        183
+      ],
+      "pivot": [
+        102.5,
+        175.7
+      ],
+      "anchors": [
+        {
+          "node": "head",
+          "local": [
+            102.5,
+            102.5
+          ]
+        },
+        {
+          "node": "neck",
+          "local": [
+            102.5,
+            175.7
+          ]
+        }
+      ],
+      "bone": "head",
+      "slot": "helmet",
+      "z": 43,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.35,
+        "max": 1.8
+      }
+    },
+    {
+      "id": "weapon",
+      "name": "Weapon",
+      "rect": [
+        175,
+        10,
+        103,
+        450
+      ],
+      "pivot": [
+        74.2,
+        301.5
+      ],
+      "anchors": [
+        {
+          "node": "weapon_tip",
+          "local": [
+            27.8,
+            4.5
+          ]
+        },
+        {
+          "node": "wrist_front",
+          "local": [
+            74.2,
+            301.5
+          ]
+        }
+      ],
+      "bone": "weapon",
+      "slot": "weapon",
+      "z": 50,
+      "solve": "similarity-2d",
+      "scale": {
+        "min": 0.45,
+        "max": 1.6
+      }
+    }
+  ]
+}

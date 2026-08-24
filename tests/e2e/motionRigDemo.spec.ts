@@ -21,6 +21,24 @@ test("Zhao Yun demo loads an editable motion-rig review workspace", async ({
     .poll(() => reference.evaluate((image) => (image as HTMLImageElement).naturalWidth))
     .toBe(1024);
 
+  const binding = page.getByTestId("tpose-binding-section");
+  await expect(binding).toBeVisible();
+  await expect(binding.getByText("23 parts", { exact: true })).toBeVisible();
+  await expect(binding.getByText("23/23 resolved", { exact: true })).toBeVisible();
+  await expect(binding.getByText(/RMSE \d+\.\d px/)).toBeVisible();
+  const bindingAtlas = binding.getByTestId("tpose-binding-source-atlas");
+  await expect(bindingAtlas).toBeVisible();
+  await expect
+    .poll(() => bindingAtlas.locator("image").getAttribute("href"))
+    .toContain("/demo/zhaoyun/tpose-detailed/atlas.png");
+  await expect(binding.getByTestId("tpose-binding-output")).toBeVisible();
+
+  await binding.getByRole("button", { name: "Hide Weapon" }).click();
+  await expect(binding.getByText("22/23 visible", { exact: true })).toBeVisible();
+  await expect(binding.getByTestId("tpose-bound-part-weapon")).toHaveCount(0);
+  await binding.getByRole("button", { name: "Show Weapon" }).click();
+  await expect(binding.getByText("23/23 visible", { exact: true })).toBeVisible();
+
   await expect(page.getByText("107 frames", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Frame 0 / 106" })).toBeVisible();
   await expect(page.getByText("zhaoyun (18/18 nodes)", { exact: true })).toBeVisible();
@@ -43,6 +61,23 @@ test("Zhao Yun demo loads an editable motion-rig review workspace", async ({
   expect(manifest.coordinateSpace).toEqual({ units: "image-pixels", origin: "top-left" });
   expect(manifest.review.lockedPoints).toContain("1:zhaoyun:root");
   expect(manifest.review.notesByFrame["1"]).toBe("Demo 验收：root 已人工确认");
+
+  // The binding is evaluated from the current corrected landmarks, not a
+  // static first-frame mock. A known fast-motion frame stays renderable while
+  // honestly surfacing its much larger reprojection error.
+  await page.getByRole("button", { name: "Frame 1 / 106" }).click();
+  await page.getByRole("spinbutton").fill("66");
+  await page.getByRole("button", { name: "Go", exact: true }).click();
+  await expect(binding.getByText("23/23 resolved", { exact: true })).toBeVisible();
+  await expect(binding.getByText("RMSE 13.0 px", { exact: true })).toBeVisible();
+
+  // Frame 52 temporarily loses both anchors for one component. A direct seek
+  // must reproduce the validator's deterministic previous-frame fallback.
+  await page.getByRole("button", { name: "Frame 66 / 106" }).click();
+  await page.getByRole("spinbutton").fill("52");
+  await page.getByRole("button", { name: "Go", exact: true }).click();
+  await expect(binding.getByText("23/23 resolved", { exact: true })).toBeVisible();
+  await expect(binding.getByText("fallback", { exact: true })).toBeVisible();
 });
 
 test("portable Motion Rig files can be imported with an optional T-Pose", async ({ page }) => {
@@ -56,6 +91,7 @@ test("portable Motion Rig files can be imported with an optional T-Pose", async 
   await expect(page.getByTestId("motion-rig-panel")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("107 frames", { exact: true })).toBeVisible();
   await expect(page.getByText("zhaoyun (18/18 nodes)", { exact: true })).toBeVisible();
+  await expect(page.getByText("No T-Pose binding data attached.", { exact: true })).toBeVisible();
   await expect
     .poll(() =>
       page

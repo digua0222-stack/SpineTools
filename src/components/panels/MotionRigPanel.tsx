@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import { TposeBindingSection } from "./TposeBindingSection";
 import {
   analyzeMotionRigSequence,
   buildMotionRigFrames,
@@ -43,7 +44,9 @@ import {
 const baseUrl = import.meta.env.BASE_URL.endsWith("/")
   ? import.meta.env.BASE_URL
   : `${import.meta.env.BASE_URL}/`;
-const DEFAULT_TPOSE_URL = `${baseUrl}demo/zhaoyun/tpose_parts.png`;
+const DEFAULT_TPOSE_URL = `${baseUrl}demo/zhaoyun/tpose-detailed/atlas.png`;
+const DEFAULT_TPOSE_BINDING_URL = `${baseUrl}demo/zhaoyun/zhaoyun.tpose-bind.json`;
+const EMPTY_MOTION_RIG_POINTS = {};
 
 const ISSUE_LABELS: Record<MotionRigIssue["type"], string> = {
   "missing-point": "Missing",
@@ -55,6 +58,10 @@ const ISSUE_LABELS: Record<MotionRigIssue["type"], string> = {
 function videoIdentifier(filename: string | string[] | undefined): string {
   if (Array.isArray(filename)) return filename.join("|") || "untitled-video";
   return filename || "untitled-video";
+}
+
+function metadataUrl(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function reviewStorageKey(videoId: string): string {
@@ -107,12 +114,24 @@ export function MotionRigPanel() {
   } | null>(null);
 
   const videoId = videoIdentifier(video?.filename);
-  const configuredReferenceUrl = video?.backendMetadata.motionRigReferenceUrl;
+  const isBundledZhaoyunDemo = videoId.includes("demo/zhaoyun/zhaoyun.mp4");
+  const configuredReferenceUrl = metadataUrl(
+    video?.backendMetadata.motionRigReferenceUrl,
+  );
   const referenceUrl =
-    typeof configuredReferenceUrl === "string" && configuredReferenceUrl
+    configuredReferenceUrl
       ? configuredReferenceUrl
-      : videoId.includes("demo/zhaoyun/zhaoyun.mp4")
+      : isBundledZhaoyunDemo
         ? DEFAULT_TPOSE_URL
+        : null;
+  const configuredBindingUrl =
+    metadataUrl(video?.backendMetadata.motionRigTposeBindingUrl) ??
+    metadataUrl(video?.backendMetadata.motionRigBindingManifestUrl);
+  const bindingManifestUrl =
+    configuredBindingUrl
+      ? configuredBindingUrl
+      : isBundledZhaoyunDemo
+        ? DEFAULT_TPOSE_BINDING_URL
         : null;
   const storageKey = reviewStorageKey(videoId);
   const nodeNames = useMemo(
@@ -287,6 +306,16 @@ export function MotionRigPanel() {
             </p>
           </div>
         </details>
+
+        <TposeBindingSection
+          manifestUrl={bindingManifestUrl}
+          frameIdx={frameIdx}
+          frameWidth={video?.shape?.[2] ?? 1}
+          frameHeight={video?.shape?.[1] ?? 1}
+          points={currentFrame?.points ?? EMPTY_MOTION_RIG_POINTS}
+          frames={motionFrames}
+          edges={edges}
+        />
 
         {!labels || !video ? (
           <div className="p-3 text-xs text-muted-foreground">

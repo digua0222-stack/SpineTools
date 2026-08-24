@@ -9,7 +9,8 @@ A modern rewrite of SLEAP's Qt/Python desktop labeling interface as a web app, w
 This checkout adds a focused, Spine-independent review workflow for turning
 video tracking results into clean 2D motion landmarks. The bundled Zhao Yun
 demo loads a real 107-frame attack video, 18 editable landmarks and a T-Pose
-parts reference from one button on the welcome screen.
+parts reference from one button on the welcome screen. It also loads a
+23-component transparent atlas and a `tpose-bind/v1` rigid attachment preview.
 
 Windows quick start (Node.js):
 
@@ -28,17 +29,28 @@ To regenerate the deterministic OpenCV prelabels and Web demo assets:
 ```powershell
 python -m pip install -r scripts\requirements-motion-rig.txt
 python scripts\build_zhaoyun_demo.py
+python scripts\extract_tpose_parts.py
+python scripts\build_zhaoyun_tpose_binding.py
+npx bun scripts\validate_zhaoyun_tpose_binding.ts
+python scripts\render_zhaoyun_tpose_preview.py
 ```
+
+The source of the detailed T-Pose sheet has a checkerboard baked into RGB and
+no alpha channel. The extractor reconstructs a binary transparency estimate;
+it cannot recover the original anti-aliased alpha exactly.
 
 Chinese documentation:
 
 - [上手指南](docs/zh/GETTING_STARTED.md)
 - [赵云 Demo 验收](docs/zh/VALIDATION.md)
+- [T-Pose 拆片与绑定](docs/zh/TPOSE_BINDING.md)
+- [实测报告](docs/zh/VALIDATION_REPORT.md)
 
 Scope boundary: this editor produces and corrects generic image-pixel
-landmarks. It does not include Spine Editor/CLI or generate the proprietary
-`.spine` project format. T-Pose binding, attachment hierarchy, mesh weights and
-final Spine animation solving remain downstream steps.
+landmarks and now previews rigid T-Pose component retargeting. It does not
+include Spine Editor/CLI or generate the proprietary `.spine` project format.
+Spine bone hierarchy export, production attachment/slot authoring, mesh weights,
+deformation and final animation validation remain downstream steps.
 
 ## Install the desktop app
 

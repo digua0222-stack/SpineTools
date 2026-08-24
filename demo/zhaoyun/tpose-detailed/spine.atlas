@@ -1,0 +1,166 @@
+atlas.png
+size: 1024,1024
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+cape
+  rotate: false
+  xy: 586, 47
+  size: 310, 277
+  orig: 310, 277
+  offset: 0, 0
+  index: -1
+foot_back
+  rotate: false
+  xy: 282, 958
+  size: 49, 55
+  orig: 49, 55
+  offset: 0, 0
+  index: -1
+foot_front
+  rotate: false
+  xy: 691, 958
+  size: 50, 55
+  orig: 50, 55
+  offset: 0, 0
+  index: -1
+forearm_back
+  rotate: false
+  xy: 292, 529
+  size: 46, 86
+  orig: 46, 86
+  offset: 0, 0
+  index: -1
+forearm_front
+  rotate: false
+  xy: 684, 529
+  size: 45, 86
+  orig: 45, 86
+  offset: 0, 0
+  index: -1
+hand_back
+  rotate: false
+  xy: 292, 626
+  size: 35, 40
+  orig: 35, 40
+  offset: 0, 0
+  index: -1
+hand_front
+  rotate: false
+  xy: 692, 626
+  size: 35, 40
+  orig: 35, 40
+  offset: 0, 0
+  index: -1
+head
+  rotate: false
+  xy: 403, 202
+  size: 112, 101
+  orig: 112, 101
+  offset: 0, 0
+  index: -1
+helmet
+  rotate: false
+  xy: 383, 17
+  size: 205, 183
+  orig: 205, 183
+  offset: 0, 0
+  index: -1
+hip_cover_back
+  rotate: false
+  xy: 416, 621
+  size: 47, 66
+  orig: 47, 66
+  offset: 0, 0
+  index: -1
+hip_cover_front
+  rotate: false
+  xy: 549, 621
+  size: 47, 65
+  orig: 47, 65
+  offset: 0, 0
+  index: -1
+knee_cover_back
+  rotate: false
+  xy: 416, 739
+  size: 47, 66
+  orig: 47, 66
+  offset: 0, 0
+  index: -1
+knee_cover_front
+  rotate: false
+  xy: 549, 739
+  size: 47, 66
+  orig: 47, 66
+  offset: 0, 0
+  index: -1
+shin_back
+  rotate: false
+  xy: 295, 815
+  size: 52, 129
+  orig: 52, 129
+  offset: 0, 0
+  index: -1
+shin_front
+  rotate: false
+  xy: 673, 815
+  size: 52, 129
+  orig: 52, 129
+  offset: 0, 0
+  index: -1
+shoulder_back
+  rotate: false
+  xy: 301, 364
+  size: 58, 60
+  orig: 58, 60
+  offset: 0, 0
+  index: -1
+shoulder_front
+  rotate: false
+  xy: 669, 364
+  size: 58, 60
+  orig: 58, 60
+  offset: 0, 0
+  index: -1
+thigh_back
+  rotate: false
+  xy: 289, 694
+  size: 54, 104
+  orig: 54, 104
+  offset: 0, 0
+  index: -1
+thigh_front
+  rotate: false
+  xy: 677, 694
+  size: 54, 104
+  orig: 54, 104
+  offset: 0, 0
+  index: -1
+torso
+  rotate: false
+  xy: 420, 367
+  size: 172, 213
+  orig: 172, 213
+  offset: 0, 0
+  index: -1
+upper_arm_back
+  rotate: false
+  xy: 300, 437
+  size: 52, 80
+  orig: 52, 80
+  offset: 0, 0
+  index: -1
+upper_arm_front
+  rotate: false
+  xy: 671, 437
+  size: 50, 80
+  orig: 50, 80
+  offset: 0, 0
+  index: -1
+weapon
+  rotate: false
+  xy: 175, 10
+  size: 103, 450
+  orig: 103, 450
+  offset: 0, 0
+  index: -1

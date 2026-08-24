@@ -1,0 +1,920 @@
+{
+  "schemaVersion": "motion-rig/tpose-components-v1",
+  "source": {
+    "file": "../assets/tpose_detailed_checkerboard_source.png",
+    "sha256": "e7321eb57be54fc8c992c49e4a3a3bd5aa8400664e69ea28a2d44e4ebcbf3a43",
+    "bytes": 907598,
+    "width": 1024,
+    "height": 1024,
+    "channels": 3,
+    "transparency": {
+      "hasAlphaChannel": false,
+      "effectiveAlphaMin": 255,
+      "effectiveAlphaMax": 255,
+      "effectiveOpaque": true
+    },
+    "checkerboard": {
+      "likelyBakedCheckerboard": true,
+      "neutralBrightPixelRatio": 0.843763,
+      "lowTonePixelRatio": 0.399486,
+      "highTonePixelRatio": 0.402552,
+      "evidence": "alternating-near-white-tones-without-alpha"
+    }
+  },
+  "extraction": {
+    "tool": "Motion Rig Lab T-Pose component extractor",
+    "version": "0.1.0",
+    "deterministic": true,
+    "method": "dark-or-chroma-seeds-plus-border-flood-fill",
+    "seedFormula": "gray<225 OR channelRange>8",
+    "morphology": [
+      "2x2-open",
+      "5x5-close",
+      "neutral-outer-boundary-cleanup"
+    ],
+    "minimumSeedArea": 80,
+    "alphaRecovery": "binary-estimate-from-baked-checkerboard",
+    "limitations": [
+      "The source has no alpha channel; original subpixel alpha cannot be recovered exactly.",
+      "RGB at anti-aliased boundaries may retain contamination from the baked checkerboard.",
+      "Enclosed bright regions are treated as foreground; true enclosed transparent holes may be filled."
+    ]
+  },
+  "atlas": {
+    "image": "atlas.png",
+    "imageBytes": 441490,
+    "imageSha256": "1b6cd34b89ddfbb9ac9bd460367fc7103313da0d8b22013303bd0f2df7703571",
+    "spineAtlas": "spine.atlas",
+    "spineAtlasBytes": 2560,
+    "spineAtlasSha256": "4c23880af113f6b0eab130f1b1816ded5160b2696f8a0e4a138f8224497cd55f",
+    "width": 1024,
+    "height": 1024,
+    "alpha": {
+      "min": 0,
+      "max": 255,
+      "nonZeroPixels": 171077,
+      "uniqueValues": [
+        0,
+        255
+      ]
+    }
+  },
+  "naming": {
+    "mode": "normalized-spatial-anchor-matching",
+    "expectedComponentCount": 23,
+    "semanticGuarantee": "obvious-or-layout-heuristic-only",
+    "screenSideConvention": "viewer/screen relative, never character anatomical left/right",
+    "unresolvedIds": [],
+    "requiresHumanConfirmationIds": [
+      "foot_back",
+      "foot_front",
+      "forearm_back",
+      "forearm_front",
+      "hand_back",
+      "hand_front",
+      "hip_cover_back",
+      "hip_cover_front",
+      "knee_cover_back",
+      "knee_cover_front",
+      "shin_back",
+      "shin_front",
+      "shoulder_back",
+      "shoulder_front",
+      "thigh_back",
+      "thigh_front",
+      "upper_arm_back",
+      "upper_arm_front"
+    ]
+  },
+  "componentCount": 23,
+  "components": [
+    {
+      "componentLabel": 3,
+      "bbox": {
+        "x": 586,
+        "y": 47,
+        "width": 310,
+        "height": 277
+      },
+      "center": {
+        "x": 739.526,
+        "y": 196.387
+      },
+      "maskArea": 51283,
+      "id": "cape",
+      "semanticStatus": "obvious",
+      "screenSide": "right",
+      "proposedRole": "cape",
+      "matchDistanceNormalized": 0.00995,
+      "index": 1,
+      "file": "parts/cape.png",
+      "fileBytes": 102395,
+      "fileSha256": "20b448b5c0a2abf6373afd8484486dc9380199cde2ad6bf2f40056bd81c4119b",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 51283,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 586,
+        "y": 47,
+        "width": 310,
+        "height": 277
+      }
+    },
+    {
+      "componentLabel": 22,
+      "bbox": {
+        "x": 282,
+        "y": 958,
+        "width": 49,
+        "height": 55
+      },
+      "center": {
+        "x": 308.118,
+        "y": 986.387
+      },
+      "maskArea": 2087,
+      "id": "foot_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "foot-back",
+      "matchDistanceNormalized": 0.000936,
+      "index": 2,
+      "file": "parts/foot_back.png",
+      "fileBytes": 5472,
+      "fileSha256": "820f9b92f3fa4d9b6ed821dade6531b334027d82cd484302b9c1130ba4113413",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2087,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 282,
+        "y": 958,
+        "width": 49,
+        "height": 55
+      }
+    },
+    {
+      "componentLabel": 23,
+      "bbox": {
+        "x": 691,
+        "y": 958,
+        "width": 50,
+        "height": 55
+      },
+      "center": {
+        "x": 713.662,
+        "y": 986.387
+      },
+      "maskArea": 2069,
+      "id": "foot_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "foot-front",
+      "matchDistanceNormalized": 0.002082,
+      "index": 3,
+      "file": "parts/foot_front.png",
+      "fileBytes": 5505,
+      "fileSha256": "2d0688316026744f5bf2dac5f4af0e215c4a556eb45cb160bada21e7aa2abcee",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2069,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 691,
+        "y": 958,
+        "width": 50,
+        "height": 55
+      }
+    },
+    {
+      "componentLabel": 10,
+      "bbox": {
+        "x": 292,
+        "y": 529,
+        "width": 46,
+        "height": 86
+      },
+      "center": {
+        "x": 311.637,
+        "y": 570.728
+      },
+      "maskArea": 3297,
+      "id": "forearm_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "forearm-back",
+      "matchDistanceNormalized": 0.003135,
+      "index": 4,
+      "file": "parts/forearm_back.png",
+      "fileBytes": 8767,
+      "fileSha256": "12605aab9958911ae56602cb0e09b84f0b8bd2a67c6ba03e88cc4682eae2738e",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 3297,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 292,
+        "y": 529,
+        "width": 46,
+        "height": 86
+      }
+    },
+    {
+      "componentLabel": 11,
+      "bbox": {
+        "x": 684,
+        "y": 529,
+        "width": 45,
+        "height": 86
+      },
+      "center": {
+        "x": 707.477,
+        "y": 570.749
+      },
+      "maskArea": 3253,
+      "id": "forearm_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "forearm-front",
+      "matchDistanceNormalized": 0.002499,
+      "index": 5,
+      "file": "parts/forearm_front.png",
+      "fileBytes": 8566,
+      "fileSha256": "80f526eeaee34930beb80e95d63ad246c33a31776153bf3719ba8650618ab548",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 3253,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 684,
+        "y": 529,
+        "width": 45,
+        "height": 86
+      }
+    },
+    {
+      "componentLabel": 14,
+      "bbox": {
+        "x": 292,
+        "y": 626,
+        "width": 35,
+        "height": 40
+      },
+      "center": {
+        "x": 308.523,
+        "y": 645.73
+      },
+      "maskArea": 1198,
+      "id": "hand_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "hand-back",
+      "matchDistanceNormalized": 0.001755,
+      "index": 6,
+      "file": "parts/hand_back.png",
+      "fileBytes": 3405,
+      "fileSha256": "5672a99f8808c8656b5f7e7cd311c70328e549d3575c2a6084acd60ff4c45f40",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 1198,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 292,
+        "y": 626,
+        "width": 35,
+        "height": 40
+      }
+    },
+    {
+      "componentLabel": 15,
+      "bbox": {
+        "x": 692,
+        "y": 626,
+        "width": 35,
+        "height": 40
+      },
+      "center": {
+        "x": 709.311,
+        "y": 645.681
+      },
+      "maskArea": 1192,
+      "id": "hand_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "hand-front",
+      "matchDistanceNormalized": 0.00055,
+      "index": 7,
+      "file": "parts/hand_front.png",
+      "fileBytes": 3355,
+      "fileSha256": "0987f941f4cdd08e8e790d2b49d1c40b9faefbd043fe4c49443dce4b9f2e56af",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 1192,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 692,
+        "y": 626,
+        "width": 35,
+        "height": 40
+      }
+    },
+    {
+      "componentLabel": 4,
+      "bbox": {
+        "x": 403,
+        "y": 202,
+        "width": 112,
+        "height": 101
+      },
+      "center": {
+        "x": 458.38,
+        "y": 248.735
+      },
+      "maskArea": 8782,
+      "id": "head",
+      "semanticStatus": "obvious",
+      "screenSide": "center",
+      "proposedRole": "head",
+      "matchDistanceNormalized": 0.004111,
+      "index": 8,
+      "file": "parts/head.png",
+      "fileBytes": 19132,
+      "fileSha256": "b1169553c11dea3605340b9b16fc462c9e9400cff0257a5deb7c7337fbc4716c",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 8782,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 403,
+        "y": 202,
+        "width": 112,
+        "height": 101
+      }
+    },
+    {
+      "componentLabel": 2,
+      "bbox": {
+        "x": 383,
+        "y": 17,
+        "width": 205,
+        "height": 183
+      },
+      "center": {
+        "x": 475.882,
+        "y": 108.691
+      },
+      "maskArea": 20910,
+      "id": "helmet",
+      "semanticStatus": "obvious",
+      "screenSide": "center",
+      "proposedRole": "head-accessory",
+      "matchDistanceNormalized": 0.010272,
+      "index": 9,
+      "file": "parts/helmet.png",
+      "fileBytes": 52065,
+      "fileSha256": "4207b16516c35f09cde15ef419e42f69ab85c4ead12c5631d0df566d1f3ede5e",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 20910,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 383,
+        "y": 17,
+        "width": 205,
+        "height": 183
+      }
+    },
+    {
+      "componentLabel": 12,
+      "bbox": {
+        "x": 416,
+        "y": 621,
+        "width": 47,
+        "height": 66
+      },
+      "center": {
+        "x": 438.91,
+        "y": 653.525
+      },
+      "maskArea": 2387,
+      "id": "hip_cover_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "hip-cover-back",
+      "matchDistanceNormalized": 0.000877,
+      "index": 10,
+      "file": "parts/hip_cover_back.png",
+      "fileBytes": 6772,
+      "fileSha256": "0f876651060700db67591da35164b3487ed200f5c520bf773dbd8fa476cb655f",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2387,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 416,
+        "y": 621,
+        "width": 47,
+        "height": 66
+      }
+    },
+    {
+      "componentLabel": 13,
+      "bbox": {
+        "x": 549,
+        "y": 621,
+        "width": 47,
+        "height": 65
+      },
+      "center": {
+        "x": 572.082,
+        "y": 653.409
+      },
+      "maskArea": 2416,
+      "id": "hip_cover_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "hip-cover-front",
+      "matchDistanceNormalized": 0.000962,
+      "index": 11,
+      "file": "parts/hip_cover_front.png",
+      "fileBytes": 6713,
+      "fileSha256": "13d6e0ad75a4e150cb7d666b17779865b1991f7939750faca9d7b24d4a73ff6c",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2416,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 549,
+        "y": 621,
+        "width": 47,
+        "height": 65
+      }
+    },
+    {
+      "componentLabel": 18,
+      "bbox": {
+        "x": 416,
+        "y": 739,
+        "width": 47,
+        "height": 66
+      },
+      "center": {
+        "x": 438.984,
+        "y": 770.795
+      },
+      "maskArea": 2420,
+      "id": "knee_cover_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "knee-cover-back",
+      "matchDistanceNormalized": 0.001307,
+      "index": 12,
+      "file": "parts/knee_cover_back.png",
+      "fileBytes": 6809,
+      "fileSha256": "03d8f0924ff1dc66225bb6483a50ed454c3a49930faa63f9fd0739acc90eab42",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2420,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 416,
+        "y": 739,
+        "width": 47,
+        "height": 66
+      }
+    },
+    {
+      "componentLabel": 19,
+      "bbox": {
+        "x": 549,
+        "y": 739,
+        "width": 47,
+        "height": 66
+      },
+      "center": {
+        "x": 572.252,
+        "y": 770.563
+      },
+      "maskArea": 2447,
+      "id": "knee_cover_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "knee-cover-front",
+      "matchDistanceNormalized": 0.001506,
+      "index": 13,
+      "file": "parts/knee_cover_front.png",
+      "fileBytes": 6825,
+      "fileSha256": "f661436033cd00d84884a8e7bddaab444fc59f9ef3eb551312b0a4dbc9e443ff",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2447,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 549,
+        "y": 739,
+        "width": 47,
+        "height": 66
+      }
+    },
+    {
+      "componentLabel": 20,
+      "bbox": {
+        "x": 295,
+        "y": 815,
+        "width": 52,
+        "height": 129
+      },
+      "center": {
+        "x": 319.129,
+        "y": 874.138
+      },
+      "maskArea": 4988,
+      "id": "shin_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "shin-back",
+      "matchDistanceNormalized": 0.005843,
+      "index": 14,
+      "file": "parts/shin_back.png",
+      "fileBytes": 12576,
+      "fileSha256": "beaa718553806f89371530c2a4a8ed97afdc864d1dc6819d0f3c0c75f67d0aac",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 4988,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 295,
+        "y": 815,
+        "width": 52,
+        "height": 129
+      }
+    },
+    {
+      "componentLabel": 21,
+      "bbox": {
+        "x": 673,
+        "y": 815,
+        "width": 52,
+        "height": 129
+      },
+      "center": {
+        "x": 701.004,
+        "y": 874.158
+      },
+      "maskArea": 4941,
+      "id": "shin_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "shin-front",
+      "matchDistanceNormalized": 0.005558,
+      "index": 15,
+      "file": "parts/shin_front.png",
+      "fileBytes": 12504,
+      "fileSha256": "30eb7c4a3765dbe5f8514e50da09d9d57d8704d139cdd1dac9938babb084fd25",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 4941,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 673,
+        "y": 815,
+        "width": 52,
+        "height": 129
+      }
+    },
+    {
+      "componentLabel": 5,
+      "bbox": {
+        "x": 301,
+        "y": 364,
+        "width": 58,
+        "height": 60
+      },
+      "center": {
+        "x": 330.012,
+        "y": 393.192
+      },
+      "maskArea": 2529,
+      "id": "shoulder_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "shoulder-back",
+      "matchDistanceNormalized": 0.00106,
+      "index": 16,
+      "file": "parts/shoulder_back.png",
+      "fileBytes": 7190,
+      "fileSha256": "808f1a28b3d0fb8a7600187404fd08fef4d94c8e03f05c34a82536ac4e29d65e",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2529,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 301,
+        "y": 364,
+        "width": 58,
+        "height": 60
+      }
+    },
+    {
+      "componentLabel": 6,
+      "bbox": {
+        "x": 669,
+        "y": 364,
+        "width": 58,
+        "height": 60
+      },
+      "center": {
+        "x": 697.343,
+        "y": 392.907
+      },
+      "maskArea": 2579,
+      "id": "shoulder_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "shoulder-front",
+      "matchDistanceNormalized": 0.001642,
+      "index": 17,
+      "file": "parts/shoulder_front.png",
+      "fileBytes": 7348,
+      "fileSha256": "9b028e5a620bfe0e8a57e6d92ae785951dc1e6707bf23aedcc64c66fcc429ca0",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2579,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 669,
+        "y": 364,
+        "width": 58,
+        "height": 60
+      }
+    },
+    {
+      "componentLabel": 16,
+      "bbox": {
+        "x": 289,
+        "y": 694,
+        "width": 54,
+        "height": 104
+      },
+      "center": {
+        "x": 315.63,
+        "y": 744.494
+      },
+      "maskArea": 4757,
+      "id": "thigh_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "thigh-back",
+      "matchDistanceNormalized": 0.0021,
+      "index": 18,
+      "file": "parts/thigh_back.png",
+      "fileBytes": 11156,
+      "fileSha256": "6699c161c880d7150664e58f3b44b8c2b1a860be221fffcb5d063dca940b90ea",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 4757,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 289,
+        "y": 694,
+        "width": 54,
+        "height": 104
+      }
+    },
+    {
+      "componentLabel": 17,
+      "bbox": {
+        "x": 677,
+        "y": 694,
+        "width": 54,
+        "height": 104
+      },
+      "center": {
+        "x": 702.805,
+        "y": 744.555
+      },
+      "maskArea": 4758,
+      "id": "thigh_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "thigh-front",
+      "matchDistanceNormalized": 0.002524,
+      "index": 19,
+      "file": "parts/thigh_front.png",
+      "fileBytes": 11339,
+      "fileSha256": "6fb0092b9dd5b35a7960a20bac6c0f2b80bfede9f1e7c41f0c95e022c719b14a",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 4758,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 677,
+        "y": 694,
+        "width": 54,
+        "height": 104
+      }
+    },
+    {
+      "componentLabel": 7,
+      "bbox": {
+        "x": 420,
+        "y": 367,
+        "width": 172,
+        "height": 213
+      },
+      "center": {
+        "x": 505.743,
+        "y": 483.695
+      },
+      "maskArea": 23989,
+      "id": "torso",
+      "semanticStatus": "obvious",
+      "screenSide": "center",
+      "proposedRole": "torso",
+      "matchDistanceNormalized": 0.009359,
+      "index": 20,
+      "file": "parts/torso.png",
+      "fileBytes": 60498,
+      "fileSha256": "ff200fb0208e215c6abfcb5c2e766dff7a27b2dbe77d61083d86584636106b5f",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 23989,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 420,
+        "y": 367,
+        "width": 172,
+        "height": 213
+      }
+    },
+    {
+      "componentLabel": 8,
+      "bbox": {
+        "x": 300,
+        "y": 437,
+        "width": 52,
+        "height": 80
+      },
+      "center": {
+        "x": 325.446,
+        "y": 476.397
+      },
+      "maskArea": 2990,
+      "id": "upper_arm_back",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "left",
+      "proposedRole": "upper-arm-back",
+      "matchDistanceNormalized": 0.00079,
+      "index": 21,
+      "file": "parts/upper_arm_back.png",
+      "fileBytes": 7141,
+      "fileSha256": "46644c853ff36f67d9fbd76a85b9ed3ce3377f1d812cdae6cc959696580430e7",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 2990,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 300,
+        "y": 437,
+        "width": 52,
+        "height": 80
+      }
+    },
+    {
+      "componentLabel": 9,
+      "bbox": {
+        "x": 671,
+        "y": 437,
+        "width": 50,
+        "height": 80
+      },
+      "center": {
+        "x": 695.797,
+        "y": 476.74
+      },
+      "maskArea": 3007,
+      "id": "upper_arm_front",
+      "semanticStatus": "layout-heuristic",
+      "screenSide": "right",
+      "proposedRole": "upper-arm-front",
+      "matchDistanceNormalized": 0.00067,
+      "index": 22,
+      "file": "parts/upper_arm_front.png",
+      "fileBytes": 7001,
+      "fileSha256": "1b8ab98eae0a364a100b26471ab06446ded088bf1feaf91722b96ef5c9b53bb4",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 3007,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 671,
+        "y": 437,
+        "width": 50,
+        "height": 80
+      }
+    },
+    {
+      "componentLabel": 1,
+      "bbox": {
+        "x": 175,
+        "y": 10,
+        "width": 103,
+        "height": 450
+      },
+      "center": {
+        "x": 223.63,
+        "y": 217.593
+      },
+      "maskArea": 12798,
+      "id": "weapon",
+      "semanticStatus": "obvious",
+      "screenSide": "left",
+      "proposedRole": "weapon",
+      "matchDistanceNormalized": 0.017875,
+      "index": 23,
+      "file": "parts/weapon.png",
+      "fileBytes": 35056,
+      "fileSha256": "6ced8c9a55e2572481d8f9fe36cb103fa7e00710054c8e4edfde1c57269f4ae1",
+      "alpha": {
+        "min": 0,
+        "max": 255,
+        "nonZeroPixels": 12798,
+        "mode": "binary-reconstructed"
+      },
+      "atlasRegion": {
+        "page": "atlas.png",
+        "x": 175,
+        "y": 10,
+        "width": 103,
+        "height": 450
+      }
+    }
+  ]
+}
