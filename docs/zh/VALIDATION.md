@@ -23,21 +23,28 @@
 
 ```powershell
 Set-Location H:\spine_research\MotionRigLab
+python -m pip install -r scripts\requirements-motion-rig.txt
 python scripts/build_zhaoyun_demo.py
 ```
 
 预期产物：
 
 - `demo/zhaoyun/zhaoyun.motionrig.json`；
-- 生成器声明的预览或报告文件（若启用）；
+- `demo/zhaoyun/zhaoyun.prelabels.contact-sheet.png`；
+- `demo/zhaoyun/assets/SHA256SUMS.json`；
+- `public/demo/zhaoyun/{zhaoyun.motionrig.json,zhaoyun.mp4,tpose_parts.png}`；
 - 107 帧的 18 点预标注；
-- 帧级质量分数和建议审阅帧。
+- 帧级质量分数和 44 个建议审阅帧。
+
+Web 三件套是浏览器一键 Demo 的输入；可用 `--skip-web-assets` 跳过同步，但此时一键入口不会得到最新产物。
 
 ### 2.2 Demo 数据测试
 
 ```powershell
 python -m unittest scripts.tests.test_zhaoyun_demo -v
 ```
+
+本基线实测结果为 6/6 通过；点置信度均值为 0.8560、最小值为 0.0200。
 
 最低断言：
 
@@ -68,11 +75,11 @@ bun run test:e2e
 bun run dev
 ```
 
-然后按下表操作。每一项都应留下截图、导出文件或测试日志之一作为证据。
+在欢迎页点击 `Open Zhao Yun Motion Rig Demo`，然后按下表操作。每一项都应留下截图、导出文件或测试日志之一作为证据。
 
 | 编号 | 操作 | 通过标准 |
 |---|---|---|
-| UI-01 | 打开赵云视频和生成的预标注 | 显示 768 × 768 视频；总帧数为 107；骨架跟随当前帧显示 |
+| UI-01 | 点击 `Open Zhao Yun Motion Rig Demo` | 显示 768 × 768 视频；总帧数为 107；骨架跟随当前帧显示 |
 | UI-02 | 打开 `Motion Rig` 面板 | 能看到 `Review queue`、`Current frame` 和阈值控件 |
 | UI-03 | 调高 `Confidence threshold` | 低置信告警数量不减少；队列无重复或越界帧 |
 | UI-04 | 收紧 `Bone length tolerance` | 骨长突变告警数量不减少；告警能指向具体帧/骨段 |

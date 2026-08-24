@@ -56,20 +56,27 @@ Demo 源文件位于 `demo/zhaoyun/assets/`：
 在仓库根目录运行：
 
 ```powershell
+python -m pip install -r scripts\requirements-motion-rig.txt
 python scripts/build_zhaoyun_demo.py
 ```
 
-生成器输出 `demo/zhaoyun/zhaoyun.motionrig.json`。它为每帧写入 18 个语义点、置信度、来源、锁定状态、帧质量和低置信帧建议。生成器的预标注是自动起点，不是人工真值；武器快速移动、遮挡和前后肢交叉处通常需要纠偏。
+生成器输出：
+
+- `demo/zhaoyun/zhaoyun.motionrig.json`：编辑器交换数据；
+- `demo/zhaoyun/zhaoyun.prelabels.contact-sheet.png`：九帧骨架叠加预览；
+- `demo/zhaoyun/assets/SHA256SUMS.json`：三个原始输入的哈希清单；
+- `public/demo/zhaoyun/` 下的 JSON、`zhaoyun.mp4` 和 `tpose_parts.png`：一键 Demo 使用的 Web 副本。
+
+不想同步 Web 副本时增加 `--skip-web-assets`。生成器为每帧写入 18 个语义点、置信度、来源、锁定状态、帧质量和低置信帧建议。当前基线有 44 个建议帧，点置信度均值为 0.8560、最小值为 0.0200。置信度只用于安排人工审阅优先级，不是人工真值或校准后的正确概率；武器快速移动、遮挡和前后肢交叉处通常需要纠偏。
 
 ## 4. 打开项目
 
 1. 启动浏览器版编辑器。
-2. 使用应用的项目/视频入口打开 `demo/zhaoyun/assets/银枪三连刺.mp4`。
-3. 导入 `demo/zhaoyun/zhaoyun.motionrig.json`，或使用 Demo 快捷入口（若当前构建提供）。
-4. 打开右侧 `Motion Rig` 面板。
-5. 在 `View` 中打开节点名和骨骼边，确认点名、左右肢和枪尖方向与画面一致。
+2. 在欢迎页点击 `Open Zhao Yun Motion Rig Demo`。
+3. 等待视频、107 帧预标注和 18 点骨架载入；应用会自动打开右侧 `Motion Rig` 面板。
+4. 在 `View` 中打开节点名和骨骼边，确认点名、前后肢和枪尖方向与画面一致。
 
-若构建尚未提供 Motion Rig JSON 一键导入，先按 Demo 验证文档中的适配命令生成/打开 `.slp` 项目，再使用 `Motion Rig` 面板审阅。不要把 T-Pose PNG 当作视频帧导入；它是后续绑定参照，而不是动作源。
+一键入口读取 `public/demo/zhaoyun/`，因此修改生成器或输入后要重新运行 Demo 命令。不要把 T-Pose PNG 当作视频帧导入；它是后续绑定参照，而不是动作源。
 
 ## 5. 推荐的人工纠偏顺序
 
@@ -114,7 +121,7 @@ python scripts/build_zhaoyun_demo.py
 建议每次审阅形成三个文件：
 
 1. 项目文件：`File > Save As`，保留可继续编辑的标签项目；
-2. 标签 JSON：`File > Export Labels as JSON`，保存逐帧骨点；
+2. 标签 JSON：`File > Export > JSON...`，保存逐帧骨点；
 3. 审阅 JSON：`Motion Rig > Copy review JSON`，保存锁点、阈值和备注。
 
 推荐命名：
