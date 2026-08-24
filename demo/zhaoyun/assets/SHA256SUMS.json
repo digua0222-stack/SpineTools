@@ -1,0 +1,20 @@
+{
+  "algorithm": "sha256",
+  "files": [
+    {
+      "path": "银枪三连刺.mp4",
+      "bytes": 688452,
+      "sha256": "05b9be105dfe9253506c7346fd7c14233e4201b9fe6d1848ec374a4b61f06fa1"
+    },
+    {
+      "path": "tpos分离部件.png",
+      "bytes": 1042905,
+      "sha256": "2d0ab78f3c273c9c8c065269299b15cc9e14e301a03829066d241e276471f68e"
+    },
+    {
+      "path": "角色立绘拆分_1.png",
+      "bytes": 895224,
+      "sha256": "ce42587c0bc3863fe9db8fc2b856410273c89be740e8a3081b42ac42ba03521b"
+    }
+  ]
+}
