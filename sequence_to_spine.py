@@ -301,6 +301,96 @@ def verify_pixels(atlas_path: Path, frames: list[PackedFrame]) -> int:
     return exact
 
 
+def gif_frame(image: Image.Image, canvas_size: tuple[int, int]) -> Image.Image:
+    """Center one attachment on a shared canvas and reserve index 255 for transparency."""
+    canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+    x = (canvas.width - image.width) // 2
+    y = (canvas.height - image.height) // 2
+    canvas.alpha_composite(image, (x, y))
+
+    alpha = canvas.getchannel("A")
+    matte = Image.new("RGB", canvas.size, (0, 0, 0))
+    matte.paste(canvas.convert("RGB"), mask=alpha)
+    indexed = matte.quantize(
+        colors=255,
+        method=Image.Quantize.MEDIANCUT,
+        dither=Image.Dither.FLOYDSTEINBERG,
+    )
+    transparent = alpha.point(lambda value: 255 if value < 128 else 0)
+    indexed.paste(255, mask=transparent)
+    indexed.info["transparency"] = 255
+    indexed.info["disposal"] = 2
+    return indexed
+
+
+def gif_durations(frame_count: int, fps: float) -> list[int]:
+    """Distribute GIF centiseconds so total duration matches the Spine duration."""
+    return [
+        10 * (round((index + 1) * 100 / fps) - round(index * 100 / fps))
+        for index in range(frame_count)
+    ]
+
+
+def gif_name(output_name: str, group: AnimationGroup, group_count: int) -> str:
+    if group_count == 1:
+        return f"{output_name}.gif"
+    safe_animation = re.sub(r'[<>:"/\\|?*]+', "_", group.name).strip(". ") or group.group_id
+    return f"{output_name}__{safe_animation}.gif"
+
+
+def create_preview_gif(group: AnimationGroup, path: Path) -> dict[str, Any]:
+    requested_path = path
+    canvas_size = (
+        max(frame.width for frame in group.frames),
+        max(frame.height for frame in group.frames),
+    )
+    preview_frames = [gif_frame(frame, canvas_size) for frame in group.frames]
+    durations = gif_durations(len(preview_frames), group.fps)
+    temporary_path = path.with_name(f".{path.name}.tmp")
+    preview_frames[0].save(
+        temporary_path,
+        format="GIF",
+        save_all=True,
+        append_images=preview_frames[1:],
+        duration=durations,
+        loop=0,
+        disposal=2,
+        transparency=255,
+        optimize=False,
+    )
+    try:
+        temporary_path.replace(path)
+    except PermissionError:
+        counter = 1
+        while True:
+            suffix = "_updated" if counter == 1 else f"_updated_{counter}"
+            candidate = path.with_name(f"{path.stem}{suffix}{path.suffix}")
+            if not candidate.exists():
+                temporary_path.replace(candidate)
+                path = candidate
+                break
+            counter += 1
+
+    with Image.open(path) as opened:
+        frame_count = opened.n_frames
+        loop = opened.info.get("loop")
+        actual_durations = []
+        for index in range(opened.n_frames):
+            opened.seek(index)
+            actual_durations.append(int(opened.info.get("duration", 0)))
+    return {
+        "animation": group.name,
+        "path": str(path),
+        "requested_path": str(requested_path),
+        "used_fallback_path": path != requested_path,
+        "frames": frame_count,
+        "duration_ms": sum(actual_durations),
+        "expected_duration_ms": round(len(group.frames) * 1000 / group.fps),
+        "loop": loop,
+        "canvas": list(canvas_size),
+    }
+
+
 def export(
     *,
     groups: list[AnimationGroup],
@@ -310,6 +400,7 @@ def export(
     columns: int,
     padding: int,
     make_zip: bool,
+    make_gif: bool,
 ) -> dict[str, Any]:
     if spine_version not in SUPPORTED_VERSIONS:
         raise ValueError(f"spine_version must be one of {', '.join(SUPPORTED_VERSIONS)}")
@@ -339,8 +430,21 @@ def export(
             for path in (png_path, atlas_path, json_path):
                 archive.write(path, arcname=path.name)
 
+    gif_previews = []
+    gif_paths: list[Path] = []
+    if make_gif:
+        for group in groups:
+            gif_path = output_dir / gif_name(output_name, group, len(groups))
+            preview = create_preview_gif(group, gif_path)
+            gif_previews.append(preview)
+            gif_paths.append(Path(preview["path"]))
+
     exact_frames = verify_pixels(png_path, frames)
-    result_paths = [png_path, atlas_path, json_path] + ([zip_path] if make_zip else [])
+    result_paths = (
+        [png_path, atlas_path, json_path]
+        + ([zip_path] if make_zip else [])
+        + gif_paths
+    )
     report = {
         "status": "ok",
         "implementation": "independent local sequence-frame converter",
@@ -366,6 +470,7 @@ def export(
             "pixel_exact_frames": exact_frames,
             "total_frames": len(frames),
         },
+        "gif_previews": gif_previews,
         "files": {
             path.name: {"path": str(path), "bytes": path.stat().st_size, "sha256": sha256(path)}
             for path in result_paths
@@ -437,6 +542,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--columns", type=int, default=10)
     result.add_argument("--padding", type=int, default=2)
     result.add_argument("--no-zip", action="store_true")
+    result.add_argument("--no-gif", action="store_true", help="do not generate animated GIF previews")
     return result
 
 
@@ -450,6 +556,7 @@ def main() -> int:
             spine_version = str(config.get("spine_version", args.spine_version))
             columns = int(config.get("columns", args.columns))
             padding = int(config.get("padding", args.padding))
+            make_gif = bool(config.get("gif", not args.no_gif))
         else:
             if bool(args.event_name) != bool(args.event_frame):
                 raise ValueError("--event-name and --event-frame must be used together")
@@ -473,6 +580,7 @@ def main() -> int:
             spine_version = args.spine_version
             columns = args.columns
             padding = args.padding
+            make_gif = not args.no_gif
 
         report = export(
             groups=groups,
@@ -482,6 +590,7 @@ def main() -> int:
             columns=columns,
             padding=padding,
             make_zip=not args.no_zip,
+            make_gif=make_gif,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
