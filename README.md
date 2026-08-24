@@ -98,6 +98,20 @@ python -m unittest discover -s tests -v
 
 转换器会在每次导出后重新打开 atlas，并逐帧比较图集区域与输入图片；结果记录在 `.report.json` 的 `verification` 字段中。
 
+## 本地 See-through 分层实验
+
+仓库提供 Windows/RTX 环境的可重复部署脚本，用独立 Python 环境运行 See-through，避免污染
+现有 ComfyUI。脚本固定插件和模型 revision，包含安装、模型下载、诊断、启动、节点测试和
+完整推理 smoke test。
+
+```powershell
+pwsh -File .\scripts\seethrough\Install.ps1 -ComfyRoot H:\ComfyUI -DownloadModels
+```
+
+详细的硬件要求、低显存参数、维护方式和授权边界见
+[See-through 本地环境文档](docs/SEETHROUGH_LOCAL_SETUP.zh-CN.md)。See-through 只负责初始语义
+分层，不会自动产生 Spine 骨骼、pivot、IK 或可直接使用的动画。
+
 ## 授权边界
 
 本工具只实现序列帧打包和公开 Spine JSON/atlas 数据结构，不包含或替代 Spine Editor、Spine CLI、Spine Runtime。使用 Spine 商标、编辑器或运行库时，仍需遵守 Esoteric Software 的相关许可条款。输入图片和视频的版权也由使用者自行确认。
