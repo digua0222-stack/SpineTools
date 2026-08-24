@@ -32,6 +32,16 @@
       "license": "UNDECLARED_ON_MODEL_CARD"
     }
   ],
+  "auxiliaryHubFiles": [
+    {
+      "name": "juggernaut-scheduler",
+      "repository": "frankjoshua/juggernautXL_version6Rundiffusion",
+      "revision": "aadab4c7cb252b83a0e2d6f3386b8c837af23932",
+      "cacheRef": "main",
+      "filename": "scheduler/scheduler_config.json",
+      "license": "UNDECLARED_ON_MODEL_CARD"
+    }
+  ],
   "requiredNodes": [
     "SeeThrough_LoadLayerDiffModel",
     "SeeThrough_LoadDepthModel",
@@ -41,5 +51,6 @@
     "SeeThrough_SavePSD"
   ],
   "defaultPort": 8188,
+  "minimumFreeVramMiBForPilotInference": 7000,
   "minimumFreeVramMiBForInference": 9500
 }

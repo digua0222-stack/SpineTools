@@ -9,6 +9,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from huggingface_hub import try_to_load_from_cache
+
 
 def git_head(root: Path) -> str | None:
     try:
@@ -31,6 +33,7 @@ def main() -> int:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--comfy-root", type=Path, required=True)
     parser.add_argument("--plugin-root", type=Path, required=True)
+    parser.add_argument("--hub-cache", type=Path, required=True)
     parser.add_argument("--json-out", type=Path, required=True)
     parser.add_argument("--require-models", action="store_true")
     args = parser.parse_args()
@@ -80,6 +83,29 @@ def main() -> int:
             warnings.append(f"Model revision marker does not match the pin: {path}")
         models.append({**spec, "path": str(path), "ready": ready, "markerRevision": marker_revision})
 
+    auxiliary_hub_files = []
+    for spec in config.get("auxiliaryHubFiles", []):
+        cached = try_to_load_from_cache(
+            spec["repository"], spec["filename"], revision=spec["revision"], cache_dir=args.hub_cache
+        )
+        ready = isinstance(cached, str) and Path(cached).is_file()
+        cache_ref = spec.get("cacheRef")
+        ref_cached = (
+            try_to_load_from_cache(
+                spec["repository"], spec["filename"], revision=cache_ref, cache_dir=args.hub_cache
+            )
+            if cache_ref
+            else cached
+        )
+        ref_ready = isinstance(ref_cached, str) and Path(ref_cached).is_file()
+        if args.require_models and not ready:
+            errors.append(f"Auxiliary Hub file is missing: {spec['repository']}/{spec['filename']}")
+        if args.require_models and not ref_ready:
+            errors.append(f"Auxiliary Hub cache ref is missing: {spec['repository']}@{cache_ref}")
+        auxiliary_hub_files.append(
+            {**spec, "path": cached if ready else None, "ready": ready and ref_ready}
+        )
+
     plugin_head = git_head(args.plugin_root)
     if plugin_head != config["plugin"]["commit"]:
         errors.append(f"Plugin revision mismatch: expected {config['plugin']['commit']}, got {plugin_head}")
@@ -103,6 +129,7 @@ def main() -> int:
         "comfyUi": {"path": str(args.comfy_root), "commit": comfy_head},
         "plugin": {"path": str(args.plugin_root), "commit": plugin_head},
         "models": models,
+        "auxiliaryHubFiles": auxiliary_hub_files,
         "warnings": warnings,
         "errors": errors,
     }

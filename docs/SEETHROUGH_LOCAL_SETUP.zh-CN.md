@@ -41,6 +41,7 @@ pwsh -File .\scripts\seethrough\Install.ps1 `
 4. 安装现有 ComfyUI 依赖；
 5. 将 ComfyUI-See-through 固定在 `config.json` 指定的提交；
 6. 从官方 Hugging Face 仓库下载固定 revision 的 LayerDiff 和 Marigold；
+   同时缓存 LayerDiff 初始化所需的 Juggernaut scheduler 配置，保证离线加载；
 7. 写入运行环境和模型清单；
 8. 执行诊断。
 
@@ -99,6 +100,14 @@ pwsh -File .\scripts\seethrough\Test-Installation.ps1 `
 
 插件输出的图层 PNG 和 JSON 位于 `H:\ComfyUI\output`，测试报告位于
 `.venv-seethrough\seethrough-smoke.json`。
+
+### RTX 3060 低显存实测
+
+本机在保留 WeTERM、CodeBuddy 和 Codex 的情况下，以约 7.5 GB 空闲显存完成了
+`512 / depth 384 / 2 steps / group_offload` 全链路：LayerDiff 产生 24 个原始语义层，
+后处理输出 13 个带深度信息的 RGBA 部件；LayerDiff 峰值 PyTorch reserved 约 5.34 GB。
+脚本因此对不超过 `512 / 384` 的 pilot 使用 7 GB 门槛，其他分辨率仍使用 9.5 GB 安全门槛。
+2 steps 只能验证环境和链路，不能用于评价最终分层质量。
 
 ## 维护和升级
 

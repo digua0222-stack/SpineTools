@@ -11,10 +11,12 @@ $ComfyRoot = Resolve-ComfyRoot $ComfyRoot
 $VenvRoot = Resolve-SeeThroughVenvRoot -ComfyRoot $ComfyRoot -VenvRoot $VenvRoot
 $python = Get-VenvPython $VenvRoot
 $modelRoot = Join-Path (Join-Path $ComfyRoot "models") "SeeThrough"
+$hubCache = Join-Path $VenvRoot "hf-hub-cache"
 $arguments = @(
     (Join-Path $PSScriptRoot "download_models.py"),
     "--config", (Join-Path $PSScriptRoot "config.json"),
-    "--model-root", $modelRoot
+    "--model-root", $modelRoot,
+    "--hub-cache", $hubCache
 )
 if ($HfEndpoint) { $arguments += @("--endpoint", $HfEndpoint) }
 if ($Force) { $arguments += "--force" }

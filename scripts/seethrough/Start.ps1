@@ -14,11 +14,14 @@ $ComfyRoot = Resolve-ComfyRoot $ComfyRoot
 $VenvRoot = Resolve-SeeThroughVenvRoot -ComfyRoot $ComfyRoot -VenvRoot $VenvRoot
 $python = Get-VenvPython $VenvRoot
 $runtimeUserRoot = Join-Path $VenvRoot "user"
+$hubCache = Join-Path $VenvRoot "hf-hub-cache"
 New-Item -ItemType Directory -Force -Path $runtimeUserRoot | Out-Null
+New-Item -ItemType Directory -Force -Path $hubCache | Out-Null
 if ($Port -le 0) { $Port = [int]$config.defaultPort }
 if (Test-TcpPort -Port $Port) { throw "Port $Port is already in use." }
 
 $env:PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
+$env:HF_HUB_CACHE = $hubCache
 if ($Offline) {
     $env:HF_HUB_OFFLINE = "1"
     $env:TRANSFORMERS_OFFLINE = "1"

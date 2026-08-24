@@ -41,8 +41,12 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Model diagnosis failed" }
 
         $freeVram = Get-FreeVramMiB
-        if (-not $IgnoreVramGuard -and $null -ne $freeVram -and $freeVram -lt [int]$config.minimumFreeVramMiBForInference) {
-            throw "Only $freeVram MiB VRAM is free. Close Unity/MiniMax/GPU-heavy apps or pass -IgnoreVramGuard."
+        $requiredVram = [int]$config.minimumFreeVramMiBForInference
+        if ($Resolution -le 512 -and $DepthResolution -le 384) {
+            $requiredVram = [int]$config.minimumFreeVramMiBForPilotInference
+        }
+        if (-not $IgnoreVramGuard -and $null -ne $freeVram -and $freeVram -lt $requiredVram) {
+            throw "Only $freeVram MiB VRAM is free; this run requires $requiredVram MiB. Close GPU-heavy apps or pass -IgnoreVramGuard."
         }
         $report = Join-Path $VenvRoot "seethrough-smoke.json"
         Invoke-Checked $python @(

@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download
 
 
 def load_config(path: Path) -> dict:
@@ -32,12 +32,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Download pinned See-through models from Hugging Face.")
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--model-root", type=Path, required=True)
+    parser.add_argument("--hub-cache", type=Path, required=True)
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--endpoint", default="")
     args = parser.parse_args()
 
     config = load_config(args.config)
     args.model_root.mkdir(parents=True, exist_ok=True)
+    args.hub_cache.mkdir(parents=True, exist_ok=True)
     if args.endpoint:
         os.environ["HF_ENDPOINT"] = args.endpoint.rstrip("/")
 
@@ -46,6 +48,7 @@ def main() -> int:
         "downloadedAt": datetime.now(timezone.utc).isoformat(),
         "endpoint": os.environ.get("HF_ENDPOINT", "https://huggingface.co"),
         "models": [],
+        "auxiliaryHubFiles": [],
     }
 
     for model in config["models"]:
@@ -79,6 +82,27 @@ def main() -> int:
                 "bytes": directory_size(destination),
             }
         )
+
+    for auxiliary in config.get("auxiliaryHubFiles", []):
+        print(
+            f"[download] {auxiliary['repository']}/{auxiliary['filename']} @ {auxiliary['revision']}",
+            flush=True,
+        )
+        cached_path = hf_hub_download(
+            repo_id=auxiliary["repository"],
+            filename=auxiliary["filename"],
+            revision=auxiliary["revision"],
+            cache_dir=args.hub_cache,
+            force_download=args.force,
+        )
+        cache_ref = auxiliary.get("cacheRef")
+        if cache_ref:
+            repo_cache = args.hub_cache / f"models--{auxiliary['repository'].replace('/', '--')}"
+            ref_path = repo_cache / "refs" / cache_ref
+            ref_path.parent.mkdir(parents=True, exist_ok=True)
+            # huggingface_hub reads refs verbatim (without stripping whitespace).
+            ref_path.write_text(auxiliary["revision"], "utf-8")
+        report["auxiliaryHubFiles"].append({**auxiliary, "path": cached_path})
 
     report_path = args.model_root / "seethrough-models.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", "utf-8")

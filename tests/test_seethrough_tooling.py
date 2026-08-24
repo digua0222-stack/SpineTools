@@ -26,6 +26,9 @@ class SeeThroughToolingTest(unittest.TestCase):
         self.assertRegex(config["comfyUi"]["testedCommit"], r"^[0-9a-f]{40}$")
         for model in config["models"]:
             self.assertRegex(model["revision"], r"^[0-9a-f]{40}$")
+        for auxiliary in config["auxiliaryHubFiles"]:
+            self.assertRegex(auxiliary["revision"], r"^[0-9a-f]{40}$")
+            self.assertEqual(auxiliary["cacheRef"], "main")
         self.assertEqual(config["torchIndexUrl"], "https://download.pytorch.org/whl/cu126")
         self.assertEqual(
             config["torchPackages"],
@@ -35,6 +38,8 @@ class SeeThroughToolingTest(unittest.TestCase):
                 "torchaudio==2.11.0+cu126",
             ],
         )
+        self.assertEqual(config["minimumFreeVramMiBForPilotInference"], 7000)
+        self.assertEqual(config["minimumFreeVramMiBForInference"], 9500)
 
     def test_dependency_lock_exists(self) -> None:
         lock = (SCRIPT_ROOT / "requirements-win-cu126.lock.txt").read_text("utf-8")
@@ -68,6 +73,7 @@ class SeeThroughToolingTest(unittest.TestCase):
         start = (SCRIPT_ROOT / "Start.ps1").read_text("utf-8")
         self.assertIn("network_mode = offline", install)
         self.assertIn('"--user-directory", $runtimeUserRoot', start)
+        self.assertIn("HF_HUB_CACHE", start)
 
 
 if __name__ == "__main__":

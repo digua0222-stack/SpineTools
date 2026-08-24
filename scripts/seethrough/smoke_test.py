@@ -115,7 +115,14 @@ def main() -> int:
         response = request_json(f"{args.server.rstrip('/')}/history/{prompt_id}")
         if prompt_id in response:
             history = response[prompt_id]
-            if history.get("status", {}).get("completed"):
+            status = history.get("status", {})
+            messages = status.get("messages", [])
+            execution_error = next(
+                (message for message in messages if message and message[0] == "execution_error"), None
+            )
+            if execution_error:
+                raise RuntimeError(json.dumps(execution_error[1], ensure_ascii=False))
+            if status.get("completed"):
                 break
         time.sleep(5)
     if not history or not history.get("status", {}).get("completed"):
