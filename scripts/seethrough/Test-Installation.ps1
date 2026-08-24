@@ -8,6 +8,8 @@ param(
     [int]$Resolution = 1024,
     [int]$DepthResolution = 720,
     [int]$Steps = 4,
+    [long]$Seed = 42,
+    [ValidateSet("preserve", "opaque")][string]$AlphaMode = "preserve",
     [switch]$IgnoreVramGuard
 )
 
@@ -57,6 +59,8 @@ try {
             "--resolution", $Resolution,
             "--depth-resolution", $DepthResolution,
             "--steps", $Steps,
+            "--seed", $Seed,
+            "--alpha-mode", $AlphaMode,
             "--report", $report
         ) "Full See-through inference failed"
         Write-Host "Inference smoke report: $report"

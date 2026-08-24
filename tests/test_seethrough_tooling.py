@@ -50,6 +50,10 @@ class SeeThroughToolingTest(unittest.TestCase):
     def test_smoke_prompt_is_local_only_and_low_vram(self) -> None:
         module = load_smoke_module()
         prompt = module.build_prompt("input.png", "pilot", 1024, 720, 4)
+        self.assertEqual(prompt["8"]["class_type"], "JoinImageWithAlpha")
+        self.assertEqual(prompt["8"]["inputs"]["image"], ["1", 0])
+        self.assertEqual(prompt["8"]["inputs"]["alpha"], ["1", 1])
+        self.assertEqual(prompt["4"]["inputs"]["image"], ["8", 0])
         self.assertFalse(prompt["2"]["inputs"]["auto_download"])
         self.assertFalse(prompt["3"]["inputs"]["auto_download"])
         self.assertTrue(prompt["2"]["inputs"]["group_offload"])
@@ -57,6 +61,10 @@ class SeeThroughToolingTest(unittest.TestCase):
         self.assertEqual(prompt["4"]["inputs"]["resolution"], 1024)
         self.assertEqual(prompt["5"]["inputs"]["resolution_depth"], 720)
         self.assertFalse(prompt["6"]["inputs"]["use_lama"])
+
+        opaque = module.build_prompt("input.png", "baseline", 512, 384, 30, alpha_mode="opaque")
+        self.assertNotIn("8", opaque)
+        self.assertEqual(opaque["4"]["inputs"]["image"], ["1", 0])
 
     def test_maintenance_scripts_exist(self) -> None:
         for name in [

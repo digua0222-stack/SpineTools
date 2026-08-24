@@ -17,8 +17,16 @@ def request_json(url: str, payload: dict | None = None) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def build_prompt(image_name: str, prefix: str, resolution: int, depth_resolution: int, steps: int) -> dict:
-    return {
+def build_prompt(
+    image_name: str,
+    prefix: str,
+    resolution: int,
+    depth_resolution: int,
+    steps: int,
+    alpha_mode: str = "preserve",
+    seed: int = 42,
+) -> dict:
+    prompt = {
         "1": {"class_type": "LoadImage", "inputs": {"image": image_name}},
         "2": {
             "class_type": "SeeThrough_LoadLayerDiffModel",
@@ -45,9 +53,9 @@ def build_prompt(image_name: str, prefix: str, resolution: int, depth_resolution
         "4": {
             "class_type": "SeeThrough_GenerateLayers",
             "inputs": {
-                "image": ["1", 0],
+                "image": ["8", 0] if alpha_mode == "preserve" else ["1", 0],
                 "layerdiff_model": ["2", 0],
-                "seed": 42,
+                "seed": seed,
                 "resolution": resolution,
                 "num_inference_steps": steps,
             },
@@ -57,7 +65,7 @@ def build_prompt(image_name: str, prefix: str, resolution: int, depth_resolution
             "inputs": {
                 "layers": ["4", 0],
                 "depth_model": ["3", 0],
-                "seed": 42,
+                "seed": seed,
                 "resolution_depth": depth_resolution,
             },
         },
@@ -70,6 +78,12 @@ def build_prompt(image_name: str, prefix: str, resolution: int, depth_resolution
             "inputs": {"parts": ["6", 0], "filename_prefix": prefix},
         },
     }
+    if alpha_mode == "preserve":
+        prompt["8"] = {
+            "class_type": "JoinImageWithAlpha",
+            "inputs": {"image": ["1", 0], "alpha": ["1", 1]},
+        }
+    return prompt
 
 
 def main() -> int:
@@ -80,6 +94,8 @@ def main() -> int:
     parser.add_argument("--resolution", type=int, default=1024)
     parser.add_argument("--depth-resolution", type=int, default=720)
     parser.add_argument("--steps", type=int, default=4)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--alpha-mode", choices=["preserve", "opaque"], default="preserve")
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
@@ -95,6 +111,8 @@ def main() -> int:
         "SeeThrough_PostProcess",
         "SeeThrough_SavePSD",
     }
+    if args.alpha_mode == "preserve":
+        required.add("JoinImageWithAlpha")
     missing = sorted(required - set(object_info))
     if missing:
         raise RuntimeError(f"See-through nodes are missing: {missing}")
@@ -104,9 +122,17 @@ def main() -> int:
     input_target = args.comfy_root / "input" / input_name
     input_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.input, input_target)
-    prefix = f"seethrough_smoke_{run_id}"
+    prefix = f"seethrough_smoke_{args.alpha_mode}_{run_id}"
 
-    prompt = build_prompt(input_name, prefix, args.resolution, args.depth_resolution, args.steps)
+    prompt = build_prompt(
+        input_name,
+        prefix,
+        args.resolution,
+        args.depth_resolution,
+        args.steps,
+        alpha_mode=args.alpha_mode,
+        seed=args.seed,
+    )
     queued = request_json(f"{args.server.rstrip('/')}/prompt", {"prompt": prompt})
     prompt_id = queued["prompt_id"]
     deadline = time.monotonic() + args.timeout
@@ -149,6 +175,8 @@ def main() -> int:
         "resolution": args.resolution,
         "depthResolution": args.depth_resolution,
         "steps": args.steps,
+        "seed": args.seed,
+        "alphaMode": args.alpha_mode,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", "utf-8")

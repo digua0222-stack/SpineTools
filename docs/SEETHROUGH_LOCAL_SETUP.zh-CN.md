@@ -76,6 +76,9 @@ pwsh -File .\scripts\seethrough\Start.ps1 -ComfyRoot H:\ComfyUI -Offline
 
 ## 测试
 
+透明PNG必须通过 `JoinImageWithAlpha` 把 `LoadImage` 的MASK重新合成为RGBA；完整参数与对照方法见
+[Alpha 入参修复与验证](SEETHROUGH_ALPHA_INPUT.zh-CN.md)。测试脚本默认使用 `-AlphaMode preserve`。
+
 仅测试服务与节点注册，不加载大模型：
 
 ```powershell
