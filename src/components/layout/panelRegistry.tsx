@@ -21,6 +21,7 @@ import {
   Globe,
   GraduationCap,
   TableProperties,
+  Activity,
 } from "lucide-react";
 
 import { VideosPanel } from "../panels/VideosPanel";
@@ -35,12 +36,14 @@ import { InferencePanel } from "../panels/InferencePanel";
 import { ConnectPanel } from "../panels/ConnectPanel";
 import { FramesPanel } from "../panels/FramesPanel";
 import { TrainingPanel } from "../panels/TrainingPanel";
+import { MotionRigPanel } from "../panels/MotionRigPanel";
 
 /** Panel definitions with icons. Render order comes from the store's panelOrder. */
 export const PANELS = [
   { id: "videos", label: "Videos", icon: Film, component: VideosPanel },
   { id: "skeleton", label: "Skeleton", icon: Bone, component: SkeletonPanel },
   { id: "instances", label: "Instances", icon: Users, component: InstancesPanel },
+  { id: "motion-rig", label: "Motion Rig", icon: Activity, component: MotionRigPanel },
   { id: "view", label: "View", icon: Eye, component: ViewPanel },
   { id: "suggestions", label: "Suggestions", icon: Lightbulb, component: SuggestionsPanel },
   { id: "frames", label: "Frames", icon: TableProperties, component: FramesPanel },

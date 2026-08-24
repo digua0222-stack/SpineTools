@@ -21,6 +21,7 @@ export const DEFAULT_PANEL_ORDER = [
   "videos",
   "skeleton",
   "instances",
+  "motion-rig",
   "view",
   "suggestions",
   "frames",
