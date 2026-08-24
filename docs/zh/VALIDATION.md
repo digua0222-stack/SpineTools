@@ -13,7 +13,6 @@
 | `assets/银枪三连刺.mp4` | H.264，768 × 768，24 fps，107 帧，4.458333 秒 | `05B9BE105DFE9253506C7346FD7C14233E4201B9FE6D1848EC374A4B61F06FA1` |
 | `assets/tpos分离部件.png` | PNG，1024 × 1024 | `2D0AB78F3C273C9C8C065269299B15CC9E14E301A03829066D241E276471F68E` |
 | `assets/角色立绘拆分_1.png` | PNG，1024 × 1024 | `CE42587C0BC3863FE9DB8FC2B856410273C89BE740E8A3081B42AC42BA03521B` |
-| `assets/contact_sheet.png` | 九宫格动作抽样 | `18E0E4F6A191FD27E4EE454548D3E5955B72E2B55858CFE940493663D46CA8F0` |
 
 任何固定输入哈希变化都应视为一组新基线，并重新运行全部验证。
 
@@ -58,14 +57,29 @@ python -m unittest scripts.tests.test_zhaoyun_demo -v
 
 ### 2.3 Web 应用测试
 
+推荐的 Bun 路径：
+
 ```powershell
 bun install --frozen-lockfile
 bun run build
-bun run test
-bun run test:e2e
+bun test tests/unit/motionRigReview.test.ts tests/unit/zhaoyunDemo.test.ts --isolate
+bunx playwright install chromium
+bun run test:e2e -- tests/e2e/motionRigDemo.spec.ts
 ```
 
-建议将 Motion Rig 的单元测试至少覆盖：告警分类、阈值边界、骨长容差、持枪距离、锁点状态序列化和 review JSON 导出。
+没有 Bun 的 Windows 环境可使用：
+
+```powershell
+npm install
+npm run build
+npx bun test tests/unit/motionRigReview.test.ts tests/unit/zhaoyunDemo.test.ts --isolate
+npx playwright install chromium
+npm run test:e2e -- tests/e2e/motionRigDemo.spec.ts
+```
+
+去掉最后一条命令中的测试文件参数即可运行完整 Playwright 套件。Motion Rig 的单元测试应覆盖告警分类、阈值边界、骨长容差、持枪距离、锁点状态序列化和 review JSON 导出。
+
+赵云定向 E2E 包含两条路径：欢迎页一键 Demo，以及在一次多选中导入 Motion Rig JSON + 本地视频 + 可选 T-Pose。后者还应验证无参照图的通用项目不会错误显示赵云 T-Pose。
 
 ## 3. 浏览器人工验收
 
@@ -144,6 +158,8 @@ MVP 可判定通过，当且仅当：
 - 已知缺陷不会被描述为“已经自动解决”。
 
 若尚未实现自动局部重跟踪、Spine 骨骼求解或 T-Pose 绑定，不影响“人工纠偏编辑器 MVP”通过，但必须在验收报告中明确标为后续工作。
+
+当前构建的实测状态和未完成项见 [VALIDATION_REPORT.md](VALIDATION_REPORT.md)。
 
 ## 7. 失败判定与记录模板
 

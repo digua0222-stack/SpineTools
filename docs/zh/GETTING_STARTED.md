@@ -33,6 +33,14 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+Windows 上没有 Bun 时，也已验证可用 npm 启动浏览器版：
+
+```powershell
+Set-Location H:\spine_research\MotionRigLab
+npm install
+npm run dev
+```
+
 浏览器打开终端显示的地址，默认是 `http://localhost:5173`。
 
 生产构建与本地预览：
@@ -42,6 +50,8 @@ bun run build
 bun run preview
 ```
 
+npm 路径对应为 `npm run build` 和 `npm run preview`。
+
 桌面壳不是本次 MVP 的必需条件。`bun run tauri:dev` 还需要 Rust 1.95+ 和 Tauri 系统依赖；只做赵云 Demo 验证时优先使用浏览器版。
 
 ## 3. 生成赵云 Demo 数据
@@ -50,8 +60,7 @@ Demo 源文件位于 `demo/zhaoyun/assets/`：
 
 - `银枪三连刺.mp4`：768 × 768、24 fps、107 帧；
 - `tpos分离部件.png`：1024 × 1024，拆开的基础部件；
-- `角色立绘拆分_1.png`：1024 × 1024，角色立绘和部分拆分素材；
-- `contact_sheet.png`：动作接触表，仅供快速检查。
+- `角色立绘拆分_1.png`：1024 × 1024，角色立绘和部分拆分素材。
 
 在仓库根目录运行：
 
@@ -71,12 +80,27 @@ python scripts/build_zhaoyun_demo.py
 
 ## 4. 打开项目
 
+### 4.1 打开内置赵云 Demo
+
 1. 启动浏览器版编辑器。
 2. 在欢迎页点击 `Open Zhao Yun Motion Rig Demo`。
 3. 等待视频、107 帧预标注和 18 点骨架载入；应用会自动打开右侧 `Motion Rig` 面板。
-4. 在 `View` 中打开节点名和骨骼边，确认点名、前后肢和枪尖方向与画面一致。
+4. 展开 `Reference / T-Pose`，确认 1024 × 1024 参照图可见，并核对 `Coordinate space: image pixels (origin: top-left)`。
+5. 在 `View` 中打开节点名和骨骼边，确认点名、前后肢和枪尖方向与画面一致。
 
 一键入口读取 `public/demo/zhaoyun/`，因此修改生成器或输入后要重新运行 Demo 命令。不要把 T-Pose PNG 当作视频帧导入；它是后续绑定参照，而不是动作源。
+
+### 4.2 导入自己的 Motion Rig 文件
+
+欢迎页的 `Import Motion Rig Files` 是通用入口。在同一个多选文件框中一次选择：
+
+- 一个符合 `motion-rig/v1` 的 `.json`；
+- 与 JSON 帧数、尺寸和坐标相匹配的视频，支持 MP4、MOV、WebM 或 MKV；
+- 可选的一张 PNG/JPEG T-Pose 或部件参照图。
+
+JSON 和视频缺一不可，图片可不选；不要分三次点击导入。入口按扩展名/MIME 类型识别所选文件，每类使用找到的第一个文件。若同类选了多个文件，先精简选择，避免导入到错误素材。没有选择参照图时，`Reference / T-Pose` 会明确显示未附加图片，骨点审阅仍可继续；通用项目不会回退显示赵云 T-Pose。
+
+导入成功后，应用以 JSON 文件名创建可编辑项目、自动打开 `Motion Rig` 面板，并把所选参照图仅关联到当前视频。外部 AI/跟踪器只要输出相同交换 schema，即可复用这条人工纠偏路径。
 
 ## 5. 推荐的人工纠偏顺序
 
@@ -86,11 +110,13 @@ python scripts/build_zhaoyun_demo.py
 
 - `Confidence threshold` 控制低置信告警阈值；
 - `Bone length tolerance` 控制骨长跳变容差；
-- `Weapon constraints` 用于检查手腕到武器点的距离关系；
+- `Weapon constraints` 显示持枪约束所需锚点是否齐全；
 - `Review queue` 汇总当前阈值下的可疑帧；
 - `Next issue` 跳到下一个问题。
 
 置信度只是排序信号，不应解释为“正确概率”。建议先处理缺点和明显骨长突变，再处理低置信点，最后观察动作播放的连续性。
+
+当前赵云 18 点骨架只有 `weapon_tip`，缺少武器尾点和前/后握点，所以 `Weapon constraints` 正确显示 `Needs anchors`。在补齐 `weapon_tail`、`front_grip`、`rear_grip`（或受支持的中英文别名）以前，该项不能证明双手始终贴合枪身。
 
 ### 5.2 拖动骨点
 
@@ -114,7 +140,7 @@ python scripts/build_zhaoyun_demo.py
 
 在 `Review notes` 写下不能仅靠坐标表达的信息，例如“第 46 帧前手被枪柄遮挡，按前后帧插值”。使用 `Copy review JSON` 复制锁定和审阅状态，并保存为独立的 `.review.json` 文件。
 
-注意：标签点位通过应用的项目保存流程持久化；Motion Rig 的锁定/备注是否嵌入项目取决于当前构建。验收时应同时保存项目文件、标签 JSON 和 review JSON，不要只依赖浏览器会话。
+当前构建把锁点和备注自动保存在浏览器 `localStorage`，键名为 `motion-rig-review:v1:<videoId>`；它们不会嵌入 `.slp`。`Copy review JSON` 输出的 schema 是 `motion-rig-review@1`，包含坐标系、骨架、阈值、推断角色、锁点和备注。清除站点数据、切换浏览器/地址或改变 `videoId` 都可能让原会话状态不可见，因此必须把剪贴板内容另存为 `.review.json`。标签点位仍通过应用的项目保存流程持久化。
 
 ## 6. 保存与导出
 
@@ -122,7 +148,7 @@ python scripts/build_zhaoyun_demo.py
 
 1. 项目文件：`File > Save As`，保留可继续编辑的标签项目；
 2. 标签 JSON：`File > Export > JSON...`，保存逐帧骨点；
-3. 审阅 JSON：`Motion Rig > Copy review JSON`，保存锁点、阈值和备注。
+3. 审阅 JSON：`Motion Rig > Copy review JSON`，把剪贴板内容保存为文件，保留锁点、阈值和备注。
 
 推荐命名：
 
@@ -197,4 +223,4 @@ Motion Rig Lab 基于 BSD-3-Clause 的 SLEAP App 修改，不包含 Spine Editor
 - 下游求解器版本与导出参数；
 - 许可与素材来源记录。
 
-赵云 Demo 的具体测试步骤和已知限制见 [VALIDATION.md](VALIDATION.md)。
+赵云 Demo 的测试步骤见 [VALIDATION.md](VALIDATION.md)，本次实测结果见 [VALIDATION_REPORT.md](VALIDATION_REPORT.md)。
