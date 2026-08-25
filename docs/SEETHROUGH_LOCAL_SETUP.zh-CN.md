@@ -99,10 +99,18 @@ pwsh -File .\scripts\seethrough\Test-Installation.ps1 `
 
 完整测试默认启用两套模型的 `group_offload`、关闭在线下载和 LaMa 附加下载。它会拒绝在
 空闲显存低于 `config.json` 阈值时启动，避免和 Unity、MiniMax 等程序争抢显存。4 steps 只用于
-证明链路可运行；制作测试应提高到 30 steps。
+证明链路可运行；制作测试应提高到 30 steps，最终质量对照可提高到 50 steps。
 
 插件输出的图层 PNG 和 JSON 位于 `H:\ComfyUI\output`，测试报告位于
 `.venv-seethrough\seethrough-smoke.json`。
+
+将图层 JSON 和同目录的 RGBA 部件生成一张人工复核总览：
+
+```powershell
+pwsh -File .\scripts\seethrough\New-LayerContactSheet.ps1 `
+  -LayerJson H:\ComfyUI\output\<prefix>_layers.json `
+  -OutputPath H:\spine_research\outputs\contact_sheet.png
+```
 
 ### RTX 3060 低显存实测
 
@@ -111,6 +119,11 @@ pwsh -File .\scripts\seethrough\Test-Installation.ps1 `
 后处理输出 13 个带深度信息的 RGBA 部件；LayerDiff 峰值 PyTorch reserved 约 5.34 GB。
 脚本因此对不超过 `512 / 384` 的 pilot 使用 7 GB 门槛，其他分辨率仍使用 9.5 GB 安全门槛。
 2 steps 只能验证环境和链路，不能用于评价最终分层质量。
+
+本机还完成了 `1024 / depth 720 / 50 steps / seed 42 / Alpha preserve` 全链路，输出 19 个
+有效 RGBA 部件。整卡显存峰值约 10.3 GB，LayerDiff 日志中的 PyTorch reserved 峰值为
+6.50 GB，运行约 19 分钟，最高观测温度 82°C。该档位能改善披风、胸甲和长枪等大件，
+但不能解决头盔被固定标签误分为 `front hair / headwear / back hair` 的语义领域错配。
 
 ## 维护和升级
 
