@@ -112,6 +112,16 @@ pwsh -File .\scripts\seethrough\New-LayerContactSheet.ps1 `
   -OutputPath H:\spine_research\outputs\contact_sheet.png
 ```
 
+按图层深度顺序重组，并输出原图对照、50%叠加、RGBA差异热图及量化指标：
+
+```powershell
+H:\ComfyUI\.venv-seethrough\Scripts\python.exe `
+  .\scripts\seethrough\reconstruct_layers.py `
+  --layer-json H:\ComfyUI\output\<prefix>_layers.json `
+  --source G:\path\video_frame_053.png `
+  --output-dir H:\spine_research\outputs\reconstruction
+```
+
 ### RTX 3060 低显存实测
 
 本机在保留 WeTERM、CodeBuddy 和 Codex 的情况下，以约 7.5 GB 空闲显存完成了
