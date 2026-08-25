@@ -118,6 +118,136 @@ macOS的 `--group-offload auto` 会自动解析为关闭，因为插件的group-
 | `-KeepServer` | `--keep-server` | 关 | 生成结束后保留本次启动的ComfyUI |
 | `-SkipDiagnose` | `--skip-diagnose` | 关 | 跳过模型和版本诊断，不建议生产使用 |
 
+## 质量参数详解
+
+参数不能同时等价为“画质”。边界清晰度、部件完整性、RGBA部件的像素尺寸和前后遮挡顺序，分别由不同阶段决定。
+
+| 参数 | 边界清晰度 | 拆图漏件 | RGBA部件分辨率 | 深度/层级 | 质量优先建议 |
+|---|---:|---:|---:|---:|---|
+| `Resolution` | 明显影响 | 小幅但不稳定 | 直接影响 | 间接影响 | RTX 3060使用1024；显存允许再试1280 |
+| `DepthResolution` | 基本不影响 | 基本不影响 | 不影响 | 直接影响 | 720；层级有问题时尝试`-1`跟随Resolution |
+| `Steps` | 30前较明显，之后递减 | 不保证 | 不影响 | 不影响 | 初筛20–30，终稿40–50 |
+| `Seed` | 结果可能变化 | 明显影响单次结果 | 不影响 | 结果可能变化 | 同参数跑4–8个Seed并择优 |
+| `AlphaMode` | 透明原图时关键 | 可保留细小轮廓 | 不影响 | 不影响 | 有Alpha的PNG固定使用`preserve` |
+| `QuantMode` | `nf4`可能有轻微精度损失 | 轻微/不稳定 | 不影响 | 不影响 | 质量优先`none`；显存不足才试`nf4` |
+| `GroupOffload` | 不影响 | 不影响 | 不影响 | 不影响 | CUDA使用`auto/on`，它只改变显存和速度 |
+| `TblrSplit` | 不改善原始蒙版 | 只拆指定对称部件 | 不影响 | 可增加独立部件 | Spine绑定通常保持开启 |
+| `UseLama` | 只可能改善特定hair补全 | 不改善通用漏件 | 不影响 | 不影响 | 当前v3前/后发标签下收益有限，默认关闭 |
+
+### Resolution
+
+`Resolution`是LayerDiff实际使用的正方形画布边长，保存的JSON画布也是该尺寸；裁切后的RGBA部件保留这套坐标尺度。因此它是当前参数中唯一能够直接提高部件像素尺寸的参数。
+
+- `512`：只适合链路验证或快速Seed排雷。
+- `768`：Seed初筛，成本和可辨识度较平衡。
+- `1024`：RTX 3060 12GB已验证的终稿档。
+- `1280`：显存挑战档，应先关闭占用GPU的软件并只跑一个Seed验证。
+- `2048`：接口允许的理论上限，不代表本机可运行，也不会为低分辨率原画凭空恢复真实细节。
+
+输入会先等比缩放并居中补成正方形。长枪、翅膀等横向物体会让人物主体在画布中占比变小。若目标是人物骨骼部件，先将人物与长武器分别紧裁、分别切片，通常比把Resolution从1024强行提高到2048更有效。
+
+### DepthResolution
+
+该参数只控制Marigold深度推理，主要影响部件的前后排序和遮挡聚类，不会让RGBA边缘更清晰，也不会提高RGBA文件尺寸。
+
+- `720`是当前机器的实用默认值。
+- `-1`表示与`Resolution`相同，适合前后层级明显错误时进行最终验证。
+- 如果主要问题是鞋子、披风或头盔没有被识别，提高DepthResolution通常无效。
+
+### Steps
+
+Steps是LayerDiff去噪步数，不是清晰度倍数。30步以前通常有实际收益，40–50适合终稿；继续提高到60–100会显著增加耗时，但无法保证边界更准或部件更完整，也可能让重绘内容发生漂移。
+
+### Seed
+
+Seed是随机生成轨迹的编号，不存在“越大越好”。相同输入、模型、Resolution、Steps和Seed用于复现同一组条件；更换Seed相当于重新采样一次拆分方案。它是解决单次漏件成本最低的手段之一，但不能突破模型固定语义标签。
+
+改变Resolution或Steps后，即使保持同一Seed，采样轨迹和结果也可能改变。因此初筛结果只能用于缩小候选范围，终稿参数下仍需再次确认。
+
+### AlphaMode和边界限制
+
+透明PNG使用`preserve`时，原图Alpha会进入工作流；使用`opaque`会把整张矩形画布视为不透明输入。`preserve`只能保留已有Alpha，不能自动把JPEG或黑底图变成透明图。
+
+当前命令尚未暴露Alpha阈值、碎片面积、孔洞闭合、边缘羽化和像素风最近邻放大等后处理参数。Resolution可以提高边缘采样密度，但不能把软边自动变为像素硬边；这类效果应在切片后通过蒙版/图层编辑器处理。
+
+### 不能靠参数解决的问题
+
+当前v3模型使用固定标签，例如`topwear`、`legwear`、`footwear`、`headwear`、`front hair`、`back hair`和`objects`。肩甲、膝甲、披风等不会因为Steps提高就自动获得新的专用语义标签。下列情况应使用多Seed挑选、分对象输入或人工蒙版纠偏：
+
+- 头盔被分到hair。
+- 鞋子或被遮挡的肢体完全漏失。
+- 披风、胸甲和裙甲被合并到同一层。
+- 模型补画出的遮挡区域与原角色设计不一致。
+
+## 多Seed初筛
+
+是的，多Seed初筛就是固定除Seed外的所有条件，用不同Seed独立运行多轮，然后比较产物。建议先跑4个Seed；若没有可用候选，再扩展到8个，而不是一开始用1024/50跑满全部Seed。
+
+推荐两阶段流程：
+
+1. 初筛：`768 / depth 512 / 30 steps`，Seed使用`7、23、42、88`。
+2. 扩展：前4个都不合格时，再增加`137、2026、3407、8192`。
+3. 每个Seed使用独立输出目录，不要互相覆盖。
+4. 检查必需部件是否存在、语义是否正确、边缘是否残缺，并查看重组图。
+5. 选出前2–3个Seed，以`1024 / depth 720 / 50 steps`分别复跑。
+6. 若终稿复跑发生退化，使用下一候选Seed；必要时组合不同Seed中质量最好的部件。
+
+Windows批量初筛：
+
+```powershell
+$inputImage = "D:\art\zhaoyun.png"
+$outputRoot = "D:\exports\zhaoyun-seed-screen"
+$seeds = @(7, 23, 42, 88)
+
+foreach ($seed in $seeds) {
+  pwsh -NoProfile -File .\scripts\seethrough\Generate.ps1 `
+    -ComfyRoot D:\AI\ComfyUI `
+    -InputImage $inputImage `
+    -OutputDirectory (Join-Path $outputRoot "seed-$seed") `
+    -OutputPrefix "zhaoyun_seed_$seed" `
+    -Resolution 768 `
+    -DepthResolution 512 `
+    -Steps 30 `
+    -Seed $seed `
+    -AlphaMode preserve `
+    -QuantMode none `
+    -GroupOffload auto `
+    -TblrSplit $true
+}
+```
+
+macOS批量初筛：
+
+```bash
+input_image="$HOME/art/zhaoyun.png"
+output_root="$HOME/exports/zhaoyun-seed-screen"
+
+for seed in 7 23 42 88; do
+  ./scripts/seethrough/generate.sh \
+    --comfy-root "$HOME/ComfyUI" \
+    --input "$input_image" \
+    --output-dir "$output_root/seed-$seed" \
+    --output-prefix "zhaoyun_seed_$seed" \
+    --resolution 768 \
+    --depth-resolution 512 \
+    --steps 30 \
+    --seed "$seed" \
+    --alpha-mode preserve \
+    --quant-mode none \
+    --group-offload auto \
+    --tblr-split
+done
+```
+
+初筛不是简单选择“部件数量最多”的结果。更多部件也可能代表误拆或碎片噪声。优先按以下顺序判断：
+
+1. Spine必需部件是否齐全，例如躯干、左右手臂/手、左右腿/脚、头脸、头饰和武器。
+2. 语义是否正确，例如头盔没有混入头发、长枪没有混入手臂。
+3. 拼回整体后是否漏轮廓、错层或出现明显色差。
+4. 边缘和被遮挡区域是否足以支持旋转，不要求单张静态重组图完全无差异。
+
+每轮生成后，可以用本文“诊断和复核”中的部件总览图与重组脚本复核。`Alpha IoU/Recall`可用于发现轮廓漏失，但它只能作为辅助指标，不能判断图层语义是否正确。
+
 ## 输出内容
 
 指定输出目录中包含：
@@ -142,6 +272,8 @@ ComfyUI自己的 `output` 仍保留原始生成文件；指定输出目录是本
 
 RTX 3060 12GB的 `1024/720/50` 实测整卡峰值约10.3GB；高于1024应先降低其他GPU占用或验证NF4。
 增加Steps或Resolution无法修复固定语义标签把头盔识别为hair的问题，遇到此类错误应进入蒙版/图层编辑器纠偏。
+
+本项目对同一赵云输入的实测中，`512/30`保留了`footwear`，而`1024/720/50`反而漏掉`footwear`。高分辨率改善了铠甲、披风、长枪和颜色细节，但不保证语义分片更完整。这也是终稿阶段仍需保留多个Seed候选的原因。
 
 ## 诊断和复核
 
