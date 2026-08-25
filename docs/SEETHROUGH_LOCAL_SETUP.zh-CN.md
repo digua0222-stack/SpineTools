@@ -1,5 +1,9 @@
 # See-through 本地分层环境
 
+跨平台的一键安装、Windows/macOS生成入口、全部切片参数和指定输出说明见
+[See-through 本地切片完整工具链](SEETHROUGH_TOOLCHAIN.zh-CN.md)。本文保留底层环境、版本锁定、
+Windows/RTX显存实测和维护细节。
+
 这套脚本在现有 ComfyUI 旁边创建独立的 GPU Python 环境，用于本地运行
 [See-through](https://github.com/shitagaki-lab/see-through) 的
 [ComfyUI 封装](https://github.com/jtydhr88/ComfyUI-See-through)。它不会覆盖 ComfyUI 原有

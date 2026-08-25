@@ -100,15 +100,22 @@ python -m unittest discover -s tests -v
 
 ## 本地 See-through 分层实验
 
-仓库提供 Windows/RTX 环境的可重复部署脚本，用独立 Python 环境运行 See-through，避免污染
-现有 ComfyUI。脚本固定插件和模型 revision，包含安装、模型下载、诊断、启动、节点测试和
-完整推理 smoke test。
+仓库提供 Windows/NVIDIA CUDA 和 macOS/Apple MPS 的本地部署入口，用独立 Python 环境运行
+See-through，避免污染现有 ComfyUI。安装器会检测并复用已有 ComfyUI，缺失时自动安装；生成
+脚本支持原画、输出目录/ZIP、Resolution、DepthResolution、Steps、Seed、Alpha和高级开关。
 
 ```powershell
 pwsh -File .\scripts\seethrough\Install.ps1 -ComfyRoot H:\ComfyUI -DownloadModels
 ```
 
-详细的硬件要求、低显存参数、维护方式和授权边界见
+macOS：
+
+```bash
+./scripts/seethrough/install.sh --comfy-root "$HOME/ComfyUI" --download-models
+```
+
+完整安装、切片参数和指定输出说明见
+[See-through 完整工具链](docs/SEETHROUGH_TOOLCHAIN.zh-CN.md)；底层环境维护细节见
 [See-through 本地环境文档](docs/SEETHROUGH_LOCAL_SETUP.zh-CN.md)。See-through 只负责初始语义
 分层，不会自动产生 Spine 骨骼、pivot、IK 或可直接使用的动画。
 

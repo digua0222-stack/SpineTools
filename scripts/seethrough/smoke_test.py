@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import time
 import urllib.error
@@ -25,6 +26,10 @@ def build_prompt(
     steps: int,
     alpha_mode: str = "preserve",
     seed: int = 42,
+    quant_mode: str = "none",
+    group_offload: bool = True,
+    tblr_split: bool = True,
+    use_lama: bool = False,
 ) -> dict:
     prompt = {
         "1": {"class_type": "LoadImage", "inputs": {"image": image_name}},
@@ -34,9 +39,9 @@ def build_prompt(
                 "model": "seethroughv0.0.2_layerdiff3d",
                 "vae_ckpt": "",
                 "unet_ckpt": "",
-                "quant_mode": "none",
+                "quant_mode": quant_mode,
                 "cache_tag_embeds": True,
-                "group_offload": True,
+                "group_offload": group_offload,
                 "auto_download": False,
             },
         },
@@ -44,9 +49,9 @@ def build_prompt(
             "class_type": "SeeThrough_LoadDepthModel",
             "inputs": {
                 "model": "seethroughv0.0.1_marigold",
-                "quant_mode": "none",
+                "quant_mode": quant_mode,
                 "cache_tag_embeds": True,
-                "group_offload": True,
+                "group_offload": group_offload,
                 "auto_download": False,
             },
         },
@@ -71,7 +76,7 @@ def build_prompt(
         },
         "6": {
             "class_type": "SeeThrough_PostProcess",
-            "inputs": {"layers_depth": ["5", 0], "tblr_split": True, "use_lama": False},
+            "inputs": {"layers_depth": ["5", 0], "tblr_split": tblr_split, "use_lama": use_lama},
         },
         "7": {
             "class_type": "SeeThrough_SavePSD",
@@ -86,6 +91,38 @@ def build_prompt(
     return prompt
 
 
+def safe_prefix(value: str) -> str:
+    normalized = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", value.strip())
+    normalized = re.sub(r"\s+", "_", normalized).strip("._-")
+    if not normalized:
+        raise ValueError("Output prefix must contain at least one letter or number")
+    return normalized[:80]
+
+
+def copy_outputs(info_path: Path, info: dict, output_dir: Path, source_input: Path, prefix: str) -> tuple[Path, list[str]]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    source_root = info_path.parent
+    filenames = [info_path.name]
+    for layer in info["layers"]:
+        filenames.append(layer["filename"])
+        if layer.get("depth_filename"):
+            filenames.append(layer["depth_filename"])
+
+    copied: list[str] = []
+    for filename in filenames:
+        source = source_root / filename
+        destination = output_dir / filename
+        if source.resolve() != destination.resolve():
+            shutil.copy2(source, destination)
+        copied.append(str(destination))
+
+    source_destination = output_dir / f"{prefix}_source{source_input.suffix.lower()}"
+    if source_input.resolve() != source_destination.resolve():
+        shutil.copy2(source_input, source_destination)
+    copied.append(str(source_destination))
+    return output_dir / info_path.name, copied
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run one local-only See-through inference through ComfyUI.")
     parser.add_argument("--server", default="http://127.0.0.1:8188")
@@ -96,12 +133,26 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--alpha-mode", choices=["preserve", "opaque"], default="preserve")
+    parser.add_argument("--quant-mode", choices=["none", "nf4"], default="none")
+    parser.add_argument("--group-offload", choices=["on", "off"], default="on")
+    parser.add_argument("--tblr-split", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--use-lama", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--output-prefix", default="seethrough")
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
 
     if not args.input.is_file():
         raise FileNotFoundError(args.input)
+    if not 512 <= args.resolution <= 2048:
+        raise ValueError("resolution must be between 512 and 2048")
+    if args.depth_resolution != -1 and not 64 <= args.depth_resolution <= 2048:
+        raise ValueError("depth resolution must be -1 or between 64 and 2048")
+    if not 1 <= args.steps <= 100:
+        raise ValueError("steps must be between 1 and 100")
+    if not 0 <= args.seed <= 2**32 - 1:
+        raise ValueError("seed must be between 0 and 4294967295")
     object_info = request_json(f"{args.server.rstrip('/')}/object_info")
     required = {
         "SeeThrough_LoadLayerDiffModel",
@@ -122,7 +173,7 @@ def main() -> int:
     input_target = args.comfy_root / "input" / input_name
     input_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.input, input_target)
-    prefix = f"seethrough_smoke_{args.alpha_mode}_{run_id}"
+    prefix = f"{safe_prefix(args.output_prefix)}_{args.alpha_mode}_{run_id}"
 
     prompt = build_prompt(
         input_name,
@@ -132,6 +183,10 @@ def main() -> int:
         args.steps,
         alpha_mode=args.alpha_mode,
         seed=args.seed,
+        quant_mode=args.quant_mode,
+        group_offload=args.group_offload == "on",
+        tblr_split=args.tblr_split,
+        use_lama=args.use_lama,
     )
     queued = request_json(f"{args.server.rstrip('/')}/prompt", {"prompt": prompt})
     prompt_id = queued["prompt_id"]
@@ -165,6 +220,16 @@ def main() -> int:
     if not info.get("layers"):
         raise RuntimeError(f"Layer metadata is empty: {info_path}")
 
+    copied_files: list[str] = []
+    if args.output_dir:
+        info_path, copied_files = copy_outputs(
+            info_path,
+            info,
+            args.output_dir.expanduser().resolve(),
+            args.input.resolve(),
+            prefix,
+        )
+
     result = {
         "ok": True,
         "promptId": prompt_id,
@@ -177,6 +242,13 @@ def main() -> int:
         "steps": args.steps,
         "seed": args.seed,
         "alphaMode": args.alpha_mode,
+        "quantMode": args.quant_mode,
+        "groupOffload": args.group_offload == "on",
+        "tblrSplit": args.tblr_split,
+        "useLama": args.use_lama,
+        "outputDirectory": str(args.output_dir.expanduser().resolve()) if args.output_dir else str(output_root),
+        "outputPrefix": prefix,
+        "files": copied_files,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", "utf-8")

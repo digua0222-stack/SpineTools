@@ -1,0 +1,11 @@
+# Direct dependencies verified structurally for the pinned See-through plugin.
+# bitsandbytes is intentionally omitted: quant_mode=none is used on Apple MPS.
+accelerate==1.14.0
+diffusers==0.40.0
+huggingface-hub==1.28.0
+matplotlib==3.11.1
+opencv-python==5.0.0.93
+peft==0.20.0
+psd-tools==1.18.0
+requests==2.34.2
+scikit-learn==1.9.0

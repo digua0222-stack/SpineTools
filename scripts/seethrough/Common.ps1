@@ -15,6 +15,7 @@ function Resolve-ComfyRoot {
     $candidates = @()
     if ($ComfyRoot) { $candidates += $ComfyRoot }
     if ($env:COMFYUI_ROOT) { $candidates += $env:COMFYUI_ROOT }
+    $candidates += (Join-Path $HOME "ComfyUI")
     $candidates += "H:\ComfyUI"
 
     foreach ($candidate in $candidates) {
@@ -38,7 +39,8 @@ function Resolve-SeeThroughVenvRoot {
 
 function Get-VenvPython {
     param([Parameter(Mandatory = $true)][string]$VenvRoot)
-    $python = Join-Path $VenvRoot "Scripts\python.exe"
+    $pythonRelative = if ([IO.Path]::DirectorySeparatorChar -eq '\') { "Scripts\python.exe" } else { "bin/python" }
+    $python = Join-Path $VenvRoot $pythonRelative
     if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
         throw "See-through Python environment is missing: $python"
     }

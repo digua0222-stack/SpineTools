@@ -7,6 +7,32 @@
     "torchvision==0.28.0+cu126",
     "torchaudio==2.11.0+cu126"
   ],
+  "platforms": {
+    "windows": {
+      "accelerator": "cuda",
+      "torchIndexUrl": "https://download.pytorch.org/whl/cu126",
+      "torchPackages": [
+        "torch==2.13.0+cu126",
+        "torchvision==0.28.0+cu126",
+        "torchaudio==2.11.0+cu126"
+      ],
+      "constraints": "requirements-win-cu126.lock.txt",
+      "pluginRequirements": null,
+      "groupOffloadDefault": true
+    },
+    "macos": {
+      "accelerator": "mps",
+      "torchIndexUrl": "https://pypi.org/simple",
+      "torchPackages": [
+        "torch==2.13.0",
+        "torchvision==0.28.0",
+        "torchaudio==2.11.0"
+      ],
+      "constraints": null,
+      "pluginRequirements": "requirements-macos.txt",
+      "groupOffloadDefault": false
+    }
+  },
   "comfyUi": {
     "repository": "https://github.com/comfyanonymous/ComfyUI.git",
     "testedCommit": "f350acdf213a1b3cbeab2059888265b21590ce9f"

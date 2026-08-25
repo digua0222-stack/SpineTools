@@ -46,14 +46,25 @@ def main() -> int:
         import torch
 
         cuda_available = torch.cuda.is_available()
-        gpu = torch.cuda.get_device_name(0) if cuda_available else None
+        mps_backend = getattr(torch.backends, "mps", None)
+        mps_available = bool(mps_backend and mps_backend.is_available())
+        accelerator = "cuda" if cuda_available else "mps" if mps_available else "cpu"
+        gpu = (
+            torch.cuda.get_device_name(0)
+            if cuda_available
+            else f"Apple {platform.machine()} MPS"
+            if mps_available
+            else None
+        )
         vram = round(torch.cuda.get_device_properties(0).total_memory / 1024**2) if cuda_available else None
         torch_version = torch.__version__
         torch_cuda = torch.version.cuda
-        if not cuda_available:
-            errors.append("CUDA PyTorch is not available")
+        if accelerator == "cpu":
+            errors.append("Neither CUDA nor Apple MPS acceleration is available")
     except Exception as exc:  # pragma: no cover - diagnostic boundary
         cuda_available = False
+        mps_available = False
+        accelerator = "unavailable"
         gpu = None
         vram = None
         torch_version = None
@@ -120,7 +131,13 @@ def main() -> int:
         "checkedAt": datetime.now(timezone.utc).isoformat(),
         "ok": not errors,
         "python": {"version": platform.python_version(), "executable": sys.executable},
-        "torch": {"version": torch_version, "cudaVersion": torch_cuda, "cudaAvailable": cuda_available},
+        "torch": {
+            "version": torch_version,
+            "cudaVersion": torch_cuda,
+            "cudaAvailable": cuda_available,
+            "mpsAvailable": mps_available,
+            "accelerator": accelerator,
+        },
         "gpu": {"name": gpu, "vramMiB": vram},
         "packages": {
             name: package_version(name)
