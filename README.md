@@ -136,6 +136,18 @@ macOS：
 `-Preset quality`/`--preset quality`生成终稿候选。所有分辨率、深度分辨率、Steps、Seed、Alpha、
 量化和显存卸载参数均可在测试入口覆盖。
 
+运行前查看本机GPU、显存占用和推荐示例参数：
+
+```powershell
+pwsh -NoProfile -File .\scripts\seethrough\Get-HardwareRecommendation.ps1
+```
+
+macOS：
+
+```bash
+./scripts/seethrough/recommend-hardware.sh
+```
+
 ## 授权边界
 
 本工具只实现序列帧打包和公开 Spine JSON/atlas 数据结构，不包含或替代 Spine Editor、Spine CLI、Spine Runtime。使用 Spine 商标、编辑器或运行库时，仍需遵守 Esoteric Software 的相关许可条款。输入图片和视频的版权也由使用者自行确认。

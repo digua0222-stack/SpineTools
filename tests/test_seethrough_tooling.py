@@ -25,6 +25,15 @@ def load_smoke_module():
     return module
 
 
+def load_hardware_module():
+    path = SCRIPT_ROOT / "hardware_recommendation.py"
+    spec = importlib.util.spec_from_file_location("seethrough_hardware_recommendation", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class SeeThroughToolingTest(unittest.TestCase):
     def test_runtime_pins_are_immutable_revisions(self) -> None:
         config = json.loads((SCRIPT_ROOT / "config.json").read_text("utf-8"))
@@ -108,6 +117,9 @@ class SeeThroughToolingTest(unittest.TestCase):
             "generate.sh",
             "Test-ZhaoYun.ps1",
             "test-zhaoyun.sh",
+            "hardware_recommendation.py",
+            "Get-HardwareRecommendation.ps1",
+            "recommend-hardware.sh",
         ]:
             self.assertTrue((SCRIPT_ROOT / name).is_file(), name)
 
@@ -130,6 +142,40 @@ class SeeThroughToolingTest(unittest.TestCase):
             self.assertIn("pilot", script)
             self.assertIn("screen", script)
             self.assertIn("quality", script)
+
+    def test_hardware_tiers_match_supported_example_parameters(self) -> None:
+        module = load_hardware_module()
+
+        tier, supported, profiles, _ = module.windows_profiles(6144)
+        self.assertEqual(tier, "unsupported")
+        self.assertFalse(supported)
+
+        tier, supported, profiles, _ = module.windows_profiles(8192)
+        self.assertEqual(tier, "cuda-8gb")
+        self.assertTrue(supported)
+        self.assertEqual(profiles[-1]["resolution"], 768)
+        self.assertEqual(profiles[-1]["quantMode"], "nf4")
+        self.assertTrue(profiles[-1]["ignoreVramGuard"])
+
+        tier, supported, profiles, notes = module.windows_profiles(12288)
+        self.assertEqual(tier, "cuda-12gb")
+        self.assertTrue(supported)
+        self.assertEqual(
+            (profiles[-1]["resolution"], profiles[-1]["depthResolution"], profiles[-1]["steps"]),
+            (1024, 720, 50),
+        )
+        self.assertEqual(profiles[-1]["quantMode"], "none")
+        self.assertTrue(any("RTX 3060" in note for note in notes))
+
+        tier, supported, profiles, _ = module.windows_profiles(24576)
+        self.assertEqual(tier, "cuda-24gb-plus")
+        self.assertEqual(profiles[-1]["resolution"], 1280)
+
+        tier, supported, profiles, _ = module.macos_profiles(32768)
+        self.assertEqual(tier, "mps-24-32gb")
+        self.assertTrue(supported)
+        self.assertEqual(profiles[-1]["groupOffload"], "off")
+        self.assertEqual(profiles[-1]["quantMode"], "none")
 
     def test_runtime_uses_an_isolated_comfy_user_directory(self) -> None:
         install = (SCRIPT_ROOT / "install_runtime.py").read_text("utf-8")

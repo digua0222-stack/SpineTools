@@ -134,6 +134,13 @@ if [[ "$DRY_RUN" == "true" ]]; then
   exit 0
 fi
 
+runtime_python="$VENV_ROOT/bin/python"
+mkdir -p "$OUTPUT_DIRECTORY"
+hardware_report="$OUTPUT_DIRECTORY/hardware_report.json"
+"$runtime_python" "$SCRIPT_DIR/hardware_recommendation.py" \
+  --platform macos \
+  --json-out "$hardware_report"
+
 generate_args=(
   --comfy-root "$COMFY_ROOT"
   --venv-root "$VENV_ROOT"
@@ -158,7 +165,6 @@ generate_args=(
 "$SCRIPT_DIR/generate.sh" "${generate_args[@]}"
 
 report_path="$OUTPUT_DIRECTORY/run_report.json"
-runtime_python="$VENV_ROOT/bin/python"
 if [[ ! -f "$report_path" ]]; then
   echo "ERROR: Generation completed without run_report.json: $report_path" >&2
   exit 2
@@ -174,6 +180,7 @@ reconstruction_directory="$OUTPUT_DIRECTORY/reconstruction"
 layer_count="$($runtime_python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["layerCount"])' "$report_path")"
 echo "Zhao Yun test completed."
 echo "  layers:     $layer_count"
+echo "  hardware:   $hardware_report"
 echo "  run report: $report_path"
 echo "  comparison: $reconstruction_directory/comparison.png"
 echo "  metrics:    $reconstruction_directory/metrics.json"

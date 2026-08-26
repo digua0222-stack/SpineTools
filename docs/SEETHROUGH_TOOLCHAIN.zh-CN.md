@@ -145,6 +145,33 @@ macOS初筛档示例：
 
 Windows输出中还包含`contact_sheet.png`；两个平台都会生成`reconstruction/comparison.png`和`reconstruction/metrics.json`。默认输出目录是仓库下的`output/zhaoyun-seethrough`，该目录已加入Git忽略。
 
+### 单机显卡报告与自动推荐
+
+Windows：
+
+```powershell
+pwsh -NoProfile -File .\scripts\seethrough\Get-HardwareRecommendation.ps1 `
+  -JsonOut .\output\hardware_report.json
+```
+
+macOS：
+
+```bash
+./scripts/seethrough/recommend-hardware.sh \
+  --json-out ./output/hardware_report.json
+```
+
+报告打印操作系统、CPU、系统内存、GPU型号、驱动、CUDA计算能力、总/空闲/已用显存、利用率、温度与功耗，并为`pilot/screen/quality`分别给出参数和可复制命令。Windows存在多张NVIDIA显卡时可使用`-GpuIndex`选择报告目标。
+
+推荐同时考虑两个维度：
+
+- 总显存决定硬件能力档：低于8GB不支持；8GB以512为主；10GB推荐768；12GB推荐实测的1024/720/50；16GB保持1024并提高深度；24GB以上推荐1280。
+- 当前空闲显存决定能否立即执行。即使12GB显卡支持quality档，如果当前空闲显存低于安全门槛，报告仍会标记`not-ready`并要求先关闭GPU进程。
+
+Apple Silicon没有独立显存，报告根据统一内存给出保守MPS建议，并始终使用`QuantMode=none`和`GroupOffload=off`。由于当前仓库没有实体Mac完整推理记录，MPS建议是容量规划起点，不是性能承诺。
+
+赵云一键测试会自动把同一份报告写入输出目录的`hardware_report.json`，便于连同`run_report.json`和`environment.json`归档。
+
 ## 生成参数
 
 | Windows | macOS/Python | 默认值 | 范围/说明 |

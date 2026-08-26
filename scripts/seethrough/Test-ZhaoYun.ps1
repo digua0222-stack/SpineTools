@@ -29,6 +29,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$env:PYTHONUTF8 = "1"
 . (Join-Path $PSScriptRoot "Common.ps1")
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
@@ -85,6 +86,14 @@ if ($DryRun) {
 
 $resolvedComfyRoot = Resolve-ComfyRoot $ComfyRoot
 $resolvedVenvRoot = Resolve-SeeThroughVenvRoot -ComfyRoot $resolvedComfyRoot -VenvRoot $VenvRoot
+$python = Get-VenvPython $resolvedVenvRoot
+New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+$hardwareReport = Join-Path $OutputDirectory "hardware_report.json"
+Invoke-Checked $python @(
+    (Join-Path $PSScriptRoot "hardware_recommendation.py"),
+    "--platform", "windows",
+    "--json-out", $hardwareReport
+) "Hardware recommendation failed"
 
 $generateParameters = @{
     ComfyRoot = $resolvedComfyRoot
@@ -124,7 +133,6 @@ $contactSheet = Join-Path $OutputDirectory "contact_sheet.png"
     -LayerJson $layerJson `
     -OutputPath $contactSheet
 
-$python = Get-VenvPython $resolvedVenvRoot
 $reconstructionDirectory = Join-Path $OutputDirectory "reconstruction"
 Invoke-Checked $python @(
     (Join-Path $PSScriptRoot "reconstruct_layers.py"),
@@ -136,6 +144,7 @@ Invoke-Checked $python @(
 
 Write-Host "Zhao Yun test completed."
 Write-Host "  layers:          $($report.layerCount)"
+Write-Host "  hardware report: $hardwareReport"
 Write-Host "  run report:      $reportPath"
 Write-Host "  contact sheet:   $contactSheet"
 Write-Host "  comparison:      $(Join-Path $reconstructionDirectory 'comparison.png')"

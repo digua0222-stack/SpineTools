@@ -41,7 +41,7 @@ LoadImage.MASK  ──> JoinImageWithAlpha.alpha
 pwsh -File .\scripts\seethrough\Test-Installation.ps1 `
   -ComfyRoot H:\ComfyUI `
   -FullInference `
-  -InputImage "G:\Users\zijuezhang\AppData\Local\com.minimax.hub\MiniMax Design\current Data\Projects\赵云形象\spine_generated\images\video_frame_053.png" `
+  -InputImage ".\examples\seethrough\zhaoyun.png" `
   -Resolution 512 `
   -DepthResolution 384 `
   -Steps 30 `
