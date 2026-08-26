@@ -119,6 +119,23 @@ macOS：
 [See-through 本地环境文档](docs/SEETHROUGH_LOCAL_SETUP.zh-CN.md)。See-through 只负责初始语义
 分层，不会自动产生 Spine 骨骼、pivot、IK 或可直接使用的动画。
 
+新用户可以直接使用仓库内置的[赵云测试图片](examples/seethrough/zhaoyun.png)，一条命令完成
+ComfyUI、See-through、模型下载、环境诊断、切片和重组验证：
+
+```powershell
+pwsh -NoProfile -File .\scripts\seethrough\Test-ZhaoYun.ps1
+```
+
+macOS：
+
+```bash
+./scripts/seethrough/test-zhaoyun.sh
+```
+
+默认`pilot`预设用于确认链路；可以使用`-Preset screen`/`--preset screen`做Seed初筛，或使用
+`-Preset quality`/`--preset quality`生成终稿候选。所有分辨率、深度分辨率、Steps、Seed、Alpha、
+量化和显存卸载参数均可在测试入口覆盖。
+
 ## 授权边界
 
 本工具只实现序列帧打包和公开 Spine JSON/atlas 数据结构，不包含或替代 Spine Editor、Spine CLI、Spine Runtime。使用 Spine 商标、编辑器或运行库时，仍需遵守 Esoteric Software 的相关许可条款。输入图片和视频的版权也由使用者自行确认。

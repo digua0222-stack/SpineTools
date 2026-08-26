@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
+import struct
 import subprocess
 import sys
 import tempfile
@@ -11,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_ROOT = ROOT / "scripts" / "seethrough"
+EXAMPLE_ROOT = ROOT / "examples" / "seethrough"
 
 
 def load_smoke_module():
@@ -103,8 +106,30 @@ class SeeThroughToolingTest(unittest.TestCase):
             "generate.py",
             "install.sh",
             "generate.sh",
+            "Test-ZhaoYun.ps1",
+            "test-zhaoyun.sh",
         ]:
             self.assertTrue((SCRIPT_ROOT / name).is_file(), name)
+
+    def test_zhaoyun_quickstart_bundle(self) -> None:
+        image_path = EXAMPLE_ROOT / "zhaoyun.png"
+        content = image_path.read_bytes()
+        self.assertEqual(content[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(struct.unpack(">II", content[16:24]), (498, 345))
+        self.assertEqual(
+            hashlib.sha256(content).hexdigest(),
+            "edbe1d7ce6483988a10737cd70fc3dbb03a18ecefc087207a6979a0e86c89d48",
+        )
+
+        windows = (SCRIPT_ROOT / "Test-ZhaoYun.ps1").read_text("utf-8")
+        macos = (SCRIPT_ROOT / "test-zhaoyun.sh").read_text("utf-8")
+        for script in [windows, macos]:
+            self.assertIn("zhaoyun.png", script)
+            self.assertIn("download-models", script.lower().replace("downloadmodels", "download-models"))
+            self.assertIn("generate", script.lower())
+            self.assertIn("pilot", script)
+            self.assertIn("screen", script)
+            self.assertIn("quality", script)
 
     def test_runtime_uses_an_isolated_comfy_user_directory(self) -> None:
         install = (SCRIPT_ROOT / "install_runtime.py").read_text("utf-8")

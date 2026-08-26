@@ -95,6 +95,56 @@ pwsh -NoProfile -File .\scripts\seethrough\Generate.ps1 `
 
 macOS的 `--group-offload auto` 会自动解析为关闭，因为插件的group-offload实现以CUDA为目标。
 
+## 赵云一键测试
+
+仓库包含标准透明测试输入`examples/seethrough/zhaoyun.png`。以下入口会串联安装器与生成器：首次运行自动检查或安装ComfyUI、固定提交的See-through、独立Python环境和全部模型，然后执行诊断、切片、指定目录导出及重组对比。
+
+Windows：
+
+```powershell
+pwsh -NoProfile -File .\scripts\seethrough\Test-ZhaoYun.ps1
+```
+
+macOS：
+
+```bash
+./scripts/seethrough/test-zhaoyun.sh
+```
+
+默认使用`pilot`预设，适合新机器首次验证：
+
+| 预设 | Resolution | DepthResolution | Steps | 用途 |
+|---|---:|---:|---:|---|
+| `pilot` | 512 | 384 | 4 | 快速确认安装、模型和输出链路 |
+| `screen` | 768 | 512 | 30 | 多Seed初筛 |
+| `quality` | 1024 | 720 | 50 | RTX 3060 12GB已验证的终稿候选 |
+
+`pilot`只验证安装和数据链路，1–4步生成的图层不能用于评价最终画质。Windows/NVIDIA首次测试若提示空闲显存不足，应优先关闭占用GPU的软件；仅做链路排障时可以组合`-QuantMode nf4 -IgnoreVramGuard`降低权重显存并跳过安全门槛，但NF4不应替代质量档的`QuantMode=none`。
+
+Windows质量档示例：
+
+```powershell
+pwsh -NoProfile -File .\scripts\seethrough\Test-ZhaoYun.ps1 `
+  -ComfyRoot H:\ComfyUI `
+  -OutputDirectory H:\exports\zhaoyun-quality `
+  -Preset quality `
+  -Seed 42
+```
+
+macOS初筛档示例：
+
+```bash
+./scripts/seethrough/test-zhaoyun.sh \
+  --comfy-root "$HOME/ComfyUI" \
+  --output-dir "$HOME/exports/zhaoyun-screen" \
+  --preset screen \
+  --seed 42
+```
+
+预设只是默认参数组合，仍可用`Resolution/DepthResolution/Steps/Seed/AlphaMode/QuantMode/GroupOffload/TblrSplit/UseLama`对应的命令行参数逐项覆盖。`SkipInstall/--skip-install`复用已准备环境；`ForceModels/--force-models`重新下载模型；`HfEndpoint/--hf-endpoint`指定Hugging Face镜像；`DryRun/--dry-run`只验证下载与运行计划，不启动推理。
+
+Windows输出中还包含`contact_sheet.png`；两个平台都会生成`reconstruction/comparison.png`和`reconstruction/metrics.json`。默认输出目录是仓库下的`output/zhaoyun-seethrough`，该目录已加入Git忽略。
+
 ## 生成参数
 
 | Windows | macOS/Python | 默认值 | 范围/说明 |

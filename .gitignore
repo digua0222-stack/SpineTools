@@ -5,6 +5,7 @@ venv/
 dist/
 build/
 export/
+output/
 *.report.json
 .DS_Store
 Thumbs.db
