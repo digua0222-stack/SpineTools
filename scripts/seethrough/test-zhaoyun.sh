@@ -41,7 +41,7 @@ Usage: ./scripts/seethrough/test-zhaoyun.sh [options]
 Installs pinned ComfyUI + See-through + models, then runs the bundled Zhao Yun image.
 
   --preset probe|pilot|screen|balanced|quality|max
-                                 512/384/1 through 2048/2048/100
+                                 512/384/1 through 2048/720/100
   --resolution N                 Override layer resolution (512-2048)
   --depth-resolution N           Override depth resolution (-1 or 64-2048)
   --steps N                      Override inference steps (1-100)
@@ -113,8 +113,8 @@ case "$PRESET" in
   quality)
     : "${RESOLUTION:=1024}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=50}" ;;
   max)
-    : "${RESOLUTION:=2048}"; : "${DEPTH_RESOLUTION:=2048}"; : "${STEPS:=100}"
-    echo "WARNING: max is a stress-test profile. It is not recommended for Seed screening." >&2 ;;
+    : "${RESOLUTION:=2048}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=100}"
+    echo "WARNING: max keeps RGBA generation at 2048/100 but uses depth 720 for H20/cu121 stability. It is not recommended for Seed screening." >&2 ;;
   *) echo "ERROR: invalid --preset" >&2; usage >&2; exit 2 ;;
 esac
 

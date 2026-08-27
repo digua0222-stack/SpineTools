@@ -25,7 +25,8 @@ See-through 可以在 Linux + NVIDIA H20 上离线运行。实测已完成从赵
 |---|---|---|---|
 | probe | 512 / depth 384 / 1 step | 成功，27 层 | 约 27 秒 |
 | balanced | 1024 / depth 720 / 30 steps | 成功，22 层 | 约 1 分 55 秒 |
-| max | 2048 / depth 2048 / 100 steps | 主体扩散完成，整轮未完成；实例回收前已运行超过 15 分钟 | 未完成 |
+| max（旧参数） | 2048 / depth 2048 / 100 steps | 首轮实例回收前未完成；第二轮在深度注意力阶段触发CUDA `invalid configuration argument` | 失败，不再作为默认值 |
+| max（当前默认） | 2048 / depth 720 / 100 steps | 保留最高RGBA分层参数，深度阶段使用已验证尺寸 | 待完整计时 |
 
 `max` 运行时 GPU 利用率 100%，显存约 22 GiB，功耗约 343 W。瓶颈是计算量而不是显存。1024 档比 512 档层数更少也再次证明：提高分辨率和步数不会单调改善语义拆分完整度。
 
@@ -163,9 +164,9 @@ tail -n 200 /opt/seethrough/output/<run-id>/bootstrap.log
 
 底层调试时仍可分别使用 `install-linux.sh` 和 `test-zhaoyun.sh`，但全新 GPU Docker 优先使用总入口，以确保日志、清单和立即归档不会遗漏。
 
-## 最高配压力测试
+## 最高RGBA配置
 
-工具允许的上限是 2048 / depth 2048 / 100 steps：
+H20/驱动535/cu121当前默认使用 2048 / depth 720 / 100 steps：
 
 ```bash
 ./scripts/seethrough/bootstrap-linux.sh \
@@ -176,13 +177,18 @@ tail -n 200 /opt/seethrough/output/<run-id>/bootstrap.log
   --run-id h20-max
 ```
 
-这是压力测试，不是日常质量档。扩散主计算可粗略看作与 `steps × resolution²` 成正比；相对 1024/30，2048/100 的理论计算量约为：
+RGBA分层仍使用2048分辨率和100步；只把Marigold深度计算限制为720。第二次实测表明，
+`depth-resolution=2048` 会在 `SeeThrough_GenerateDepth` 的
+`scaled_dot_product_attention` 中触发CUDA `invalid configuration argument`，因此不再作为
+默认配置。该档仍是压力测试，不是日常质量档。扩散主计算可粗略看作与
+`steps × resolution²` 成正比；相对1024/30，2048/100的理论计算量约为：
 
 ```text
 (2048 / 1024)² × (100 / 30) ≈ 13.3 倍
 ```
 
-而且 `depth-resolution=2048` 还会增加每个部件的 Marigold 深度成本。实际业务不应为每个 Seed 使用此档。
+实际业务不应为每个Seed使用此档。若需要复现旧的深度压力测试，可以显式传入
+`--depth-resolution 2048`，但该组合在当前H20运行栈上不受支持，也不会生成完整产物。
 
 ## 本次遇到的问题与修复
 

@@ -76,6 +76,16 @@ class LinuxBootstrapTest(unittest.TestCase):
         self.assertIn("pip-freeze.txt", bootstrap)
         self.assertIn("archive_directory", bootstrap)
 
+        zhaoyun_runner = (SCRIPT_ROOT / "test-zhaoyun.sh").read_text("utf-8")
+        self.assertIn(
+            ': "${RESOLUTION:=2048}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=100}"',
+            zhaoyun_runner,
+        )
+        self.assertNotIn(
+            ': "${RESOLUTION:=2048}"; : "${DEPTH_RESOLUTION:=2048}"; : "${STEPS:=100}"',
+            zhaoyun_runner,
+        )
+
     def test_linux_installer_uses_only_official_python_fallback(self) -> None:
         installer = (SCRIPT_ROOT / "install-linux.sh").read_text("utf-8")
         official = (
