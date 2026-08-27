@@ -87,6 +87,8 @@ class LinuxBootstrapTest(unittest.TestCase):
         self.assertIn("UV_HTTP_RETRIES", installer)
         self.assertIn("apt-get install", installer)
         self.assertIn("dnf install", installer)
+        # TencentOS 3.2 ships curl 7.61, which predates --retry-all-errors.
+        self.assertNotIn("--retry-all-errors", installer)
         for untrusted_proxy in ["ghproxy", "fastgit", "kkgithub", "github.moeyy"]:
             self.assertNotIn(untrusted_proxy, installer.lower())
 

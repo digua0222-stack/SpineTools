@@ -145,11 +145,11 @@ if ! command -v uv >/dev/null 2>&1; then
   installer="$temporary_directory/uv-installer.sh"
   echo "[install] uv from the official Astral installer"
   if ! curl --proto '=https' --tlsv1.2 -LfsS \
-    --connect-timeout 10 --max-time 120 --retry 3 --retry-all-errors \
+    --connect-timeout 10 --max-time 120 --retry 3 \
     https://astral.sh/uv/install.sh -o "$installer"; then
     echo "[fallback] astral.sh uv installer timed out; using the official GitHub release installer."
     curl --proto '=https' --tlsv1.2 -LfsS \
-      --connect-timeout 10 --max-time 120 --retry 3 --retry-all-errors \
+      --connect-timeout 10 --max-time 120 --retry 3 \
       https://github.com/astral-sh/uv/releases/latest/download/uv-installer.sh \
       -o "$installer"
   fi

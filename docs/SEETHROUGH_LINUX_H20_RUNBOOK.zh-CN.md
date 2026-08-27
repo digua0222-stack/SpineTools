@@ -143,6 +143,7 @@ tail -n 200 /opt/seethrough/output/<run-id>/bootstrap.log
 常见恢复方式：
 
 - **Python 下载超时**：日志出现 `[fallback]` 属于预期自动恢复；官方 GitHub 多次失败时，用更大的 `--python-install-timeout` 和新 `--run-id` 重跑。uv 已完成的缓存会复用。
+- **curl 报 `--retry-all-errors: is unknown`**：TencentOS 3.2 自带 curl 7.61，不支持该新参数。提交 `4dc7f36` 之后的安装器改用兼容旧版 curl 的重试参数；先 `git pull --ff-only`，再用新 `--run-id` 续跑即可，已下载内容会复用。
 - **GPU 不可见**：确认容器用 NVIDIA runtime/`--gpus all` 启动，并在容器内先执行 `nvidia-smi -L`。脚本不会在容器内修宿主机驱动。
 - **已有 ComfyUI 有本地修改**：安装器会明确报错并保持原目录不变。最安全的恢复是给本任务换一个空的 `--comfy-root`，不要删除未知用户文件。
 - **模型下载中断**：直接以新 `--run-id` 重跑；revision marker 完整的模型会跳过，不完整模型会续传/修复。只有确认缓存损坏时才加 `--force-models`。
