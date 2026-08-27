@@ -7,9 +7,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMFY_ROOT="${COMFYUI_ROOT:-/opt/seethrough/ComfyUI}"
 VENV_ROOT="${SEETHROUGH_VENV_ROOT:-/opt/seethrough/venv}"
 OUTPUT_ROOT="${SEETHROUGH_OUTPUT_ROOT:-/opt/seethrough/output}"
+INPUT_IMAGE="$REPO_ROOT/examples/seethrough/zhaoyun.png"
 HF_ENDPOINT_VALUE=""
 PRESET_SPEC="probe,balanced"
-SEED="42"
+SEED_SPEC="42"
 INSTALL_ONLY="false"
 SKIP_SYSTEM_PACKAGES="false"
 FORCE_MODELS="false"
@@ -20,6 +21,7 @@ PYTHON_INSTALL_TIMEOUT="120"
 PYTHON_INSTALL_RETRIES="3"
 QUANT_MODE="none"
 GROUP_OFFLOAD="off"
+QUALITY_PROFILE="zhaoyun"
 PORT="8188"
 INFERENCE_TIMEOUT="7200"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -36,9 +38,12 @@ archives both the probe and balanced Zhao Yun presets.
   --comfy-root PATH             ComfyUI installation (default: /opt/seethrough/ComfyUI)
   --venv-root PATH              Isolated runtime venv (default: /opt/seethrough/venv)
   --output-dir PATH             Session output root (default: /opt/seethrough/output)
+  --input PATH                  Source image (default: bundled Zhao Yun PNG)
   --hf-endpoint URL             Optional Hugging Face endpoint for model downloads
   --preset LIST                 Comma-separated presets; e.g. probe or probe,balanced
-  --seed N                      Seed for every selected preset (default: 42)
+  --seed N                      One Seed for every selected preset (default: 42)
+  --seeds LIST                  Comma-separated Seeds; e.g. 7,23,42,88
+  --quality-profile NAME        generic or zhaoyun (default: zhaoyun)
   --install-only                Install, diagnose, and archive the audit; skip inference
   --python-install-timeout N    Seconds allowed per uv Python attempt (default: 120)
   --python-install-retries N    Official GitHub fallback attempts (default: 3)
@@ -95,6 +100,11 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_ROOT="$2"
       shift 2
       ;;
+    --input)
+      require_value "$1" "${2:-}"
+      INPUT_IMAGE="$2"
+      shift 2
+      ;;
     --hf-endpoint)
       require_value "$1" "${2:-}"
       HF_ENDPOINT_VALUE="$2"
@@ -107,7 +117,17 @@ while [[ $# -gt 0 ]]; do
       ;;
     --seed)
       require_value "$1" "${2:-}"
-      SEED="$2"
+      SEED_SPEC="$2"
+      shift 2
+      ;;
+    --seeds)
+      require_value "$1" "${2:-}"
+      SEED_SPEC="$2"
+      shift 2
+      ;;
+    --quality-profile)
+      require_value "$1" "${2:-}"
+      QUALITY_PROFILE="$2"
       shift 2
       ;;
     --install-only)
@@ -174,7 +194,6 @@ done
 [[ "$VENV_ROOT" != "/" && -n "$VENV_ROOT" ]] || die "--venv-root cannot be /."
 [[ "$OUTPUT_ROOT" != "/" && -n "$OUTPUT_ROOT" ]] || die "--output-dir cannot be /."
 [[ "$RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "--run-id contains unsafe characters."
-[[ "$SEED" =~ ^[0-9]+$ ]] && ((SEED <= 4294967295)) || die "--seed must be 0-4294967295."
 is_positive_integer "$PYTHON_INSTALL_TIMEOUT" || die "--python-install-timeout must be positive."
 is_positive_integer "$PYTHON_INSTALL_RETRIES" || die "--python-install-retries must be positive."
 is_positive_integer "$PORT" && ((PORT <= 65535)) || die "--port must be 1-65535."
@@ -185,6 +204,10 @@ if [[ -n "$HF_ENDPOINT_VALUE" ]]; then
   [[ "$HF_ENDPOINT_VALUE" != *"?"* && "$HF_ENDPOINT_VALUE" != *"#"* ]] ||
     die "--hf-endpoint must not contain a query string or fragment."
 fi
+case "$QUALITY_PROFILE" in
+  generic | zhaoyun) ;;
+  *) die "--quality-profile must be generic or zhaoyun." ;;
+esac
 
 IFS=',' read -r -a PRESETS <<<"$PRESET_SPEC"
 [[ ${#PRESETS[@]} -gt 0 ]] || die "--preset must not be empty."
@@ -196,6 +219,16 @@ for preset in "${PRESETS[@]}"; do
   esac
   [[ -z "${SEEN_PRESETS[$preset]+present}" ]] || die "Duplicate preset: $preset"
   SEEN_PRESETS["$preset"]="true"
+done
+
+IFS=',' read -r -a SEEDS <<<"$SEED_SPEC"
+[[ ${#SEEDS[@]} -gt 0 ]] || die "--seeds must not be empty."
+declare -A SEEN_SEEDS=()
+for seed in "${SEEDS[@]}"; do
+  [[ "$seed" == "0" || "$seed" =~ ^[1-9][0-9]*$ ]] && ((seed <= 4294967295)) ||
+    die "Every Seed must be 0-4294967295: $seed"
+  [[ -z "${SEEN_SEEDS[$seed]+present}" ]] || die "Duplicate Seed: $seed"
+  SEEN_SEEDS["$seed"]="true"
 done
 
 SESSION_ROOT="$OUTPUT_ROOT/$RUN_ID"
@@ -327,10 +360,15 @@ archive_directory() {
 }
 
 preflight
+if [[ "$DRY_RUN" != "true" ]]; then
+  [[ -f "$INPUT_IMAGE" ]] || die "Input image is missing: $INPUT_IMAGE"
+fi
 log "[plan] session: $SESSION_ROOT"
 log "[plan] ComfyUI: $COMFY_ROOT"
 log "[plan] venv: $VENV_ROOT"
-log "[plan] presets: $PRESET_SPEC; seed: $SEED"
+log "[plan] input: $INPUT_IMAGE"
+log "[plan] presets: $PRESET_SPEC; seeds: $SEED_SPEC"
+log "[plan] quality profile: $QUALITY_PROFILE"
 log "[plan] H20 defaults: quant=$QUANT_MODE, group-offload=$GROUP_OFFLOAD"
 
 install_args=(
@@ -351,16 +389,20 @@ run_logged "$SCRIPT_DIR/install-linux.sh" "${install_args[@]}"
 if [[ "$DRY_RUN" == "true" ]]; then
   if [[ "$INSTALL_ONLY" != "true" ]]; then
     for preset in "${PRESETS[@]}"; do
-      run_logged "$SCRIPT_DIR/test-zhaoyun.sh" \
-        --preset "$preset" \
-        --seed "$SEED" \
-        --comfy-root "$COMFY_ROOT" \
-        --venv-root "$VENV_ROOT" \
-        --output-dir "$SESSION_ROOT/${preset}-seed-${SEED}" \
-        --skip-install \
-        --quant-mode "$QUANT_MODE" \
-        --group-offload "$GROUP_OFFLOAD" \
-        --dry-run
+      for seed in "${SEEDS[@]}"; do
+        run_logged "$SCRIPT_DIR/test-zhaoyun.sh" \
+          --preset "$preset" \
+          --seed "$seed" \
+          --input "$INPUT_IMAGE" \
+          --quality-profile "$QUALITY_PROFILE" \
+          --comfy-root "$COMFY_ROOT" \
+          --venv-root "$VENV_ROOT" \
+          --output-dir "$SESSION_ROOT/${preset}-seed-${seed}" \
+          --skip-install \
+          --quant-mode "$QUANT_MODE" \
+          --group-offload "$GROUP_OFFLOAD" \
+          --dry-run
+      done
     done
   fi
   log "[dry-run] Bootstrap plan validated; no session directory was created."
@@ -384,28 +426,37 @@ if [[ "$INSTALL_ONLY" == "true" ]]; then
 fi
 
 for preset in "${PRESETS[@]}"; do
-  run_directory="$SESSION_ROOT/${preset}-seed-${SEED}"
-  test_args=(
-    --preset "$preset"
-    --seed "$SEED"
-    --comfy-root "$COMFY_ROOT"
-    --venv-root "$VENV_ROOT"
-    --output-dir "$run_directory"
-    --skip-install
-    --quant-mode "$QUANT_MODE"
-    --group-offload "$GROUP_OFFLOAD"
-    --port "$PORT"
-    --inference-timeout "$INFERENCE_TIMEOUT"
-  )
-  [[ "$ONLINE" == "true" ]] && test_args+=(--online)
-  run_logged "$SCRIPT_DIR/test-zhaoyun.sh" "${test_args[@]}"
-  capture_environment "$run_directory/audit"
-  log "[success] $preset seed $SEED completed; archiving immediately."
-  mkdir -p "$run_directory/logs"
-  cp "$LOG_FILE" "$run_directory/logs/bootstrap.log"
-  archive_path="$SESSION_ROOT/${preset}-seed-${SEED}.tar.gz"
-  archive_directory "$run_directory" "$archive_path"
-  log "[archive] $archive_path"
+  for seed in "${SEEDS[@]}"; do
+    run_directory="$SESSION_ROOT/${preset}-seed-${seed}"
+    test_args=(
+      --preset "$preset"
+      --seed "$seed"
+      --input "$INPUT_IMAGE"
+      --quality-profile "$QUALITY_PROFILE"
+      --comfy-root "$COMFY_ROOT"
+      --venv-root "$VENV_ROOT"
+      --output-dir "$run_directory"
+      --skip-install
+      --quant-mode "$QUANT_MODE"
+      --group-offload "$GROUP_OFFLOAD"
+      --port "$PORT"
+      --inference-timeout "$INFERENCE_TIMEOUT"
+    )
+    [[ "$ONLINE" == "true" ]] && test_args+=(--online)
+    run_logged "$SCRIPT_DIR/test-zhaoyun.sh" "${test_args[@]}"
+    capture_environment "$run_directory/audit"
+    log "[success] $preset seed $seed completed; archiving immediately."
+    mkdir -p "$run_directory/logs"
+    cp "$LOG_FILE" "$run_directory/logs/bootstrap.log"
+    archive_path="$SESSION_ROOT/${preset}-seed-${seed}.tar.gz"
+    archive_directory "$run_directory" "$archive_path"
+    log "[archive] $archive_path"
+  done
 done
+
+run_logged "$VENV_ROOT/bin/python" "$SCRIPT_DIR/rank_quality_reports.py" \
+  --root "$SESSION_ROOT" \
+  --output "$SESSION_ROOT/quality-ranking.json"
+log "[quality] $SESSION_ROOT/quality-ranking.json"
 
 log "[done] All requested presets completed: $SESSION_ROOT"

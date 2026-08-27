@@ -134,8 +134,8 @@ macOS：
 | 预设 | Resolution | DepthResolution | Steps | 用途 |
 |---|---:|---:|---:|---|
 | `pilot` | 512 | 384 | 4 | 快速确认安装、模型和输出链路 |
-| `screen` | 768 | 512 | 30 | 多Seed初筛 |
-| `quality` | 1024 | 720 | 50 | RTX 3060 12GB已验证的终稿候选 |
+| `screen` | 768 | 512 | 12 | 多Seed低成本初筛 |
+| `quality` | 1024 | 720 | 40 | 入选Seed的终稿候选 |
 
 `pilot`只验证安装和数据链路，1–4步生成的图层不能用于评价最终画质。Windows/NVIDIA首次测试若提示空闲显存不足，应优先关闭占用GPU的软件；仅做链路排障时可以组合`-QuantMode nf4 -IgnoreVramGuard`降低权重显存并跳过安全门槛，但NF4不应替代质量档的`QuantMode=none`。
 
@@ -161,7 +161,7 @@ macOS初筛档示例：
 
 预设只是默认参数组合，仍可用`Resolution/DepthResolution/Steps/Seed/AlphaMode/QuantMode/GroupOffload/TblrSplit/UseLama`对应的命令行参数逐项覆盖。`SkipInstall/--skip-install`复用已准备环境；`ForceModels/--force-models`重新下载模型；`HfEndpoint/--hf-endpoint`指定Hugging Face镜像；`DryRun/--dry-run`只验证下载与运行计划，不启动推理。
 
-Windows输出中还包含`contact_sheet.png`；两个平台都会生成`reconstruction/comparison.png`和`reconstruction/metrics.json`。默认输出目录是仓库下的`output/zhaoyun-seethrough`，该目录已加入Git忽略。
+Windows输出中还包含`contact_sheet.png`；两个平台都会生成`reconstruction/comparison.png`、`reconstruction/metrics.json`和`reconstruction/quality_report.json`。默认输出目录是仓库下的`output/zhaoyun-seethrough`，该目录已加入Git忽略。
 
 ### 单机显卡报告与自动推荐
 
@@ -200,7 +200,7 @@ Apple Silicon没有独立显存，报告根据统一内存给出保守MPS建议�
 | `-OutputArchive` | `--archive` | 空 | 可选的精确ZIP输出路径 |
 | `-Resolution` | `--resolution` | 1024 | 512–2048，LayerDiff方形画布 |
 | `-DepthResolution` | `--depth-resolution` | 720 | `-1`或64–2048；`-1`跟随Resolution |
-| `-Steps` | `--steps` | 30 | 1–100；4仅用于链路测试，30制作，40–50终稿 |
+| `-Steps` | `--steps` | 30 | 1–100；4仅用于链路测试，12初筛，30制作，40–50终稿 |
 | `-Seed` | `--seed` | 42 | 0–4294967295；影响语义分片和重绘结果 |
 | `-AlphaMode` | `--alpha-mode` | `preserve` | `preserve`或`opaque` |
 | `-QuantMode` | `--quant-mode` | `none` | `none`或`nf4`；NF4仅支持CUDA环境 |
@@ -335,11 +335,11 @@ candidate_i ~ P(layers | source_image, fixed_tags, model, parameters, seed_i)
 
 推荐两阶段流程：
 
-1. 初筛：`768 / depth 512 / 30 steps`，Seed使用`7、23、42、88`。
+1. 初筛：`768 / depth 512 / 12 steps`，Seed使用`7、23、42、88`。
 2. 扩展：前4个都不合格时，再增加`137、2026、3407、8192`。
 3. 每个Seed使用独立输出目录，不要互相覆盖。
 4. 检查必需部件是否存在、语义是否正确、边缘是否残缺，并查看重组图。
-5. 选出前2–3个Seed，以`1024 / depth 720 / 50 steps`分别复跑。
+5. 选出前1–2个Seed，以`1024 / depth 720 / 40 steps`分别复跑。
 6. 若终稿复跑发生退化，使用下一候选Seed；必要时组合不同Seed中质量最好的部件。
 
 Windows批量初筛：
@@ -357,7 +357,7 @@ foreach ($seed in $seeds) {
     -OutputPrefix "zhaoyun_seed_$seed" `
     -Resolution 768 `
     -DepthResolution 512 `
-    -Steps 30 `
+    -Steps 12 `
     -Seed $seed `
     -AlphaMode preserve `
     -QuantMode none `
@@ -380,7 +380,7 @@ for seed in 7 23 42 88; do
     --output-prefix "zhaoyun_seed_$seed" \
     --resolution 768 \
     --depth-resolution 512 \
-    --steps 30 \
+    --steps 12 \
     --seed "$seed" \
     --alpha-mode preserve \
     --quant-mode none \
@@ -409,6 +409,7 @@ done
 - `run_report.json`：输入、参数、输出文件列表和ComfyUI prompt ID。
 - `environment.json`：Python、PyTorch、加速器、插件和模型版本诊断。
 - `logs/`：工具本次自行启动ComfyUI时的标准输出和错误日志。
+- `reconstruction/quality_report.json`：重组指标、语义完整度、异常大层和自动评分。
 - 可选ZIP：由 `OutputArchive/--archive` 指定精确路径。
 
 ComfyUI自己的 `output` 仍保留原始生成文件；指定输出目录是本工具链整理后的可交付副本。

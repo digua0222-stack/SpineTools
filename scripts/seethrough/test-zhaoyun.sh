@@ -24,6 +24,8 @@ else
 fi
 TBLR_SPLIT="true"
 USE_LAMA="false"
+QUALITY_PROFILE="zhaoyun"
+FAIL_ON_LOW_QUALITY="false"
 HF_ENDPOINT_VALUE=""
 INFERENCE_TIMEOUT="7200"
 PORT="8188"
@@ -60,6 +62,9 @@ Installs pinned ComfyUI + See-through + models, then runs the bundled Zhao Yun i
   --inference-timeout N          Inference timeout in seconds
   --no-tblr-split
   --use-lama
+  --quality-profile generic|zhaoyun
+                                 Automatic review profile (default: zhaoyun)
+  --fail-on-low-quality          Exit 3 when the automatic quality gate fails
   --force-models
   --skip-install                 Reuse an already prepared runtime
   --skip-plugin-checkout
@@ -90,6 +95,8 @@ while [[ $# -gt 0 ]]; do
     --inference-timeout) INFERENCE_TIMEOUT="$2"; shift 2 ;;
     --no-tblr-split) TBLR_SPLIT="false"; shift ;;
     --use-lama) USE_LAMA="true"; shift ;;
+    --quality-profile) QUALITY_PROFILE="$2"; shift 2 ;;
+    --fail-on-low-quality) FAIL_ON_LOW_QUALITY="true"; shift ;;
     --force-models) FORCE_MODELS="true"; shift ;;
     --skip-install) SKIP_INSTALL="true"; shift ;;
     --skip-plugin-checkout) SKIP_PLUGIN_CHECKOUT="true"; shift ;;
@@ -107,15 +114,20 @@ case "$PRESET" in
   pilot)
     : "${RESOLUTION:=512}"; : "${DEPTH_RESOLUTION:=384}"; : "${STEPS:=4}" ;;
   screen)
-    : "${RESOLUTION:=768}"; : "${DEPTH_RESOLUTION:=512}"; : "${STEPS:=30}" ;;
+    : "${RESOLUTION:=768}"; : "${DEPTH_RESOLUTION:=512}"; : "${STEPS:=12}" ;;
   balanced)
     : "${RESOLUTION:=1024}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=30}" ;;
   quality)
-    : "${RESOLUTION:=1024}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=50}" ;;
+    : "${RESOLUTION:=1024}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=40}" ;;
   max)
     : "${RESOLUTION:=2048}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=100}"
     echo "WARNING: max keeps RGBA generation at 2048/100 but uses depth 720 for H20/cu121 stability. It is not recommended for Seed screening." >&2 ;;
   *) echo "ERROR: invalid --preset" >&2; usage >&2; exit 2 ;;
+esac
+
+case "$QUALITY_PROFILE" in
+  generic | zhaoyun) ;;
+  *) echo "ERROR: invalid --quality-profile" >&2; usage >&2; exit 2 ;;
 esac
 
 if [[ ! -f "$INPUT_IMAGE" ]]; then
@@ -201,6 +213,16 @@ reconstruction_directory="$OUTPUT_DIRECTORY/reconstruction"
   --output-dir "$reconstruction_directory" \
   --title "Zhao Yun See-through $PRESET seed $SEED"
 
+quality_report="$reconstruction_directory/quality_report.json"
+quality_args=(
+  --layer-json "$layer_json"
+  --metrics "$reconstruction_directory/metrics.json"
+  --profile "$QUALITY_PROFILE"
+  --output "$quality_report"
+)
+[[ "$FAIL_ON_LOW_QUALITY" == "true" ]] && quality_args+=(--fail-on-low-quality)
+"$runtime_python" "$SCRIPT_DIR/evaluate_layers.py" "${quality_args[@]}"
+
 layer_count="$($runtime_python -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["layerCount"])' "$report_path")"
 echo "Zhao Yun test completed."
 echo "  layers:     $layer_count"
@@ -208,6 +230,7 @@ echo "  hardware:   $hardware_report"
 echo "  run report: $report_path"
 echo "  comparison: $reconstruction_directory/comparison.png"
 echo "  metrics:    $reconstruction_directory/metrics.json"
+echo "  quality:    $quality_report"
 
 if [[ -n "$OUTPUT_TAR" ]]; then
   if ! command -v tar >/dev/null 2>&1; then

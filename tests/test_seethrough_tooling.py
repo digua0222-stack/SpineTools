@@ -34,6 +34,15 @@ def load_hardware_module():
     return module
 
 
+def load_quality_module():
+    path = SCRIPT_ROOT / "evaluate_layers.py"
+    spec = importlib.util.spec_from_file_location("seethrough_evaluate_layers", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class SeeThroughToolingTest(unittest.TestCase):
     def test_runtime_pins_are_immutable_revisions(self) -> None:
         config = json.loads((SCRIPT_ROOT / "config.json").read_text("utf-8"))
@@ -138,6 +147,8 @@ class SeeThroughToolingTest(unittest.TestCase):
             "hardware_recommendation.py",
             "Get-HardwareRecommendation.ps1",
             "recommend-hardware.sh",
+            "evaluate_layers.py",
+            "rank_quality_reports.py",
         ]:
             self.assertTrue((SCRIPT_ROOT / name).is_file(), name)
 
@@ -160,6 +171,70 @@ class SeeThroughToolingTest(unittest.TestCase):
             self.assertIn("pilot", script)
             self.assertIn("screen", script)
             self.assertIn("quality", script)
+
+    def test_quality_gate_rejects_semantically_incomplete_layers(self) -> None:
+        module = load_quality_module()
+        layer_info = {
+            "width": 2048,
+            "height": 2048,
+            "layers": [
+                {"name": "back hair", "left": 0, "top": 200, "right": 1500, "bottom": 1800},
+                {"name": "topwear", "left": 0, "top": 200, "right": 1500, "bottom": 1800},
+                {"name": "handwear-l"},
+                {"name": "handwear-r"},
+                {"name": "objects"},
+                {"name": "eyebrow-l"},
+                {"name": "eyebrow-r"},
+                {"name": "mouth"},
+                {"name": "nose"},
+                {"name": "eyewhite-l"},
+                {"name": "eyewhite-r"},
+                {"name": "neck"},
+            ],
+        }
+        metrics = {
+            "alpha_recall": 0.9622185,
+            "gray_composite_psnr_db": 22.9598,
+            "changed_pixels_over_10_of_255": 0.0924366,
+        }
+        report = module.evaluate(layer_info, metrics, "zhaoyun")
+        self.assertFalse(report["passed"])
+        self.assertLess(report["score"], 70)
+        self.assertEqual(
+            report["semantic"]["missingCriticalGroups"],
+            ["head_core", "lower_body"],
+        )
+        self.assertEqual(len(report["suspiciousBroadLayers"]), 2)
+        self.assertTrue(any("alpha recall" in issue for issue in report["issues"]))
+
+    def test_quality_gate_accepts_complete_high_fidelity_candidate(self) -> None:
+        module = load_quality_module()
+        names = [
+            "headwear",
+            "front hair",
+            "topwear",
+            "handwear-l",
+            "handwear-r",
+            "bottomwear",
+            "legwear",
+            "footwear",
+            "objects",
+        ]
+        layers = [
+            {"name": name, "left": 10, "top": 10, "right": 200, "bottom": 200}
+            for name in names
+        ]
+        report = module.evaluate(
+            {"width": 1024, "height": 1024, "layers": layers},
+            {
+                "alpha_recall": 0.995,
+                "gray_composite_psnr_db": 30.0,
+                "changed_pixels_over_10_of_255": 0.02,
+            },
+            "zhaoyun",
+        )
+        self.assertTrue(report["passed"])
+        self.assertGreater(report["score"], 85)
 
     def test_hardware_tiers_match_supported_example_parameters(self) -> None:
         module = load_hardware_module()

@@ -15,6 +15,8 @@ param(
     [ValidateSet("auto", "on", "off")][string]$GroupOffload = "auto",
     [bool]$TblrSplit = $true,
     [bool]$UseLama = $false,
+    [ValidateSet("generic", "zhaoyun")][string]$QualityProfile = "zhaoyun",
+    [switch]$FailOnLowQuality,
     [string]$HfEndpoint = "",
     [switch]$ForceModels,
     [switch]$SkipInstall,
@@ -44,8 +46,8 @@ $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 
 $presets = @{
     pilot   = @{ Resolution = 512;  DepthResolution = 384; Steps = 4 }
-    screen  = @{ Resolution = 768;  DepthResolution = 512; Steps = 30 }
-    quality = @{ Resolution = 1024; DepthResolution = 720; Steps = 50 }
+    screen  = @{ Resolution = 768;  DepthResolution = 512; Steps = 12 }
+    quality = @{ Resolution = 1024; DepthResolution = 720; Steps = 40 }
 }
 $selected = $presets[$Preset]
 if ($Resolution -eq 0) { $Resolution = [int]$selected.Resolution }
@@ -142,6 +144,17 @@ Invoke-Checked $python @(
     "--title", "Zhao Yun See-through $Preset seed $Seed"
 ) "Zhao Yun reconstruction review failed"
 
+$qualityReport = Join-Path $reconstructionDirectory "quality_report.json"
+$qualityArguments = @(
+    (Join-Path $PSScriptRoot "evaluate_layers.py"),
+    "--layer-json", $layerJson,
+    "--metrics", (Join-Path $reconstructionDirectory "metrics.json"),
+    "--profile", $QualityProfile,
+    "--output", $qualityReport
+)
+if ($FailOnLowQuality) { $qualityArguments += "--fail-on-low-quality" }
+Invoke-Checked $python $qualityArguments "Zhao Yun automatic quality review failed"
+
 Write-Host "Zhao Yun test completed."
 Write-Host "  layers:          $($report.layerCount)"
 Write-Host "  hardware report: $hardwareReport"
@@ -149,3 +162,4 @@ Write-Host "  run report:      $reportPath"
 Write-Host "  contact sheet:   $contactSheet"
 Write-Host "  comparison:      $(Join-Path $reconstructionDirectory 'comparison.png')"
 Write-Host "  metrics:         $(Join-Path $reconstructionDirectory 'metrics.json')"
+Write-Host "  quality:         $qualityReport"

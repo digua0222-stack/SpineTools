@@ -64,6 +64,9 @@ class LinuxBootstrapTest(unittest.TestCase):
             "--hf-endpoint",
             "--preset",
             "--seed",
+            "--seeds",
+            "--input",
+            "--quality-profile",
             "--install-only",
             "--python-install-timeout",
             "--python-install-retries",
@@ -196,6 +199,8 @@ class LinuxBootstrapTest(unittest.TestCase):
                     "--dry-run",
                     "--preset",
                     "probe,balanced",
+                    "--seeds",
+                    "7,42",
                     "--comfy-root",
                     shlex.quote(bash_path(temporary_root / "ComfyUI")),
                     "--venv-root",
@@ -214,6 +219,8 @@ class LinuxBootstrapTest(unittest.TestCase):
             self.assertIn("quant=none, group-offload=off", completed.stdout)
             self.assertIn("preset:           probe", completed.stdout)
             self.assertIn("preset:           balanced", completed.stdout)
+            self.assertIn("steps / seed:     1 / 7", completed.stdout)
+            self.assertIn("steps / seed:     30 / 42", completed.stdout)
             self.assertIn("no session directory was created", completed.stdout)
             self.assertFalse(output_root.exists())
 

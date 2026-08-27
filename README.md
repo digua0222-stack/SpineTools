@@ -125,6 +125,15 @@ Linux/NVIDIA 全新 GPU Docker（默认安装后依次跑 `probe` 和 `balanced`
   --seed 42
 ```
 
+多 Seed 初筛可一次提交并自动生成质量排序：
+
+```bash
+./scripts/seethrough/bootstrap-linux.sh \
+  --preset screen \
+  --seeds 7,23,42,88 \
+  --run-id h20-screen-4
+```
+
 只安装可加 `--install-only`；只跑链路探针可用 `--preset probe`。入口支持 apt 和 dnf/yum，
 uv Python 下载卡顿时会在硬超时后自动回退到 Astral 官方 `python-build-standalone` GitHub releases。
 
@@ -154,7 +163,10 @@ Linux 使用同一个 shell 测试入口；`probe` 是 1 step 链路验证，`ba
 
 默认`pilot`预设用于确认链路；可以使用`-Preset screen`/`--preset screen`做Seed初筛，或使用
 `-Preset quality`/`--preset quality`生成终稿候选。所有分辨率、深度分辨率、Steps、Seed、Alpha、
-量化和显存卸载参数均可在测试入口覆盖。
+量化和显存卸载参数均可在测试入口覆盖。每轮还会输出
+`reconstruction/quality_report.json`；Linux 多 Seed 会额外输出 `quality-ranking.json`。H20
+最高参数低质量样本的证据与优化命令见
+[H20 最高参数低质量复盘](docs/SEETHROUGH_H20_LOW_QUALITY_ANALYSIS.zh-CN.md)。
 
 运行前查看本机GPU、显存占用和推荐示例参数：
 
