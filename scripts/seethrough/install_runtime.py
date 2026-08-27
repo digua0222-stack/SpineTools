@@ -25,7 +25,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--comfy-root", type=Path)
     parser.add_argument("--venv-root", type=Path)
-    parser.add_argument("--platform", choices=["auto", "windows", "macos"], default="auto")
+    parser.add_argument(
+        "--platform", choices=["auto", "windows", "macos", "linux"], default="auto"
+    )
     parser.add_argument("--uv-bin", default="uv")
     parser.add_argument("--download-models", action="store_true")
     parser.add_argument("--hf-endpoint", default="")
@@ -47,7 +49,9 @@ def platform_key(requested: str) -> str:
         return "windows"
     if system == "Darwin":
         return "macos"
-    raise RuntimeError(f"Unsupported operating system: {system}. Use Windows or macOS.")
+    if system == "Linux":
+        return "linux"
+    raise RuntimeError(f"Unsupported operating system: {system}. Use Windows, macOS, or Linux.")
 
 
 def quote_command(command: list[str]) -> str:
@@ -141,6 +145,50 @@ def ensure_plugin(
     run(["git", "-C", target, "checkout", "--detach", plugin["commit"]], dry_run=dry_run)
 
 
+def command_succeeds(command: list[str | Path], *, cwd: Path | None = None) -> bool:
+    return (
+        subprocess.run(
+            [str(part) for part in command],
+            cwd=str(cwd) if cwd else None,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+        == 0
+    )
+
+
+def apply_plugin_patches(
+    plugin_root: Path,
+    patch_names: list[str],
+    *,
+    dry_run: bool,
+) -> list[str]:
+    applied: list[str] = []
+    for relative_name in patch_names:
+        patch_path = (SCRIPT_ROOT / relative_name).resolve()
+        if not patch_path.is_file() and not dry_run:
+            raise RuntimeError(f"Configured plugin patch is missing: {patch_path}")
+        print(f"[patch] See-through compatibility: {patch_path.name}", flush=True)
+        if dry_run:
+            applied.append(relative_name)
+            continue
+        reverse_check = ["git", "apply", "--reverse", "--check", patch_path]
+        if command_succeeds(reverse_check, cwd=plugin_root):
+            print(f"[ready] Plugin patch already applied: {patch_path.name}", flush=True)
+            applied.append(relative_name)
+            continue
+        forward_check = ["git", "apply", "--check", patch_path]
+        if not command_succeeds(forward_check, cwd=plugin_root):
+            raise RuntimeError(
+                f"Plugin patch does not match pinned See-through source: {patch_path}. "
+                "Check the plugin revision before updating the patch."
+            )
+        run(["git", "apply", patch_path], cwd=plugin_root)
+        applied.append(relative_name)
+    return applied
+
+
 def venv_python(venv_root: Path, target_platform: str) -> Path:
     return venv_root / ("Scripts/python.exe" if target_platform == "windows" else "bin/python")
 
@@ -163,6 +211,7 @@ def write_manager_config(venv_root: Path, *, dry_run: bool) -> tuple[Path, Path]
     runtime_user_root = venv_root / "user"
     manager_config = runtime_user_root / "__manager" / "config.ini"
     if not dry_run:
+        (runtime_user_root / "default").mkdir(parents=True, exist_ok=True)
         manager_config.parent.mkdir(parents=True, exist_ok=True)
         if not manager_config.exists():
             manager_config.write_text(
@@ -238,6 +287,11 @@ def main() -> int:
         skip_checkout=args.skip_plugin_checkout,
         dry_run=args.dry_run,
     )
+    plugin_patches = apply_plugin_patches(
+        plugin_root,
+        platform_config.get("pluginPatches", []),
+        dry_run=args.dry_run,
+    )
     plugin_requirements = (
         SCRIPT_ROOT / plugin_requirements_name
         if plugin_requirements_name
@@ -287,6 +341,7 @@ def main() -> int:
         "managerConfig": str(manager_config),
         "pluginRoot": str(plugin_root),
         "pluginCommit": git_head(plugin_root),
+        "pluginPatches": plugin_patches,
         "pythonVersion": subprocess.check_output(
             [str(python), "-c", "import platform; print(platform.python_version())"], text=True
         ).strip(),

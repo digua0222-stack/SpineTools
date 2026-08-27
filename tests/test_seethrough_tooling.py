@@ -59,6 +59,16 @@ class SeeThroughToolingTest(unittest.TestCase):
         self.assertTrue(config["platforms"]["windows"]["groupOffloadDefault"])
         self.assertEqual(config["platforms"]["macos"]["accelerator"], "mps")
         self.assertFalse(config["platforms"]["macos"]["groupOffloadDefault"])
+        self.assertEqual(config["platforms"]["linux"]["accelerator"], "cuda")
+        self.assertEqual(
+            config["platforms"]["linux"]["torchPackages"],
+            [
+                "torch==2.5.1+cu121",
+                "torchvision==0.20.1+cu121",
+                "torchaudio==2.5.1+cu121",
+            ],
+        )
+        self.assertFalse(config["platforms"]["linux"]["groupOffloadDefault"])
 
     def test_dependency_lock_exists(self) -> None:
         lock = (SCRIPT_ROOT / "requirements-win-cu126.lock.txt").read_text("utf-8")
@@ -68,6 +78,12 @@ class SeeThroughToolingTest(unittest.TestCase):
         mac_requirements = (SCRIPT_ROOT / "requirements-macos.txt").read_text("utf-8")
         self.assertIn("diffusers==0.40.0", mac_requirements)
         self.assertNotIn("bitsandbytes==", mac_requirements)
+        linux_lock = (SCRIPT_ROOT / "requirements-linux-cu121.lock.txt").read_text("utf-8")
+        self.assertIn("diffusers==0.40.0", linux_lock)
+        self.assertIn("bitsandbytes==0.50.2", linux_lock)
+        self.assertIn("transformers==5.16.1", linux_lock)
+        patch = SCRIPT_ROOT / "patches" / "linux-h20-fp32-text-encoder.patch"
+        self.assertIn("dtype=torch.float32", patch.read_text("utf-8"))
 
     def test_smoke_prompt_is_local_only_and_low_vram(self) -> None:
         module = load_smoke_module()
@@ -114,6 +130,7 @@ class SeeThroughToolingTest(unittest.TestCase):
             "install_runtime.py",
             "generate.py",
             "install.sh",
+            "install-linux.sh",
             "generate.sh",
             "Test-ZhaoYun.ps1",
             "test-zhaoyun.sh",
@@ -215,7 +232,7 @@ class SeeThroughToolingTest(unittest.TestCase):
             self.assertTrue((export / "demo_source.png").is_file())
 
     def test_cross_platform_install_dry_runs(self) -> None:
-        for target_platform in ["windows", "macos"]:
+        for target_platform in ["windows", "macos", "linux"]:
             completed = subprocess.run(
                 [
                     sys.executable,

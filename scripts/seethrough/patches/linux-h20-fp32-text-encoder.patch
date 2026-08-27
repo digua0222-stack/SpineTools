@@ -1,0 +1,15 @@
+diff --git a/nodes.py b/nodes.py
+--- a/nodes.py
++++ b/nodes.py
+@@ -480,7 +480,10 @@ class SeeThrough_LoadDepthModel:
+             if not pipeline._st_group_offload:
+                 device = mm.get_torch_device()
+                 if not use_nf4:
+-                    pipeline.text_encoder.to(device)
++                    # H20 with older CUDA-compatible PyTorch builds can SIGFPE in
++                    # the CLIP BF16 GEMM path. The encoder is cached once and then
++                    # unloaded, so FP32 is a safe low-cost compatibility fallback.
++                    pipeline.text_encoder.to(device=device, dtype=torch.float32)
+             print("[SeeThrough] Caching empty text embedding and unloading text encoder...", flush=True)
+             pipeline.cache_tag_embeds(unload_textencoders=True)
+             _log_vram("After Marigold cache_tag_embeds (text encoder unloaded)")

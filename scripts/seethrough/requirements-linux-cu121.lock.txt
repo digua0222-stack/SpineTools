@@ -1,0 +1,12 @@
+# Linux/CUDA 12.1 versions verified on TencentOS 3.2, NVIDIA H20, driver 535.247.01.
+# Torch packages are selected separately from config.json's PyTorch index.
+accelerate==1.14.0
+bitsandbytes==0.50.2
+diffusers==0.40.0
+huggingface-hub==1.28.0
+numpy==2.5.2
+opencv-python==5.0.0.93
+peft==0.20.0
+psd-tools==1.18.0
+scikit-learn==1.9.0
+transformers==5.16.1

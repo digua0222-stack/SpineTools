@@ -100,7 +100,7 @@ python -m unittest discover -s tests -v
 
 ## 本地 See-through 分层实验
 
-仓库提供 Windows/NVIDIA CUDA 和 macOS/Apple MPS 的本地部署入口，用独立 Python 环境运行
+仓库提供 Windows/NVIDIA CUDA、Linux/NVIDIA CUDA 和 macOS/Apple MPS 的本地部署入口，用独立 Python 环境运行
 See-through，避免污染现有 ComfyUI。安装器会检测并复用已有 ComfyUI，缺失时自动安装；生成
 脚本支持原画、输出目录/ZIP、Resolution、DepthResolution、Steps、Seed、Alpha和高级开关。
 
@@ -112,6 +112,15 @@ macOS：
 
 ```bash
 ./scripts/seethrough/install.sh --comfy-root "$HOME/ComfyUI" --download-models
+```
+
+Linux/NVIDIA：
+
+```bash
+./scripts/seethrough/install-linux.sh \
+  --comfy-root /opt/seethrough/ComfyUI \
+  --venv-root /opt/seethrough/venv \
+  --download-models
 ```
 
 完整安装、切片参数和指定输出说明见
@@ -131,6 +140,11 @@ macOS：
 ```bash
 ./scripts/seethrough/test-zhaoyun.sh
 ```
+
+Linux 使用同一个 shell 测试入口；`probe` 是 1 step 链路验证，`balanced` 是 H20 实测的
+1024/720/30 实用档，`max` 是非常耗时的 2048/2048/100 压力测试。完整实测问题、速度数据、
+tar/scp 流程和新环境复跑说明见
+[Linux/H20 实测复盘与复跑手册](docs/SEETHROUGH_LINUX_H20_RUNBOOK.zh-CN.md)。
 
 默认`pilot`预设用于确认链路；可以使用`-Preset screen`/`--preset screen`做Seed初筛，或使用
 `-Preset quality`/`--preset quality`生成终稿候选。所有分辨率、深度分辨率、Steps、Seed、Alpha、

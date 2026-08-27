@@ -31,6 +31,21 @@
       "constraints": null,
       "pluginRequirements": "requirements-macos.txt",
       "groupOffloadDefault": false
+    },
+    "linux": {
+      "accelerator": "cuda",
+      "torchIndexUrl": "https://download.pytorch.org/whl/cu121",
+      "torchPackages": [
+        "torch==2.5.1+cu121",
+        "torchvision==0.20.1+cu121",
+        "torchaudio==2.5.1+cu121"
+      ],
+      "constraints": "requirements-linux-cu121.lock.txt",
+      "pluginRequirements": null,
+      "groupOffloadDefault": false,
+      "pluginPatches": [
+        "patches/linux-h20-fp32-text-encoder.patch"
+      ]
     }
   },
   "comfyUi": {

@@ -9,6 +9,7 @@ VENV_ROOT=""
 INPUT_IMAGE="$REPO_ROOT/examples/seethrough/zhaoyun.png"
 OUTPUT_DIRECTORY="$REPO_ROOT/output/zhaoyun-seethrough"
 OUTPUT_ARCHIVE=""
+OUTPUT_TAR=""
 PRESET="pilot"
 RESOLUTION=""
 DEPTH_RESOLUTION=""
@@ -35,7 +36,8 @@ Usage: ./scripts/seethrough/test-zhaoyun.sh [options]
 
 Installs pinned ComfyUI + See-through + models, then runs the bundled Zhao Yun image.
 
-  --preset pilot|screen|quality  512/384/4, 768/512/30, or 1024/720/50
+  --preset probe|pilot|screen|balanced|quality|max
+                                 512/384/1 through 2048/2048/100
   --resolution N                 Override layer resolution (512-2048)
   --depth-resolution N           Override depth resolution (-1 or 64-2048)
   --steps N                      Override inference steps (1-100)
@@ -45,6 +47,7 @@ Installs pinned ComfyUI + See-through + models, then runs the bundled Zhao Yun i
   --input PATH                   Override bundled test image
   --output-dir PATH              Export directory
   --archive PATH.zip             Optional exact output archive
+  --tar PATH.tar.gz              Optional tar.gz of the complete output directory
   --hf-endpoint URL              Optional Hugging Face mirror
   --alpha-mode preserve|opaque
   --quant-mode none|nf4
@@ -72,6 +75,7 @@ while [[ $# -gt 0 ]]; do
     --input) INPUT_IMAGE="$2"; shift 2 ;;
     --output-dir) OUTPUT_DIRECTORY="$2"; shift 2 ;;
     --archive) OUTPUT_ARCHIVE="$2"; shift 2 ;;
+    --tar) OUTPUT_TAR="$2"; shift 2 ;;
     --hf-endpoint) HF_ENDPOINT_VALUE="$2"; shift 2 ;;
     --alpha-mode) ALPHA_MODE="$2"; shift 2 ;;
     --quant-mode) QUANT_MODE="$2"; shift 2 ;;
@@ -90,13 +94,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$PRESET" in
+  probe)
+    : "${RESOLUTION:=512}"; : "${DEPTH_RESOLUTION:=384}"; : "${STEPS:=1}" ;;
   pilot)
     : "${RESOLUTION:=512}"; : "${DEPTH_RESOLUTION:=384}"; : "${STEPS:=4}" ;;
   screen)
     : "${RESOLUTION:=768}"; : "${DEPTH_RESOLUTION:=512}"; : "${STEPS:=30}" ;;
+  balanced)
+    : "${RESOLUTION:=1024}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=30}" ;;
   quality)
     : "${RESOLUTION:=1024}"; : "${DEPTH_RESOLUTION:=720}"; : "${STEPS:=50}" ;;
-  *) echo "ERROR: --preset must be pilot, screen, or quality" >&2; exit 2 ;;
+  max)
+    : "${RESOLUTION:=2048}"; : "${DEPTH_RESOLUTION:=2048}"; : "${STEPS:=100}"
+    echo "WARNING: max is a stress-test profile. It is not recommended for Seed screening." >&2 ;;
+  *) echo "ERROR: invalid --preset" >&2; usage >&2; exit 2 ;;
 esac
 
 if [[ ! -f "$INPUT_IMAGE" ]]; then
@@ -126,7 +137,11 @@ if [[ "$SKIP_INSTALL" != "true" ]]; then
   [[ "$FORCE_MODELS" == "true" ]] && install_args+=(--force-models)
   [[ "$SKIP_PLUGIN_CHECKOUT" == "true" ]] && install_args+=(--skip-plugin-checkout)
   [[ "$DRY_RUN" == "true" ]] && install_args+=(--dry-run)
-  "$SCRIPT_DIR/install.sh" "${install_args[@]}"
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    "$SCRIPT_DIR/install-linux.sh" "${install_args[@]}"
+  else
+    "$SCRIPT_DIR/install.sh" "${install_args[@]}"
+  fi
 fi
 
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -138,7 +153,7 @@ runtime_python="$VENV_ROOT/bin/python"
 mkdir -p "$OUTPUT_DIRECTORY"
 hardware_report="$OUTPUT_DIRECTORY/hardware_report.json"
 "$runtime_python" "$SCRIPT_DIR/hardware_recommendation.py" \
-  --platform macos \
+  --platform auto \
   --json-out "$hardware_report"
 
 generate_args=(
@@ -184,3 +199,19 @@ echo "  hardware:   $hardware_report"
 echo "  run report: $report_path"
 echo "  comparison: $reconstruction_directory/comparison.png"
 echo "  metrics:    $reconstruction_directory/metrics.json"
+
+if [[ -n "$OUTPUT_TAR" ]]; then
+  if ! command -v tar >/dev/null 2>&1; then
+    echo "ERROR: tar is required for --tar." >&2
+    exit 2
+  fi
+  mkdir -p "$(dirname "$OUTPUT_TAR")"
+  output_absolute="$(cd "$(dirname "$OUTPUT_DIRECTORY")" && pwd)/$(basename "$OUTPUT_DIRECTORY")"
+  tar_absolute="$(cd "$(dirname "$OUTPUT_TAR")" && pwd)/$(basename "$OUTPUT_TAR")"
+  if [[ "$tar_absolute" == "$output_absolute"/* ]]; then
+    echo "ERROR: --tar must be outside --output-dir to avoid archiving itself." >&2
+    exit 2
+  fi
+  tar -czf "$OUTPUT_TAR" -C "$(dirname "$output_absolute")" "$(basename "$output_absolute")"
+  echo "  tar archive: $OUTPUT_TAR"
+fi

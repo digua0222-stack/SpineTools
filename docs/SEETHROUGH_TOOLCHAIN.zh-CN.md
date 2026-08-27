@@ -6,6 +6,7 @@
 支持入口：
 
 - Windows 10/11 + NVIDIA CUDA：PowerShell 7。
+- Linux x86_64 + NVIDIA CUDA：bash；H20/驱动535实测使用cu121兼容栈。
 - macOS + Apple Silicon MPS：bash/zsh。macOS 安装和参数链路由自动测试覆盖；完整模型推理仍应在目标 Mac 上执行一次 smoke test 后再用于生产。
 
 ## 目录和版本安全
@@ -104,6 +105,23 @@ Windows：
 ```powershell
 pwsh -NoProfile -File .\scripts\seethrough\Test-ZhaoYun.ps1
 ```
+
+## Linux 安装
+
+Linux 安装器支持 apt、dnf 和 yum，会补齐 OpenCV 所需的 `libGL.so.1`，并使用独立的
+Python 3.12/cu121 运行时：
+
+```bash
+chmod +x ./scripts/seethrough/install-linux.sh ./scripts/seethrough/generate.sh
+
+./scripts/seethrough/install-linux.sh \
+  --comfy-root /opt/seethrough/ComfyUI \
+  --venv-root /opt/seethrough/venv \
+  --download-models
+```
+
+H20 的实测参数、BF16 兼容补丁和实例回收前归档策略见
+[Linux/H20 实测复盘](SEETHROUGH_LINUX_H20_RUNBOOK.zh-CN.md)。
 
 macOS：
 
@@ -432,6 +450,7 @@ H:\ComfyUI\.venv-seethrough\Scripts\python.exe `
 ## 维护边界
 
 - Windows CUDA环境有本仓库锁定依赖和RTX 3060完整推理记录。
+- Linux CUDA环境已在TencentOS 3.2、NVIDIA H20 96GB、驱动535.247.01上完成512/384/1与1024/720/30端到端推理；详见[Linux/H20实测复盘](SEETHROUGH_LINUX_H20_RUNBOOK.zh-CN.md)。
 - macOS安装、参数传递、MPS诊断和CUDA开关隔离由自动测试覆盖，但本仓库当前没有Mac硬件上的完整模型推理报告。
 - See-through模型使用固定语义标签，不接受自由文本Prompt。
 - Marigold模型页当前未声明明确许可证；商用或重新分发前需单独确认。

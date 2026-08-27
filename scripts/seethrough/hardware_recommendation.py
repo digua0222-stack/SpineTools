@@ -28,7 +28,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--format", choices=["text", "json"], default="text")
     parser.add_argument("--json-out", type=Path)
     parser.add_argument("--gpu-index", type=int)
-    parser.add_argument("--platform", choices=["auto", "windows", "macos"], default="auto")
+    parser.add_argument(
+        "--platform", choices=["auto", "windows", "macos", "linux"], default="auto"
+    )
     return parser.parse_args()
 
 
@@ -290,7 +292,7 @@ def required_free_vram(profile_data: dict[str, Any], config: dict[str, Any]) -> 
 
 
 def profile_command(profile_data: dict[str, Any], target_platform: str) -> str:
-    if target_platform == "macos":
+    if target_platform in {"macos", "linux"}:
         pieces = [
             "./scripts/seethrough/test-zhaoyun.sh",
             f"--preset {profile_data['name']}",
@@ -337,15 +339,25 @@ def build_report(target_platform: str, gpu_index: int | None = None) -> dict[str
     apple_gpus = detect_apple_gpus() if target_platform == "macos" else []
     selected = choose_gpu(nvidia_gpus, gpu_index)
     notes: list[str]
-    if target_platform == "windows" and selected and selected.get("memoryTotalMiB"):
-        tier, supported, profiles, notes = windows_profiles(int(selected["memoryTotalMiB"]))
+    if target_platform in {"windows", "linux"} and selected and selected.get("memoryTotalMiB"):
+        total_vram = int(selected["memoryTotalMiB"])
+        tier, supported, profiles, notes = windows_profiles(total_vram)
         free_vram = selected.get("memoryFreeMiB")
         for item in profiles:
+            if target_platform == "linux" and total_vram >= 24576:
+                item["groupOffload"] = "off"
             item["requiredFreeVramMiB"] = required_free_vram(item, config)
             item["readyNow"] = (
                 None if free_vram is None else int(free_vram) >= int(item["requiredFreeVramMiB"])
             )
             item["command"] = profile_command(item, target_platform)
+        if target_platform == "linux" and total_vram >= 49152:
+            notes.extend(
+                [
+                    "H20 96GB实测建议使用balanced档1024/720/30；不要把2048/100用于多Seed初筛。",
+                    "驱动535应使用cu121兼容栈；升级驱动后再评估较新的PyTorch/CUDA组合。",
+                ]
+            )
         if free_vram is not None and not any(item.get("readyNow") for item in profiles):
             notes.append(
                 f"当前仅有{free_vram}MiB空闲显存，低于pilot安全门槛；先关闭GPU进程再运行。"
@@ -363,7 +375,7 @@ def build_report(target_platform: str, gpu_index: int | None = None) -> dict[str
             item["command"] = profile_command(item, target_platform)
     else:
         tier, supported, profiles = "no-supported-accelerator", False, []
-        notes = ["未检测到受支持的Windows NVIDIA CUDA或macOS Apple Silicon MPS环境。"]
+        notes = ["未检测到受支持的Windows/Linux NVIDIA CUDA或macOS Apple Silicon MPS环境。"]
 
     return {
         "schemaVersion": 1,
@@ -437,7 +449,15 @@ def main() -> int:
     args = parse_args()
     if args.platform == "auto":
         system = platform.system()
-        target_platform = "windows" if system == "Windows" else "macos" if system == "Darwin" else "unsupported"
+        target_platform = (
+            "windows"
+            if system == "Windows"
+            else "macos"
+            if system == "Darwin"
+            else "linux"
+            if system == "Linux"
+            else "unsupported"
+        )
     else:
         target_platform = args.platform
     report = build_report(target_platform, args.gpu_index)
