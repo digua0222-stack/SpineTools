@@ -131,6 +131,7 @@ class SeeThroughToolingTest(unittest.TestCase):
             "generate.py",
             "install.sh",
             "install-linux.sh",
+            "bootstrap-linux.sh",
             "generate.sh",
             "Test-ZhaoYun.ps1",
             "test-zhaoyun.sh",

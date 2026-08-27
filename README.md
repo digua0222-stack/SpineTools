@@ -114,14 +114,19 @@ macOS：
 ./scripts/seethrough/install.sh --comfy-root "$HOME/ComfyUI" --download-models
 ```
 
-Linux/NVIDIA：
+Linux/NVIDIA 全新 GPU Docker（默认安装后依次跑 `probe` 和 `balanced`，每次成功立即 tar）：
 
 ```bash
-./scripts/seethrough/install-linux.sh \
+./scripts/seethrough/bootstrap-linux.sh \
   --comfy-root /opt/seethrough/ComfyUI \
   --venv-root /opt/seethrough/venv \
-  --download-models
+  --output-dir /opt/seethrough/output \
+  --preset probe,balanced \
+  --seed 42
 ```
+
+只安装可加 `--install-only`；只跑链路探针可用 `--preset probe`。入口支持 apt 和 dnf/yum，
+uv Python 下载卡顿时会在硬超时后自动回退到 Astral 官方 `python-build-standalone` GitHub releases。
 
 完整安装、切片参数和指定输出说明见
 [See-through 完整工具链](docs/SEETHROUGH_TOOLCHAIN.zh-CN.md)；底层环境维护细节见
@@ -143,7 +148,7 @@ macOS：
 
 Linux 使用同一个 shell 测试入口；`probe` 是 1 step 链路验证，`balanced` 是 H20 实测的
 1024/720/30 实用档，`max` 是非常耗时的 2048/2048/100 压力测试。完整实测问题、速度数据、
-tar/scp 流程和新环境复跑说明见
+一键装机参数、立即 tar/scp 流程和故障恢复说明见
 [Linux/H20 实测复盘与复跑手册](docs/SEETHROUGH_LINUX_H20_RUNBOOK.zh-CN.md)。
 
 默认`pilot`预设用于确认链路；可以使用`-Preset screen`/`--preset screen`做Seed初筛，或使用

@@ -31,76 +31,148 @@ See-through 可以在 Linux + NVIDIA H20 上离线运行。实测已完成从赵
 
 临时实例在最高配任务结束前停止接受 SSH，因此服务器上的成功产物没有来得及拉回 PC。复跑时应在每个成功档位结束后立即归档和下载，不要等最高配一起打包。
 
-## 新环境最快复跑
+## 全新 Linux GPU Docker：一条命令装机并跑测
 
-要求：Linux x86_64、NVIDIA CUDA GPU、root 或 sudo、至少约 20 GiB 可用磁盘。模型本体约 12.5 GiB。
+要求：Linux x86_64、可见的 NVIDIA CUDA GPU、root 或 sudo、至少约 20 GiB 可用磁盘。模型本体约 12.5 GiB。Docker 必须通过 NVIDIA Container Toolkit 暴露 GPU，例如创建容器时使用 `--gpus all`；脚本不会安装或修改宿主机驱动。
 
 ```bash
 git clone https://github.com/digua0222-stack/SpineTools.git /opt/SpineTools
 cd /opt/SpineTools
 
-./scripts/seethrough/install-linux.sh \
+./scripts/seethrough/bootstrap-linux.sh \
   --comfy-root /opt/seethrough/ComfyUI \
   --venv-root /opt/seethrough/venv \
-  --download-models
+  --output-dir /opt/seethrough/output \
+  --preset probe,balanced \
+  --seed 42 \
+  --run-id h20-first
 ```
 
-安装器会完成：
-
-1. 安装 `git`、`curl`、`libGL.so.1` 和 glib2。
-2. 安装 uv 与 Python 3.12。
-3. 克隆并锁定 ComfyUI 和 See-through 提交。
-4. 安装与 535 驱动兼容的 PyTorch cu121 依赖。
-5. 应用 Linux/H20 文本编码器 FP32 兼容补丁。
-6. 下载锁定的 LayerDiff、Marigold 和 scheduler 文件。
-7. 生成运行时清单并执行环境诊断。
-
-先跑 1-step 链路探针，并立即生成 tar：
+`bootstrap-linux.sh` 是全新容器的首选总入口。默认值已经是 `probe,balanced`、`seed=42`、`quant=none`、`group-offload=off`，所以上述参数也可以缩写成：
 
 ```bash
-./scripts/seethrough/test-zhaoyun.sh \
-  --preset probe \
-  --comfy-root /opt/seethrough/ComfyUI \
-  --venv-root /opt/seethrough/venv \
-  --skip-install \
-  --output-dir /opt/seethrough/output/zhaoyun-probe \
-  --tar /opt/seethrough/zhaoyun-probe.tar.gz
+./scripts/seethrough/bootstrap-linux.sh --run-id h20-first
 ```
 
-探针成功后跑实用终稿档：
+一次执行会依次完成：
+
+1. 检查 Linux、apt/dnf/yum、NVIDIA GPU 可见性和基础环境。
+2. 在 Debian/Ubuntu 使用 apt，在 TencentOS/RHEL 系使用 dnf/yum 安装 `git`、`curl`、`tar`、`libGL.so.1`、glib2 等依赖。
+3. 安装 uv 和独立 Python 3.12，不升级或覆盖系统 Python。
+4. 克隆并锁定 ComfyUI 和 See-through 提交；已有正确提交直接复用，检测到本地修改则停下而不是覆盖。
+5. 安装与驱动 535 兼容的 PyTorch cu121 依赖，应用 H20 文本编码器 FP32 补丁。
+6. 按锁定 revision 下载 LayerDiff、Marigold 和 scheduler；完整模型通过 marker 直接复用。
+7. 写入运行时、模型、诊断、GPU、OS、磁盘、内存和 `pip freeze` 清单。
+8. 先跑 probe，成功后立即生成 `probe-seed-42.tar.gz`；再跑 balanced，成功后立即生成 `balanced-seed-42.tar.gz`。
+
+每次运行创建新的 `<output-dir>/<run-id>/`，不会清空旧输出。目录结构示例：
+
+```text
+/opt/seethrough/output/h20-first/
+├── bootstrap.log
+├── install-audit/
+├── install-audit.tar.gz
+├── probe-seed-42/
+├── probe-seed-42.tar.gz
+├── balanced-seed-42/
+└── balanced-seed-42.tar.gz
+```
+
+只安装和诊断，不推理：
 
 ```bash
-./scripts/seethrough/test-zhaoyun.sh \
-  --preset balanced \
-  --comfy-root /opt/seethrough/ComfyUI \
-  --venv-root /opt/seethrough/venv \
-  --skip-install \
-  --output-dir /opt/seethrough/output/zhaoyun-balanced \
-  --tar /opt/seethrough/zhaoyun-balanced.tar.gz
+./scripts/seethrough/bootstrap-linux.sh \
+  --install-only \
+  --run-id h20-install
 ```
 
-从 Windows PC 拉回：
+只跑 probe 或 balanced；安装步骤仍会幂等复检并复用：
+
+```bash
+./scripts/seethrough/bootstrap-linux.sh --preset probe --run-id h20-probe
+./scripts/seethrough/bootstrap-linux.sh --preset balanced --seed 123 --run-id h20-balanced-123
+```
+
+使用 Hugging Face endpoint 时显式传入；不传则使用官方站点。不要在 URL 中嵌入用户名、密码或 Token，入口会拒绝带内嵌凭据的 URL：
+
+```bash
+./scripts/seethrough/bootstrap-linux.sh \
+  --hf-endpoint https://your-approved-hf-endpoint.example \
+  --run-id h20-hf-endpoint
+```
+
+从 Windows PC 拉回每个已经成功的归档：
 
 ```powershell
 New-Item -ItemType Directory -Force H:\spine_research\SpineTools\artifacts\remote-h20
-scp -P <SSH端口> root@<服务器IP>:/opt/seethrough/zhaoyun-balanced.tar.gz `
+scp -P <SSH端口> root@<服务器IP>:/opt/seethrough/output/h20-first/probe-seed-42.tar.gz `
+  H:\spine_research\SpineTools\artifacts\remote-h20\
+scp -P <SSH端口> root@<服务器IP>:/opt/seethrough/output/h20-first/balanced-seed-42.tar.gz `
   H:\spine_research\SpineTools\artifacts\remote-h20\
 ```
 
 输入密码时只在 `scp` 交互提示中输入，不要把密码写入脚本、命令参数、环境变量或文档。
+
+## uv Python 卡顿检测与官方 GitHub 回退
+
+安装器先给 uv 默认 Python 源一次 120 秒窗口。超时或下载失败后，会自动设置：
+
+```text
+UV_PYTHON_INSTALL_MIRROR=https://github.com/astral-sh/python-build-standalone/releases/download
+```
+
+然后最多重试三次；每次都有独立硬超时，并同时设置 uv 的 HTTP read timeout 和 retry。此 URL 是 uv 文档定义的 Astral 官方 `python-build-standalone` GitHub release 基址，不使用第三方代理。可调参数：
+
+```bash
+./scripts/seethrough/bootstrap-linux.sh \
+  --python-install-timeout 180 \
+  --python-install-retries 5 \
+  --run-id h20-slow-network
+```
+
+官方说明见 [uv 环境变量文档](https://docs.astral.sh/uv/configuration/environment/#uv_python_install_mirror)。
+
+## 故障恢复与重复运行
+
+脚本遵循“复用完整步骤、拒绝覆盖可疑状态、为每次跑测新建会话目录”的原则。失败后先看：
+
+```bash
+tail -n 200 /opt/seethrough/output/<run-id>/bootstrap.log
+```
+
+常见恢复方式：
+
+- **Python 下载超时**：日志出现 `[fallback]` 属于预期自动恢复；官方 GitHub 多次失败时，用更大的 `--python-install-timeout` 和新 `--run-id` 重跑。uv 已完成的缓存会复用。
+- **GPU 不可见**：确认容器用 NVIDIA runtime/`--gpus all` 启动，并在容器内先执行 `nvidia-smi -L`。脚本不会在容器内修宿主机驱动。
+- **已有 ComfyUI 有本地修改**：安装器会明确报错并保持原目录不变。最安全的恢复是给本任务换一个空的 `--comfy-root`，不要删除未知用户文件。
+- **模型下载中断**：直接以新 `--run-id` 重跑；revision marker 完整的模型会跳过，不完整模型会续传/修复。只有确认缓存损坏时才加 `--force-models`。
+- **probe 成功、balanced 失败或实例即将回收**：probe 的 tar 已经存在，可立即 `scp`。恢复时使用同一 ComfyUI/venv，改成 `--preset balanced` 和新 `--run-id`，不会重做完整安装。
+- **会话名冲突**：为保护旧输出，已有 `<output-dir>/<run-id>` 时脚本拒绝进入；换一个 `--run-id`，不要手工覆盖。
+- **归档中断**：归档先写 `.partial.<pid>`，成功后才原子改名为 `.tar.gz`。只有最终 `.tar.gz` 是可交付产物。
+
+`--dry-run` 可在无 GPU 的 CI/开发机上验证参数、安装计划和 probe/balanced 计划，不创建输出目录：
+
+```bash
+./scripts/seethrough/bootstrap-linux.sh \
+  --dry-run \
+  --comfy-root /opt/seethrough/ComfyUI \
+  --venv-root /opt/seethrough/venv \
+  --output-dir /opt/seethrough/output
+```
+
+底层调试时仍可分别使用 `install-linux.sh` 和 `test-zhaoyun.sh`，但全新 GPU Docker 优先使用总入口，以确保日志、清单和立即归档不会遗漏。
 
 ## 最高配压力测试
 
 工具允许的上限是 2048 / depth 2048 / 100 steps：
 
 ```bash
-./scripts/seethrough/test-zhaoyun.sh \
+./scripts/seethrough/bootstrap-linux.sh \
   --preset max \
   --comfy-root /opt/seethrough/ComfyUI \
   --venv-root /opt/seethrough/venv \
-  --skip-install \
-  --output-dir /opt/seethrough/output/zhaoyun-max \
-  --tar /opt/seethrough/zhaoyun-max.tar.gz
+  --output-dir /opt/seethrough/output \
+  --run-id h20-max
 ```
 
 这是压力测试，不是日常质量档。扩散主计算可粗略看作与 `steps × resolution²` 成正比；相对 1024/30，2048/100 的理论计算量约为：

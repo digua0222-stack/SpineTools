@@ -97,7 +97,26 @@ def git_head(root: Path) -> str | None:
 def ensure_comfyui(target: Path, config: dict, *, dry_run: bool) -> None:
     main_py = target / "main.py"
     if main_py.is_file():
-        print(f"[found] ComfyUI: {target} ({git_head(target) or 'non-git install'})", flush=True)
+        expected = config["comfyUi"]["testedCommit"]
+        current = git_head(target)
+        print(f"[found] ComfyUI: {target} ({current or 'non-git install'})", flush=True)
+        if current == expected:
+            print(f"[ready] ComfyUI revision: {current}", flush=True)
+            return
+        if current is None:
+            raise RuntimeError(
+                f"Existing ComfyUI is not a Git checkout and cannot be pinned safely: {target}. "
+                "Choose an empty --comfy-root for the isolated runtime."
+            )
+        if not dry_run:
+            dirty = run(["git", "-C", target, "status", "--porcelain"], capture=True)
+            if dirty:
+                raise RuntimeError(
+                    f"ComfyUI repository has local changes and was left untouched: {target}. "
+                    "Choose an empty --comfy-root or clean it explicitly."
+                )
+        run(["git", "-C", target, "fetch", "origin", expected], dry_run=dry_run)
+        run(["git", "-C", target, "checkout", "--detach", expected], dry_run=dry_run)
         return
     if target.exists() and any(target.iterdir()):
         raise RuntimeError(f"ComfyUI target exists but is not a valid installation: {target}")

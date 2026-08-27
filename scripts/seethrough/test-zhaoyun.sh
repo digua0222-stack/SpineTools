@@ -17,7 +17,11 @@ STEPS=""
 SEED="42"
 ALPHA_MODE="preserve"
 QUANT_MODE="none"
-GROUP_OFFLOAD="auto"
+if [[ "$(uname -s)" == "Linux" ]]; then
+  GROUP_OFFLOAD="off"
+else
+  GROUP_OFFLOAD="auto"
+fi
 TBLR_SPLIT="true"
 USE_LAMA="false"
 HF_ENDPOINT_VALUE=""
@@ -52,6 +56,8 @@ Installs pinned ComfyUI + See-through + models, then runs the bundled Zhao Yun i
   --alpha-mode preserve|opaque
   --quant-mode none|nf4
   --group-offload auto|on|off
+  --port N                       Temporary ComfyUI port
+  --inference-timeout N          Inference timeout in seconds
   --no-tblr-split
   --use-lama
   --force-models
@@ -80,6 +86,8 @@ while [[ $# -gt 0 ]]; do
     --alpha-mode) ALPHA_MODE="$2"; shift 2 ;;
     --quant-mode) QUANT_MODE="$2"; shift 2 ;;
     --group-offload) GROUP_OFFLOAD="$2"; shift 2 ;;
+    --port) PORT="$2"; shift 2 ;;
+    --inference-timeout) INFERENCE_TIMEOUT="$2"; shift 2 ;;
     --no-tblr-split) TBLR_SPLIT="false"; shift ;;
     --use-lama) USE_LAMA="true"; shift ;;
     --force-models) FORCE_MODELS="true"; shift ;;
@@ -126,6 +134,7 @@ echo "  resolution:       $RESOLUTION"
 echo "  depth resolution: $DEPTH_RESOLUTION"
 echo "  steps / seed:     $STEPS / $SEED"
 echo "  alpha / quant:    $ALPHA_MODE / $QUANT_MODE"
+echo "  group offload:    $GROUP_OFFLOAD"
 
 if [[ "$SKIP_INSTALL" != "true" ]]; then
   install_args=(
