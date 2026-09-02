@@ -15,7 +15,9 @@ if [ ! -x "$UV" ]; then
   UV="$HOME/.local/bin/uv"
 fi
 
-"$UV" venv --python 3.12 "$VENV_ROOT"
+if [ ! -x "$VENV_ROOT/bin/python" ]; then
+  "$UV" venv --python 3.12 "$VENV_ROOT"
+fi
 "$UV" pip install --python "$VENV_ROOT/bin/python" \
   torch==2.5.1 torchvision==0.20.1 \
   --index-url https://download.pytorch.org/whl/cu121

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "description": "V1 five-part regression expectations (zhaoyun.png + profiles/zhaoyun/prompts.json + sam2.1_hiera_large)",
+  "sourceSha256": "edbe1d7ce6483988a10737cd70fc3dbb03a18ecefc087207a6979a0e86c89d48",
+  "modelSha256": "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318",
+  "hashes": {
+    "parts/face.png": "8fbd40404f1ad996db45dfa7faaa8a50603ce91ffde49656883b645f7d02852e",
+    "parts/forearm_l.png": "701286f4a6586d7f12de9f17e58da483d07fba2b9252068dec45b3aae4001e5e",
+    "parts/hand_l.png": "198b51b1e38ca32c5f1531a431b8998639221e1ffa2fb8a6a93d281254b0951c",
+    "parts/helmet.png": "60e641121256cdd81ca57f594530ff422d5b49de6f7b8d6606c97e1624a090c0",
+    "parts/spear.png": "6ca9db802fe8e2d65ae5e7bf91b7a26245ded0f3e48f28d518cd3dfc4d1cdd4b",
+    "masks/face.png": "e603db10d0544f9478bf08d9520bc7755d5157a8d6e6027d227dae9847601fc8",
+    "masks/forearm_l.png": "c1ec3d15722d794f6776fc70116b19dd0b6d6a4e1525354af3feb0d4d82762a3",
+    "masks/hand_l.png": "e441596849db47cf93df2405ed46be3ca76dc9d611af49e37885726907660cd1",
+    "masks/helmet.png": "21b46bba5447d43c5a505813957acd270eb79aee1a017712d1e4d86b5967c140",
+    "masks/spear.png": "dc1d0ecae1d53bb77387598ec7a29d4136978daee3b37d1334c5f8a8edd023da"
+  }
+}
