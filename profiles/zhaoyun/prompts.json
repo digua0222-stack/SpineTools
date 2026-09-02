@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "source": "examples/seethrough/zhaoyun.png",
+  "sourceSha256": "edbe1d7ce6483988a10737cd70fc3dbb03a18ecefc087207a6979a0e86c89d48",
+  "setupOrigin": [
+    195,
+    245
+  ],
+  "model": {
+    "family": "sam2.1",
+    "checkpoint": "sam2.1_hiera_large.pt"
+  },
+  "parts": [
+    {
+      "name": "helmet",
+      "parentBone": "head",
+      "box": [
+        145,
+        38,
+        288,
+        170
+      ],
+      "positivePoints": [
+        [
+          182,
+          92
+        ],
+        [
+          248,
+          102
+        ],
+        [
+          170,
+          128
+        ],
+        [
+          230,
+          58
+        ],
+        [
+          200,
+          72
+        ]
+      ],
+      "negativePoints": [
+        [
+          222,
+          140
+        ],
+        [
+          205,
+          178
+        ],
+        [
+          150,
+          25
+        ],
+        [
+          185,
+          18
+        ],
+        [
+          128,
+          50
+        ],
+        [
+          158,
+          62
+        ]
+      ],
+      "candidateIndex": 1,
+      "pivotSource": [
+        215,
+        105
+      ],
+      "jointTargetSource": [
+        215,
+        60
+      ],
+      "drawGroup": "head",
+      "reviewStatus": "draft",
+      "subtract": [
+        "face"
+      ]
+    },
+    {
+      "name": "face",
+      "parentBone": "head",
+      "box": [
+        192,
+        105,
+        262,
+        172
+      ],
+      "positivePoints": [
+        [
+          222,
+          132
+        ],
+        [
+          238,
+          146
+        ]
+      ],
+      "negativePoints": [
+        [
+          205,
+          112
+        ],
+        [
+          222,
+          170
+        ]
+      ],
+      "candidateIndex": 2,
+      "pivotSource": [
+        226,
+        128
+      ],
+      "jointTargetSource": [
+        226,
+        160
+      ],
+      "drawGroup": "head",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "forearm_l",
+      "parentBone": "upper_arm_l",
+      "box": [
+        96,
+        182,
+        152,
+        242
+      ],
+      "positivePoints": [
+        [
+          122,
+          208
+        ],
+        [
+          128,
+          222
+        ]
+      ],
+      "negativePoints": [
+        [
+          155,
+          192
+        ],
+        [
+          112,
+          244
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "hand_l"
+      ],
+      "pivotSource": [
+        138,
+        196
+      ],
+      "jointTargetSource": [
+        124,
+        226
+      ],
+      "drawGroup": "arm_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "hand_l",
+      "parentBone": "forearm_l",
+      "box": [
+        108,
+        210,
+        152,
+        243
+      ],
+      "positivePoints": [
+        [
+          124,
+          226
+        ],
+        [
+          137,
+          223
+        ]
+      ],
+      "negativePoints": [
+        [
+          120,
+          205
+        ],
+        [
+          126,
+          240
+        ]
+      ],
+      "candidateIndex": 0,
+      "pivotSource": [
+        118,
+        216
+      ],
+      "jointTargetSource": [
+        128,
+        230
+      ],
+      "drawGroup": "arm_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "spear",
+      "parentBone": "hand_r",
+      "box": [
+        0,
+        165,
+        498,
+        292
+      ],
+      "positivePoints": [
+        [
+          30,
+          222
+        ],
+        [
+          62,
+          236
+        ],
+        [
+          180,
+          227
+        ],
+        [
+          280,
+          214
+        ],
+        [
+          380,
+          200
+        ],
+        [
+          450,
+          193
+        ],
+        [
+          420,
+          208
+        ],
+        [
+          482,
+          186
+        ],
+        [
+          305,
+          252
+        ]
+      ],
+      "negativePoints": [
+        [
+          125,
+          220
+        ],
+        [
+          268,
+          216
+        ],
+        [
+          62,
+          272
+        ],
+        [
+          200,
+          180
+        ]
+      ],
+      "candidateIndex": 0,
+      "pivotSource": [
+        235,
+        217
+      ],
+      "jointTargetSource": [
+        480,
+        190
+      ],
+      "drawGroup": "prop_front",
+      "reviewStatus": "draft"
+    }
+  ]
+}
