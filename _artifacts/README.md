@@ -16,4 +16,6 @@
 
 | batch6 | `zhaoyun-20260902/batch6-zhaoyun-quality-final.tar.gz` | 武器/头部 seed-55 quality 档验证 | 武器 81.53（9层）/ 头部 70.36，均不如 screen 档，**screen 档为最终推荐** |
 
+| batch7 | `zhaoyun-20260902/batch7-zhaoyun-tune-seed55.tar.gz` | 第一轮单变量实验（seed-55，6 组参数） | **c1（1024/720/24）: 80.83 胜出**；Resolution 是最大正向杠杆；Steps>24 及 LaMa 无益 |
+
 产物包内包含每个 run 的分层结果、重组对比图、quality_report.json、quality-ranking.json 及 install-audit。
