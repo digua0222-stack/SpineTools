@@ -18,4 +18,6 @@
 
 | batch7 | `zhaoyun-20260902/batch7-zhaoyun-tune-seed55.tar.gz` | 第一轮单变量实验（seed-55，6 组参数） | **c1（1024/720/24）: 80.83 胜出**；Resolution 是最大正向杠杆；Steps>24 及 LaMa 无益 |
 
+| batch8 | `zhaoyun-20260902/batch8-zhaoyun-seed-round3.tar.gz` | 第二轮 Seed 筛选（1024/720/24 × seed 5,13,29,47,63,79,97,113） | seed-29: 78.26 最高，**均未超过 seed-55 的 80.83**；全图终稿锁定 seed-55 @ 1024/720/24 |
+
 产物包内包含每个 run 的分层结果、重组对比图、quality_report.json、quality-ranking.json 及 install-audit。
