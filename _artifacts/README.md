@@ -12,4 +12,6 @@
 | batch3 | `zhaoyun-20260902/batch3-zhaoyun-body-screen.tar.gz` | 人物分离图 screen 档（seed 7,23,42,55,88） | seed-55: 76.66（25层）；分离未超全图 78.63，changed-pixel 变差 |
 | batch4 | `zhaoyun-20260902/batch4-zhaoyun-weapon-screen.tar.gz` | 长枪分离图 screen 档（seed 42,55,88） | **seed-55: 88.36（26层，全部指标达标，首个 PASS 级）** |
 
+| batch5 | `zhaoyun-20260902/batch5-zhaoyun-parts-screen.tar.gz` | 局部多Pass screen 档（头/躯干/腿/披风 × seed 55,88） | **头部 seed-55: 80.01（23层）**；躯干 seed-88: 77.32；披风 seed-55: 73.78；腿部 seed-55: 65.05 |
+
 产物包内包含每个 run 的分层结果、重组对比图、quality_report.json、quality-ranking.json 及 install-audit。
