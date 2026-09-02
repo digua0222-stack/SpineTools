@@ -154,6 +154,11 @@ uv Python 下载卡顿时会在硬超时后自动回退到 Astral 官方 `python
 [See-through 本地环境文档](docs/SEETHROUGH_LOCAL_SETUP.zh-CN.md)。See-through 只负责初始语义
 分层，不会自动产生 Spine 骨骼、pivot、IK 或可直接使用的动画。
 
+See-through 在赵云铠甲角色上出现高分但缺少实际可绑定部件，因此后续主方案调整为“完整站立图、
+SAM 2 人工提示分割、独立骨架/Atlas/Spine JSON 导出及视频动作重定向”。输入不要求 TPos，
+首次人工纠偏保存提示后可无头重放。阶段契约、部件命名、坐标系、验收门、赵云验证步骤及
+第三方许可证边界见 [SAM + Spine 骨骼动画工具链设计](docs/SAM_SPINE_ANIMATION_PIPELINE_DESIGN.zh-CN.md)。
+
 新用户可以直接使用仓库内置的[赵云测试图片](examples/seethrough/zhaoyun.png)，一条命令完成
 ComfyUI、See-through、模型下载、环境诊断、切片和重组验证：
 
