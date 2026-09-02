@@ -21,7 +21,7 @@ scripts/sam/run-zhaoyun-regression.sh          # 工作根默认 /opt/spinetools
 ```
 
 依次执行：环境安装（幂等）→ V0 探针 → V1 五部件分割 → 无头重放 →
-哈希比对（`tests/sam/expected-v1-hashes.json`）。全部一致输出 `[regression] PASS`，
+哈希比对（`tests/sam/expected-zhaoyun-hashes.json`）。全部一致输出 `[regression] PASS`，
 并生成 `regression-<时间戳>.tar.gz` 归档。
 
 ## 分步执行
@@ -36,18 +36,18 @@ scripts/sam/install-sam.sh /opt/spinetools/venv /opt/spinetools/models
   --input examples/seethrough/zhaoyun.png \
   --output output/v0-probe
 
-# 3. V1 分割
+# 3. V2 全拆分
 /opt/spinetools/venv/bin/python -m spinetools.sam.segment \
   --input examples/seethrough/zhaoyun.png \
   --prompts profiles/zhaoyun/prompts.json \
-  --output output/v1-five-parts \
+  --output output/zhaoyun-split \
   --checkpoint /opt/spinetools/models/sam2.1_hiera_large.pt \
   --device cuda --offline
 
 # 4. 哈希校验
 /opt/spinetools/venv/bin/python -m spinetools.sam.verify \
-  --run output/v1-five-parts \
-  --expected tests/sam/expected-v1-hashes.json
+  --run output/zhaoyun-split \
+  --expected tests/sam/expected-zhaoyun-hashes.json
 ```
 
 ## 已验证基线（2026-09-02，H20）
@@ -56,7 +56,13 @@ scripts/sam/install-sam.sh /opt/spinetools/venv /opt/spinetools/models
 |---|---|
 | V0 探针 | 主体覆盖 81.4%，推理 8.78s |
 | V1 五部件 | helmet/face/forearm_l/hand_l/spear 互不吞并，仅关节区 8px 重叠 |
-| 无头重放 | 两次运行部件 PNG 哈希 100% 一致 |
+| V2 全拆分 | 23 部件，Alpha 召回 100%，重叠仅关节区 ≤43px |
+| 无头重放 | 两次运行部件 PNG 哈希 100% 一致（46 项） |
+
+V2 说明：`shoulder_r` 在原图中被头盔护颈完全遮挡，无可见像素可分割，已在
+`profiles/zhaoyun/prompts.json` 的 `occludedParts` 中显式标记（设计文档 3.2 允许）。
+`inner_robe` 为 catch-all 区域部件：SAM 无法将其作为连通对象分割，按设计文档 8.3
+以显式区域声明承接残余像素，不静默丢弃。
 
 ## 提示调优经验（本次实践沉淀）
 

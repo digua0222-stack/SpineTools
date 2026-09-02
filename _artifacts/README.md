@@ -22,4 +22,6 @@
 
 | batch9 | `zhaoyun-20260902/batch9-sam-v0-v1.tar.gz` | SAM 管线 V0 环境探针 + V1 五部件小样（helmet/face/forearm_l/hand_l/spear） | **V1 通过**：部件互不吞并、重放哈希 100% 一致、RGBA 全部来自原图 |
 
+| batch10 | `zhaoyun-20260902/batch10-sam-v2-full-split.tar.gz` | SAM V2 完整站立图拆分（23 部件）+ 回归基线 | **Alpha 召回 100%**，重叠仅关节区 ≤43px，重组均值差 ~1.9/255，重放哈希一致 |
+
 产物包内包含每个 run 的分层结果、重组对比图、quality_report.json、quality-ranking.json 及 install-audit。

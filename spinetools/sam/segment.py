@@ -144,6 +144,10 @@ def main() -> int:
     ap.add_argument("--model-config", default="configs/sam2.1/sam2.1_hiera_l.yaml")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--offline", action="store_true")
+    ap.add_argument("--edge-assign-rounds", type=int, default=3,
+                    help="Grow masks into adjacent uncovered alpha pixels, N ring rounds")
+    ap.add_argument("--residual-rounds", type=int, default=30,
+                    help="Nearest-part assignment rounds for leftover alpha pixels")
     args = ap.parse_args()
 
     if args.offline:
@@ -173,11 +177,17 @@ def main() -> int:
     masks_by_name: Dict[str, np.ndarray] = {}
     failures = []
 
-    # Pass 1: raw masks for every part.
+    # Pass 1: raw masks for every part. Parts flagged "catchAll" are explicit
+    # region claims (design doc 8.3): SAM is skipped, they start empty and
+    # receive leftover pixels inside their box in pass 2.6.
     raw_masks: Dict[str, np.ndarray] = {}
     seg_info: Dict[str, Dict[str, Any]] = {}
     for part in prompts["parts"]:
         name = part["name"]
+        if part.get("catchAll"):
+            raw_masks[name] = np.zeros(src.shape[:2], bool)
+            seg_info[name] = {"candidateScores": [], "selectedCandidate": -1}
+            continue
         try:
             res = segment_part(predictor, part, scale, src.shape[:2])
             raw_masks[name] = res["mask"]
@@ -197,6 +207,71 @@ def main() -> int:
             if other in raw_masks:
                 mask = mask & ~raw_masks[other]
         masks_by_name[name] = mask & src_alpha
+
+    # Pass 2.5: edge assignment - grow each mask into adjacent uncovered
+    # alpha pixels (anti-aliased edges SAM leaves behind). Deterministic:
+    # prompt order priority, one pixel ring per round.
+    edge_rounds = args.edge_assign_rounds
+    if edge_rounds > 0:
+        covered = np.zeros_like(src_alpha)
+        for m in masks_by_name.values():
+            covered |= m
+        for _ in range(edge_rounds):
+            frontier = src_alpha & ~covered
+            if not frontier.any():
+                break
+            for part in prompts["parts"]:
+                name = part["name"]
+                if name not in masks_by_name:
+                    continue
+                m = masks_by_name[name]
+                grown = m.copy()
+                grown[1:, :] |= m[:-1, :]
+                grown[:-1, :] |= m[1:, :]
+                grown[:, 1:] |= m[:, :-1]
+                grown[:, :-1] |= m[:, 1:]
+                take = frontier & grown & ~m
+                if take.any():
+                    masks_by_name[name] = m | take
+                    covered |= take
+                    frontier = src_alpha & ~covered
+
+    # Pass 2.6: catch-all parts claim leftover pixels inside their boxes.
+    for part in prompts["parts"]:
+        name = part["name"]
+        if not part.get("catchAll") or name not in masks_by_name:
+            continue
+        l, t, r, b = part["box"]
+        zone = np.zeros_like(src_alpha)
+        zone[t:b, l:r] = True
+        take = src_alpha & ~covered & zone
+        masks_by_name[name] |= take
+        covered |= take
+
+    # Pass 2.7: residual nearest-part assignment (bounded dilation), so thin
+    # anti-aliased leftovers join their closest part. Anything still uncovered
+    # after max rounds is reported, never silently dropped (doc 13.1).
+    residual_rounds = args.residual_rounds
+    if residual_rounds > 0:
+        order = [p["name"] for p in prompts["parts"] if p["name"] in masks_by_name]
+        lbl = np.zeros(src.shape[:2], np.int32)
+        for i, name in enumerate(order):
+            lbl[masks_by_name[name]] = i + 1
+        for _ in range(residual_rounds):
+            unc = src_alpha & (lbl == 0)
+            if not unc.any():
+                break
+            up = np.zeros_like(lbl); up[1:, :] = lbl[:-1, :]
+            dn = np.zeros_like(lbl); dn[:-1, :] = lbl[1:, :]
+            lf = np.zeros_like(lbl); lf[:, 1:] = lbl[:, :-1]
+            rt = np.zeros_like(lbl); rt[:, :-1] = lbl[:, 1:]
+            neigh = np.maximum(np.maximum(up, dn), np.maximum(lf, rt))
+            adopt = unc & (neigh > 0)
+            if not adopt.any():
+                break
+            lbl[adopt] = neigh[adopt]
+        for i, name in enumerate(order):
+            masks_by_name[name] |= (lbl == i + 1)
 
     # Pass 3: export.
     for i, part in enumerate(prompts["parts"]):

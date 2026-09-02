@@ -12,6 +12,59 @@
   },
   "parts": [
     {
+      "name": "back_hair",
+      "parentBone": "head",
+      "box": [
+        95,
+        2,
+        255,
+        120
+      ],
+      "positivePoints": [
+        [
+          170,
+          30
+        ],
+        [
+          130,
+          45
+        ],
+        [
+          210,
+          25
+        ],
+        [
+          150,
+          70
+        ]
+      ],
+      "negativePoints": [
+        [
+          230,
+          60
+        ],
+        [
+          240,
+          90
+        ],
+        [
+          180,
+          100
+        ]
+      ],
+      "candidateIndex": 0,
+      "pivotSource": [
+        215,
+        30
+      ],
+      "jointTargetSource": [
+        120,
+        55
+      ],
+      "drawGroup": "hair_back",
+      "reviewStatus": "draft"
+    },
+    {
       "name": "helmet",
       "parentBone": "head",
       "box": [
@@ -69,6 +122,12 @@
         ]
       ],
       "candidateIndex": 1,
+      "subtract": [
+        "face",
+        "back_hair",
+        "front_hair",
+        "neck"
+      ],
       "pivotSource": [
         215,
         105
@@ -78,6 +137,51 @@
         60
       ],
       "drawGroup": "head",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "front_hair",
+      "parentBone": "head",
+      "box": [
+        195,
+        95,
+        290,
+        155
+      ],
+      "positivePoints": [
+        [
+          265,
+          118
+        ],
+        [
+          278,
+          135
+        ],
+        [
+          255,
+          108
+        ]
+      ],
+      "negativePoints": [
+        [
+          230,
+          135
+        ],
+        [
+          250,
+          145
+        ]
+      ],
+      "candidateIndex": 0,
+      "pivotSource": [
+        258,
+        105
+      ],
+      "jointTargetSource": [
+        275,
+        145
+      ],
+      "drawGroup": "hair_front",
       "reviewStatus": "draft",
       "subtract": [
         "face"
@@ -122,6 +226,195 @@
         160
       ],
       "drawGroup": "head",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "neck",
+      "parentBone": "torso",
+      "box": [
+        215,
+        155,
+        262,
+        190
+      ],
+      "positivePoints": [
+        [
+          236,
+          170
+        ],
+        [
+          225,
+          178
+        ],
+        [
+          250,
+          172
+        ]
+      ],
+      "negativePoints": [
+        [
+          232,
+          158
+        ],
+        [
+          240,
+          185
+        ]
+      ],
+      "candidateIndex": 0,
+      "pivotSource": [
+        236,
+        168
+      ],
+      "jointTargetSource": [
+        236,
+        182
+      ],
+      "drawGroup": "torso",
+      "reviewStatus": "draft",
+      "subtract": [
+        "helmet",
+        "face"
+      ]
+    },
+    {
+      "name": "torso",
+      "parentBone": "hip",
+      "box": [
+        170,
+        165,
+        300,
+        250
+      ],
+      "positivePoints": [
+        [
+          220,
+          200
+        ],
+        [
+          250,
+          195
+        ],
+        [
+          270,
+          230
+        ],
+        [
+          200,
+          215
+        ]
+      ],
+      "negativePoints": [
+        [
+          235,
+          170
+        ]
+      ],
+      "candidateIndex": 2,
+      "subtract": [
+        "neck",
+        "shoulder_l",
+        "upper_arm_l",
+        "upper_arm_r",
+        "pelvis",
+        "forearm_l",
+        "forearm_r",
+        "spear",
+        "helmet"
+      ],
+      "pivotSource": [
+        228,
+        175
+      ],
+      "jointTargetSource": [
+        228,
+        245
+      ],
+      "drawGroup": "torso",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "shoulder_l",
+      "parentBone": "torso",
+      "box": [
+        122,
+        142,
+        190,
+        195
+      ],
+      "positivePoints": [
+        [
+          152,
+          162
+        ],
+        [
+          140,
+          175
+        ]
+      ],
+      "negativePoints": [
+        [
+          175,
+          165
+        ],
+        [
+          150,
+          195
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "upper_arm_l"
+      ],
+      "pivotSource": [
+        172,
+        168
+      ],
+      "jointTargetSource": [
+        135,
+        185
+      ],
+      "drawGroup": "arm_back",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "upper_arm_l",
+      "parentBone": "shoulder_l",
+      "box": [
+        112,
+        178,
+        162,
+        215
+      ],
+      "positivePoints": [
+        [
+          136,
+          192
+        ]
+      ],
+      "negativePoints": [
+        [
+          150,
+          180
+        ],
+        [
+          125,
+          212
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "forearm_l"
+      ],
+      "pivotSource": [
+        142,
+        184
+      ],
+      "jointTargetSource": [
+        130,
+        208
+      ],
+      "drawGroup": "arm_back",
       "reviewStatus": "draft"
     },
     {
@@ -210,6 +503,506 @@
       "reviewStatus": "draft"
     },
     {
+      "name": "upper_arm_r",
+      "parentBone": "shoulder_r",
+      "box": [
+        252,
+        180,
+        280,
+        202
+      ],
+      "positivePoints": [
+        [
+          262,
+          190
+        ],
+        [
+          268,
+          193
+        ]
+      ],
+      "negativePoints": [
+        [
+          262,
+          181
+        ],
+        [
+          276,
+          200
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "forearm_r"
+      ],
+      "pivotSource": [
+        284,
+        194
+      ],
+      "jointTargetSource": [
+        280,
+        212
+      ],
+      "drawGroup": "arm_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "forearm_r",
+      "parentBone": "upper_arm_r",
+      "box": [
+        252,
+        195,
+        300,
+        232
+      ],
+      "positivePoints": [
+        [
+          272,
+          206
+        ],
+        [
+          285,
+          212
+        ]
+      ],
+      "negativePoints": [
+        [
+          265,
+          225
+        ]
+      ],
+      "candidateIndex": 2,
+      "subtract": [
+        "hand_r"
+      ],
+      "pivotSource": [
+        282,
+        210
+      ],
+      "jointTargetSource": [
+        268,
+        224
+      ],
+      "drawGroup": "arm_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "hand_r",
+      "parentBone": "forearm_r",
+      "box": [
+        248,
+        198,
+        292,
+        238
+      ],
+      "positivePoints": [
+        [
+          266,
+          216
+        ],
+        [
+          276,
+          220
+        ]
+      ],
+      "negativePoints": [
+        [
+          280,
+          205
+        ],
+        [
+          262,
+          236
+        ]
+      ],
+      "candidateIndex": 0,
+      "pivotSource": [
+        276,
+        212
+      ],
+      "jointTargetSource": [
+        262,
+        222
+      ],
+      "drawGroup": "arm_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "pelvis",
+      "parentBone": "hip",
+      "box": [
+        170,
+        242,
+        292,
+        292
+      ],
+      "positivePoints": [
+        [
+          232,
+          258
+        ],
+        [
+          205,
+          268
+        ],
+        [
+          258,
+          268
+        ]
+      ],
+      "negativePoints": [
+        [
+          225,
+          240
+        ],
+        [
+          180,
+          290
+        ],
+        [
+          285,
+          290
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "thigh_l",
+        "thigh_r",
+        "torso"
+      ],
+      "pivotSource": [
+        230,
+        248
+      ],
+      "jointTargetSource": [
+        230,
+        285
+      ],
+      "drawGroup": "torso",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "thigh_l",
+      "parentBone": "hip",
+      "box": [
+        135,
+        270,
+        205,
+        312
+      ],
+      "positivePoints": [
+        [
+          168,
+          288
+        ]
+      ],
+      "negativePoints": [
+        [
+          185,
+          275
+        ],
+        [
+          160,
+          310
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "shin_l",
+        "spear",
+        "pelvis"
+      ],
+      "pivotSource": [
+        180,
+        278
+      ],
+      "jointTargetSource": [
+        162,
+        305
+      ],
+      "drawGroup": "leg_back",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "shin_l",
+      "parentBone": "thigh_l",
+      "box": [
+        140,
+        298,
+        200,
+        328
+      ],
+      "positivePoints": [
+        [
+          168,
+          312
+        ]
+      ],
+      "negativePoints": [
+        [
+          170,
+          298
+        ],
+        [
+          165,
+          328
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "foot_l"
+      ],
+      "pivotSource": [
+        166,
+        302
+      ],
+      "jointTargetSource": [
+        168,
+        324
+      ],
+      "drawGroup": "leg_back",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "foot_l",
+      "parentBone": "shin_l",
+      "box": [
+        128,
+        315,
+        210,
+        345
+      ],
+      "positivePoints": [
+        [
+          160,
+          330
+        ],
+        [
+          180,
+          335
+        ]
+      ],
+      "negativePoints": [
+        [
+          168,
+          315
+        ]
+      ],
+      "candidateIndex": 2,
+      "pivotSource": [
+        172,
+        322
+      ],
+      "jointTargetSource": [
+        150,
+        338
+      ],
+      "drawGroup": "leg_back",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "thigh_r",
+      "parentBone": "hip",
+      "box": [
+        225,
+        268,
+        300,
+        310
+      ],
+      "positivePoints": [
+        [
+          262,
+          285
+        ]
+      ],
+      "negativePoints": [
+        [
+          245,
+          272
+        ],
+        [
+          270,
+          308
+        ]
+      ],
+      "candidateIndex": 0,
+      "subtract": [
+        "shin_r",
+        "spear",
+        "pelvis"
+      ],
+      "pivotSource": [
+        250,
+        276
+      ],
+      "jointTargetSource": [
+        268,
+        302
+      ],
+      "drawGroup": "leg_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "shin_r",
+      "parentBone": "thigh_r",
+      "box": [
+        240,
+        295,
+        305,
+        330
+      ],
+      "positivePoints": [
+        [
+          268,
+          310
+        ],
+        [
+          280,
+          315
+        ]
+      ],
+      "negativePoints": [
+        [
+          265,
+          298
+        ],
+        [
+          275,
+          328
+        ]
+      ],
+      "candidateIndex": 2,
+      "subtract": [
+        "foot_r"
+      ],
+      "pivotSource": [
+        270,
+        300
+      ],
+      "jointTargetSource": [
+        274,
+        324
+      ],
+      "drawGroup": "leg_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "foot_r",
+      "parentBone": "shin_r",
+      "box": [
+        240,
+        318,
+        312,
+        345
+      ],
+      "positivePoints": [
+        [
+          275,
+          332
+        ]
+      ],
+      "negativePoints": [
+        [
+          272,
+          318
+        ]
+      ],
+      "candidateIndex": 0,
+      "pivotSource": [
+        272,
+        322
+      ],
+      "jointTargetSource": [
+        292,
+        338
+      ],
+      "drawGroup": "leg_front",
+      "reviewStatus": "draft"
+    },
+    {
+      "name": "inner_robe",
+      "parentBone": "hip",
+      "box": [
+        105,
+        185,
+        265,
+        332
+      ],
+      "positivePoints": [],
+      "negativePoints": [],
+      "candidateIndex": 0,
+      "subtract": [],
+      "pivotSource": [
+        200,
+        250
+      ],
+      "jointTargetSource": [
+        200,
+        320
+      ],
+      "drawGroup": "torso",
+      "reviewStatus": "draft",
+      "catchAll": true
+    },
+    {
+      "name": "cape",
+      "parentBone": "torso",
+      "box": [
+        2,
+        150,
+        180,
+        330
+      ],
+      "positivePoints": [
+        [
+          50,
+          220
+        ],
+        [
+          70,
+          270
+        ],
+        [
+          100,
+          250
+        ],
+        [
+          35,
+          290
+        ]
+      ],
+      "negativePoints": [
+        [
+          150,
+          190
+        ],
+        [
+          125,
+          215
+        ]
+      ],
+      "candidateIndex": 2,
+      "subtract": [
+        "spear",
+        "forearm_l",
+        "hand_l",
+        "shin_l",
+        "thigh_l",
+        "foot_l",
+        "back_hair"
+      ],
+      "pivotSource": [
+        160,
+        185
+      ],
+      "jointTargetSource": [
+        40,
+        300
+      ],
+      "drawGroup": "cape_back",
+      "reviewStatus": "draft"
+    },
+    {
       "name": "spear",
       "parentBone": "hand_r",
       "box": [
@@ -285,6 +1078,12 @@
       ],
       "drawGroup": "prop_front",
       "reviewStatus": "draft"
+    }
+  ],
+  "occludedParts": [
+    {
+      "name": "shoulder_r",
+      "reason": "right pauldron fully occluded by helmet neck guard in source image; no visible pixels to segment"
     }
   ]
 }

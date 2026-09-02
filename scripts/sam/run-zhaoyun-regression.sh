@@ -4,7 +4,7 @@
 #   scripts/sam/run-zhaoyun-regression.sh [WORK_ROOT]
 #
 # Steps: install env (idempotent) -> V0 probe -> V1 segment -> V1 replay ->
-# hash verification against tests/sam/expected-v1-hashes.json.
+# hash verification against tests/sam/expected-zhaoyun-hashes.json.
 # Exits non-zero if any stage fails.
 set -euo pipefail
 
@@ -30,29 +30,29 @@ echo "==> [2/5] V0 environment probe"
     echo "[regression] V0 probe returned non-zero (coverage gate), continuing"
   }
 
-echo "==> [3/5] V1 five-part segmentation"
+echo "==> [3/5] V2 full-template segmentation"
 "$PY" -m spinetools.sam.segment \
   --input examples/seethrough/zhaoyun.png \
   --prompts profiles/zhaoyun/prompts.json \
-  --output "$RUN_ROOT/v1-five-parts" \
+  --output "$RUN_ROOT/zhaoyun-split" \
   --checkpoint "$CHECKPOINT" \
   --device cuda --offline
 
-echo "==> [4/5] V1 headless replay (determinism check)"
+echo "==> [4/5] headless replay (determinism check)"
 "$PY" -m spinetools.sam.segment \
   --input examples/seethrough/zhaoyun.png \
   --prompts profiles/zhaoyun/prompts.json \
-  --output "$RUN_ROOT/v1-replay" \
+  --output "$RUN_ROOT/zhaoyun-split-replay" \
   --checkpoint "$CHECKPOINT" \
   --device cuda --offline
 
 echo "==> [5/5] hash verification"
 "$PY" -m spinetools.sam.verify \
-  --run "$RUN_ROOT/v1-five-parts" \
-  --expected tests/sam/expected-v1-hashes.json
+  --run "$RUN_ROOT/zhaoyun-split" \
+  --expected tests/sam/expected-zhaoyun-hashes.json
 "$PY" -m spinetools.sam.verify \
-  --run "$RUN_ROOT/v1-replay" \
-  --expected tests/sam/expected-v1-hashes.json
+  --run "$RUN_ROOT/zhaoyun-split-replay" \
+  --expected tests/sam/expected-zhaoyun-hashes.json
 
 tar -czf "${RUN_ROOT}.tar.gz" -C "$(dirname "$RUN_ROOT")" "$(basename "$RUN_ROOT")"
 echo "[regression] PASS - run dir: $RUN_ROOT"
