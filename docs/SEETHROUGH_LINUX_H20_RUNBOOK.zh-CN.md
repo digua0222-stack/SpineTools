@@ -37,6 +37,38 @@ See-through 可以在 Linux + NVIDIA H20 上离线运行。实测已完成从赵
 
 ## 全新 Linux GPU Docker：一条命令装机并跑测
 
+### 最短初始化入口
+
+全新容器可直接下载独立入口。该脚本自动安装基础系统包、Clone/更新 SpineTools，然后把
+正式 bootstrap 放入后台运行：
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/digua0222-stack/SpineTools/main/scripts/seethrough/init-fresh-docker.sh \
+  | bash -s -- --mode install
+```
+
+三种模式：
+
+```bash
+# 只安装和诊断
+bash /opt/SpineTools/scripts/seethrough/init-fresh-docker.sh --mode install
+
+# 安装/修复后执行1步链路验证
+bash /opt/SpineTools/scripts/seethrough/init-fresh-docker.sh --mode probe
+
+# 安装/修复后执行四Seed初筛
+bash /opt/SpineTools/scripts/seethrough/init-fresh-docker.sh \
+  --mode screen \
+  --seeds 7,23,42,88
+```
+
+脚本默认使用 `/opt/SpineTools` 和 `/opt/seethrough`，通过 `nohup` 后台运行，并打印 PID、
+Launch Log 与 Session 目录。需要在前台运行时添加 `--foreground`；系统包已经准备好时可加
+`--skip-system-packages`。脚本若发现现有仓库存在未提交修改会停止，不会覆盖用户改动。
+
+### 底层 bootstrap
+
 要求：Linux x86_64、可见的 NVIDIA CUDA GPU、root 或 sudo、至少约 20 GiB 可用磁盘。模型本体约 12.5 GiB。Docker 必须通过 NVIDIA Container Toolkit 暴露 GPU，例如创建容器时使用 `--gpus all`；脚本不会安装或修改宿主机驱动。
 
 ```bash

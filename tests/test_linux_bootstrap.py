@@ -146,7 +146,12 @@ class LinuxBootstrapTest(unittest.TestCase):
         bash = find_bash()
         if bash is None:
             self.skipTest("bash is unavailable")
-        for name in ["bootstrap-linux.sh", "install-linux.sh", "test-zhaoyun.sh"]:
+        for name in [
+            "bootstrap-linux.sh",
+            "init-fresh-docker.sh",
+            "install-linux.sh",
+            "test-zhaoyun.sh",
+        ]:
             script = SCRIPT_ROOT / name
             syntax = subprocess.run(
                 [str(bash), "-n", bash_path(script)],
@@ -163,6 +168,54 @@ class LinuxBootstrapTest(unittest.TestCase):
         )
         self.assertEqual(help_result.returncode, 0, help_result.stdout)
         self.assertIn("probe,balanced", help_result.stdout)
+
+        init_help = subprocess.run(
+            [str(bash), bash_path(SCRIPT_ROOT / "init-fresh-docker.sh"), "--help"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        self.assertEqual(init_help.returncode, 0, init_help.stdout)
+        self.assertIn("install|probe|screen", init_help.stdout)
+
+    def test_fresh_docker_init_dry_run_is_non_mutating(self) -> None:
+        bash = find_bash()
+        if bash is None:
+            self.skipTest("bash is unavailable")
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            fake_bin = temporary_root / "fake-bin"
+            fake_bin.mkdir()
+            (fake_bin / "uname").write_text(
+                "#!/usr/bin/env bash\nprintf '%s\\n' Linux\n", "utf-8"
+            )
+            (fake_bin / "uname").chmod(0o755)
+            repo_root = temporary_root / "SpineTools"
+            runtime_root = temporary_root / "seethrough"
+            command = " ".join(
+                [
+                    f"PATH={shlex.quote(bash_path(fake_bin))}:$PATH",
+                    shlex.quote(bash_path(SCRIPT_ROOT / "init-fresh-docker.sh")),
+                    "--dry-run --mode screen --seeds 7,23,42,88",
+                    "--repo-root",
+                    shlex.quote(bash_path(repo_root)),
+                    "--runtime-root",
+                    shlex.quote(bash_path(runtime_root)),
+                    "--run-id dry-run-screen",
+                ]
+            )
+            completed = subprocess.run(
+                [str(bash), "-c", command],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout)
+            self.assertIn("screen Seeds: 7,23,42,88", completed.stdout)
+            self.assertIn("Would clone/update", completed.stdout)
+            self.assertIn("Would launch bootstrap mode=screen", completed.stdout)
+            self.assertFalse(repo_root.exists())
+            self.assertFalse(runtime_root.exists())
 
     def test_bootstrap_dry_run_is_gpu_free_and_does_not_create_output(self) -> None:
         bash = find_bash()

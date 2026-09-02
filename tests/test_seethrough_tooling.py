@@ -141,6 +141,7 @@ class SeeThroughToolingTest(unittest.TestCase):
             "install.sh",
             "install-linux.sh",
             "bootstrap-linux.sh",
+            "init-fresh-docker.sh",
             "generate.sh",
             "Test-ZhaoYun.ps1",
             "test-zhaoyun.sh",

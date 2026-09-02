@@ -125,6 +125,18 @@ Linux/NVIDIA 全新 GPU Docker（默认安装后依次跑 `probe` 和 `balanced`
   --seed 42
 ```
 
+全新 Docker 也可以直接使用独立初始化入口。它会安装基础系统包、Clone/更新本仓库，并通过
+`nohup` 在后台完成环境部署：
+
+```bash
+curl -fsSL \
+  https://raw.githubusercontent.com/digua0222-stack/SpineTools/main/scripts/seethrough/init-fresh-docker.sh \
+  | bash -s -- --mode install
+```
+
+安装并执行一步链路验证可把模式改为 `--mode probe`；直接进行四 Seed 初筛可使用
+`--mode screen --seeds 7,23,42,88`。脚本会打印后台 PID、日志和 Session 目录。
+
 多 Seed 初筛可一次提交并自动生成质量排序：
 
 ```bash
