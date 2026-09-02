@@ -14,4 +14,6 @@
 
 | batch5 | `zhaoyun-20260902/batch5-zhaoyun-parts-screen.tar.gz` | 局部多Pass screen 档（头/躯干/腿/披风 × seed 55,88） | **头部 seed-55: 80.01（23层）**；躯干 seed-88: 77.32；披风 seed-55: 73.78；腿部 seed-55: 65.05 |
 
+| batch6 | `zhaoyun-20260902/batch6-zhaoyun-quality-final.tar.gz` | 武器/头部 seed-55 quality 档验证 | 武器 81.53（9层）/ 头部 70.36，均不如 screen 档，**screen 档为最终推荐** |
+
 产物包内包含每个 run 的分层结果、重组对比图、quality_report.json、quality-ranking.json 及 install-audit。
