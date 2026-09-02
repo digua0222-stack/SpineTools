@@ -20,4 +20,6 @@
 
 | batch8 | `zhaoyun-20260902/batch8-zhaoyun-seed-round3.tar.gz` | 第二轮 Seed 筛选（1024/720/24 × seed 5,13,29,47,63,79,97,113） | seed-29: 78.26 最高，**均未超过 seed-55 的 80.83**；全图终稿锁定 seed-55 @ 1024/720/24 |
 
+| batch9 | `zhaoyun-20260902/batch9-sam-v0-v1.tar.gz` | SAM 管线 V0 环境探针 + V1 五部件小样（helmet/face/forearm_l/hand_l/spear） | **V1 通过**：部件互不吞并、重放哈希 100% 一致、RGBA 全部来自原图 |
+
 产物包内包含每个 run 的分层结果、重组对比图、quality_report.json、quality-ranking.json 及 install-audit。
