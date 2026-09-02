@@ -243,9 +243,9 @@ bootstrap_args=(
   --python-install-timeout "$PYTHON_INSTALL_TIMEOUT"
   --python-install-retries "$PYTHON_INSTALL_RETRIES"
   --run-id "$RUN_ID"
-  --skip-system-packages
 )
 [[ -n "$HF_ENDPOINT_VALUE" ]] && bootstrap_args+=(--hf-endpoint "$HF_ENDPOINT_VALUE")
+[[ "$SKIP_SYSTEM_PACKAGES" == "true" ]] && bootstrap_args+=(--skip-system-packages)
 case "$MODE" in
   install)
     bootstrap_args+=(--install-only)

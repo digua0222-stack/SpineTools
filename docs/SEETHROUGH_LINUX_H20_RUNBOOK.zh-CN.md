@@ -66,6 +66,8 @@ bash /opt/SpineTools/scripts/seethrough/init-fresh-docker.sh \
 脚本默认使用 `/opt/SpineTools` 和 `/opt/seethrough`，通过 `nohup` 后台运行，并打印 PID、
 Launch Log 与 Session 目录。需要在前台运行时添加 `--foreground`；系统包已经准备好时可加
 `--skip-system-packages`。脚本若发现现有仓库存在未提交修改会停止，不会覆盖用户改动。
+默认情况下，包装脚本安装 Git/Curl 等启动依赖后，底层 bootstrap 仍会补齐
+`libGL.so.1`、glib2 等推理运行库；只有显式传入 `--skip-system-packages` 才会完全跳过。
 
 ### 底层 bootstrap
 

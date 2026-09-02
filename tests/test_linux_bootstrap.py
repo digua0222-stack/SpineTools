@@ -89,6 +89,15 @@ class LinuxBootstrapTest(unittest.TestCase):
             zhaoyun_runner,
         )
 
+        fresh_docker = (SCRIPT_ROOT / "init-fresh-docker.sh").read_text("utf-8")
+        self.assertIn(
+            '[[ "$SKIP_SYSTEM_PACKAGES" == "true" ]] && '
+            "bootstrap_args+=(--skip-system-packages)",
+            fresh_docker,
+        )
+        bootstrap_array = fresh_docker.split("bootstrap_args=(", 1)[1].split(")", 1)[0]
+        self.assertNotIn("--skip-system-packages", bootstrap_array)
+
     def test_linux_installer_uses_only_official_python_fallback(self) -> None:
         installer = (SCRIPT_ROOT / "install-linux.sh").read_text("utf-8")
         official = (
