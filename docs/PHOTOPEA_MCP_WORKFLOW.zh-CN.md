@@ -66,7 +66,9 @@ npm ci --prefix scripts/photopea --ignore-scripts --no-audit --no-fund
   --output output/photopea-zhaoyun
 ```
 
-如果已存在可用的 Photopea Python 环境，直接用该环境的 Python 执行命令即可，无需再次创建环境。MCP 服务进程与调用脚本的解释器都需满足各自依赖。其他操作系统可使用相应 venv 的 `bin/python`；完整复跑只在 Windows 实测，Linux / macOS 不作已验证承诺。
+如果已存在可用的 Photopea Python 环境，直接用该环境的 Python 执行命令即可，无需再次创建环境。MCP 服务进程与调用脚本的解释器都需满足各自依赖。其他操作系统可使用相应 venv 的 `bin/python`。
+
+2026-09-03 Linux 复跑记录：TencentOS Server 3.2（CentOS 系）+ Chromium headless shell 151 + Python 3.12 venv，完整 `--stage all` 一次通过，全部指标与 Windows 历史验收逐项一致（30 PSD 层/29 部件/30 骨骼/2 IK，setup 透明通道变化 0、预乘 RGB MAE 0，官方运行库 183 姿势、maxGripError 4.03e-06、无浏览器错误）。Linux 需先用系统包管理器安装 Chromium 运行库（本例 `dnf install atk at-spi2-atk at-spi2-core cups-libs libxkbcommon libXcomposite libXdamage libXfixes libXrandr mesa-libgbm pango cairo alsa-lib nss nspr libX11-xcb libXcursor libXi libXtst`）；编辑器首次加载仍需联网。macOS 仍未实测。
 
 可分阶段恢复：
 
