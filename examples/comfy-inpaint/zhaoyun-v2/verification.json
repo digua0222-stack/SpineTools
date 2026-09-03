@@ -49,13 +49,48 @@
       "nativeAlphaMatchesTarget": true
     }
   ],
-  "gpuInferenceVerified": false,
-  "modelWeightsDownloaded": false,
+  "gpuInferenceVerified": true,
+  "modelWeightsDownloaded": true,
   "comfyMcpCallVerified": false,
   "visualQualityAccepted": null,
   "newLayeredPsdCreated": false,
   "spineImportVerified": false,
   "spineMotionAccepted": null,
   "note": "CPU transport replaces diffusion with a solid orange image. It proves transport, compositing and mask polarity only.",
-  "regressionTestsPassed": 3
+  "regressionTestsPassed": 3,
+  "gpuRun": {
+    "testedAt": "2026-09-03",
+    "platform": "TencentOS Server 3.2 / NVIDIA H20 / Python 3.12 / torch 2.7.1+cu126",
+    "comfyUIVersion": "0.34.0 (master, 2026-09-03 clone)",
+    "checkpoint": "512-inpainting-ema.safetensors (size+SHA256 verified by download_model.py)",
+    "output": "output/inpaint-matrix (12 jobs = 4 tasks x seeds 17/41/73)",
+    "modelInferenceCompleted": true,
+    "gpuInferenceVerified": true,
+    "integrityPassedJobs": 12,
+    "peakVramSampledGB": 3.19,
+    "secondsPerJobApprox": 2.0,
+    "controlMaskedRGB_MAE": {"17": 8.353, "41": 7.373, "73": 7.666},
+    "visualQualityObservations": {
+      "scope": "AI visual inspection only; visualQualityAccepted stays null until human sign-off",
+      "passed": [
+        "cape_control seeds 17/41/73 (seamless against ground truth at 100%/200%)",
+        "cape_complete seed 17",
+        "thigh_L_complete seeds 17/41/73",
+        "forearm_L_complete seeds 17/41/73 (seed 17/41 show mild banding in the highlight at 200%, no hard seam)"
+      ],
+      "rejected": [
+        "cape_complete seed 41: grew a small character head in the edit region (extra-object failure)"
+      ],
+      "needsReview": [
+        "cape_complete seed 73: open slit at the top of the outline, confirm against intended silhouette"
+      ],
+      "recommendedSeeds": {"cape_control": 41, "cape_complete": 17, "thigh_L_complete": 17, "forearm_L_complete": 17}
+    },
+    "remainingUnverified": [
+      "comfy-mcp route (section 5)",
+      "Photopea assembly of the passed parts into a new layered PSD",
+      "Spine import and motion acceptance of the new figure",
+      "desktop editor import"
+    ]
+  }
 }

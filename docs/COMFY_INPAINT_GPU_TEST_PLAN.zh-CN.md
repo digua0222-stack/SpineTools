@@ -154,7 +154,7 @@ python scripts/comfy_inpaint/run.py --dry-run --seeds 17 --comfy-input /opt/Comf
 
 ## 7. 本次验证记录与维护
 
-[verification.json](../examples/comfy-inpaint/zhaoyun-v2/verification.json) 记录实际完成的检查及未验证项。关键限制：无 GPU 推理、无新 PSD、无新图 Spine 导入/动画验收；未安装/验证 comfy-mcp。初次 Photopea 准备和 CPU ComfyUI 合成有实际执行记录。
+[verification.json](../examples/comfy-inpaint/zhaoyun-v2/verification.json) 记录实际完成的检查及未验证项。2026-09-03 GPU 跑测（TencentOS Server 3.2 + H20 + torch 2.7.1+cu126 + ComfyUI 0.34.0）：12/12 任务技术门通过（完整性、Alpha、GPU 推理均已验证），单次 512×512 推理约 2 秒、采样峰值显存 3.19 GB；画质门观察与推荐 seed 见验证记录，cape_complete seed 41 因长出人物被拒。当前关键限制：画质门待人工签字、无新 PSD、无新图 Spine 导入/动画验收；comfy-mcp 路线仍未安装/验证。
 
 GPU 用户无需重新准备图片。维护者需要改此新图的分区时，编辑 `scripts/comfy_inpaint/prepare_photopea.py` 中的几何配方，使用 [Photopea MCP 工作流](PHOTOPEA_MCP_WORKFLOW.zh-CN.md) 的 Python 环境和 MCP 配置执行：
 
