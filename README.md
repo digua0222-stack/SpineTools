@@ -220,9 +220,11 @@ macOS：
 
 针对新提供的 1024 × 1024 站立赵云图，已提交原图、四组补绘输入与蒙版、固定提示词/seed、
 ComfyUI API 工作流和运行脚本。先验证披风纹理恢复，再测试披风、大腿与前臂的遮挡补全。
-素材准备实际使用 Photopea MCP；CPU 上传/执行/下载及像素保护已验证，GPU 生成画质和新图的
-Spine 动作尚未验证。部署与跑测见 [GPU 测试方案](docs/COMFY_INPAINT_GPU_TEST_PLAN.zh-CN.md)，
-图片见 [新图测试包](examples/comfy-inpaint/zhaoyun-v2/README.zh-CN.md)。
+素材准备实际使用 Photopea MCP；H20 推理、像素保护与坐标回贴已验证。产物复核发现目标内部
+存在不透明背景色块、披风轮廓越界，完整 PSD 和动作尚未通过。问题证据与后续实验见
+[GPU 复核与下一轮方案](docs/COMFY_INPAINT_GPU_REVIEW_NEXT.zh-CN.md)。部署见
+[GPU 测试方案](docs/COMFY_INPAINT_GPU_TEST_PLAN.zh-CN.md)，图片见
+[新图测试包](examples/comfy-inpaint/zhaoyun-v2/README.zh-CN.md)。
 
 ## 授权边界
 

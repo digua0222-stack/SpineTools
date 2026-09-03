@@ -1,0 +1,233 @@
+{
+  "sourceAlphaRange": [
+    255,
+    255
+  ],
+  "recordedPlacementRGBAExact": true,
+  "opaqueReferenceMakesAssemblyDiffVacuous": true,
+  "wrongSolidLayerAlsoHidden": true,
+  "approxForegroundPixelsOutside": 3707,
+  "outsidePerTask": {
+    "cape_complete": 3707,
+    "thigh_L_complete": 0,
+    "forearm_L_complete": 0
+  },
+  "components": [
+    {
+      "pixels": 1564,
+      "bbox": [
+        133,
+        632,
+        208,
+        717
+      ],
+      "mostCommonSourceRGB": [
+        [
+          [
+            253,
+            253,
+            253
+          ],
+          149
+        ],
+        [
+          [
+            238,
+            238,
+            238
+          ],
+          98
+        ],
+        [
+          [
+            252,
+            252,
+            252
+          ],
+          79
+        ],
+        [
+          [
+            254,
+            254,
+            254
+          ],
+          76
+        ]
+      ]
+    },
+    {
+      "pixels": 22,
+      "bbox": [
+        123,
+        652,
+        127,
+        660
+      ],
+      "mostCommonSourceRGB": [
+        [
+          [
+            234,
+            234,
+            234
+          ],
+          2
+        ],
+        [
+          [
+            233,
+            233,
+            235
+          ],
+          2
+        ],
+        [
+          [
+            235,
+            234,
+            235
+          ],
+          2
+        ],
+        [
+          [
+            235,
+            235,
+            236
+          ],
+          2
+        ]
+      ]
+    },
+    {
+      "pixels": 1463,
+      "bbox": [
+        228,
+        737,
+        408,
+        799
+      ],
+      "mostCommonSourceRGB": [
+        [
+          [
+            253,
+            253,
+            253
+          ],
+          83
+        ],
+        [
+          [
+            238,
+            238,
+            238
+          ],
+          64
+        ],
+        [
+          [
+            254,
+            254,
+            254
+          ],
+          64
+        ],
+        [
+          [
+            255,
+            255,
+            255
+          ],
+          57
+        ]
+      ]
+    },
+    {
+      "pixels": 54,
+      "bbox": [
+        211,
+        740,
+        228,
+        756
+      ],
+      "mostCommonSourceRGB": [
+        [
+          [
+            255,
+            255,
+            255
+          ],
+          2
+        ],
+        [
+          [
+            240,
+            239,
+            239
+          ],
+          2
+        ],
+        [
+          [
+            236,
+            237,
+            236
+          ],
+          2
+        ],
+        [
+          [
+            250,
+            250,
+            250
+          ],
+          1
+        ]
+      ]
+    },
+    {
+      "pixels": 586,
+      "bbox": [
+        466,
+        761,
+        522,
+        788
+      ],
+      "mostCommonSourceRGB": [
+        [
+          [
+            253,
+            253,
+            253
+          ],
+          53
+        ],
+        [
+          [
+            254,
+            254,
+            254
+          ],
+          51
+        ],
+        [
+          [
+            255,
+            255,
+            255
+          ],
+          31
+        ],
+        [
+          [
+            251,
+            251,
+            251
+          ],
+          28
+        ]
+      ]
+    }
+  ],
+  "limitation": "Approximate foreground matte is not a ground-truth silhouette; inspect source pixels and visible bands."
+}

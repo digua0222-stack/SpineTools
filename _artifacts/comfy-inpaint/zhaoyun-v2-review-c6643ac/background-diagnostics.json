@@ -1,0 +1,230 @@
+{
+  "threshold": "max per-channel abs difference from #303947 <= 12; diagnostic, not semantic ground truth",
+  "rows": [
+    {
+      "run": "inpaint-matrix",
+      "task": "cape_control",
+      "seed": 17,
+      "editPixelsNative": 3579,
+      "nearBackgroundPixelsInEdit": 0,
+      "nearBackgroundRatioInEdit": 0.0,
+      "opaqueNearBackgroundPixels": 0
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "cape_control",
+      "seed": 41,
+      "editPixelsNative": 3579,
+      "nearBackgroundPixelsInEdit": 0,
+      "nearBackgroundRatioInEdit": 0.0,
+      "opaqueNearBackgroundPixels": 0
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "cape_control",
+      "seed": 73,
+      "editPixelsNative": 3579,
+      "nearBackgroundPixelsInEdit": 0,
+      "nearBackgroundRatioInEdit": 0.0,
+      "opaqueNearBackgroundPixels": 0
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "cape_complete",
+      "seed": 17,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 6063,
+      "nearBackgroundRatioInEdit": 0.1246,
+      "opaqueNearBackgroundPixels": 6063
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "cape_complete",
+      "seed": 41,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 8275,
+      "nearBackgroundRatioInEdit": 0.1701,
+      "opaqueNearBackgroundPixels": 8275
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "cape_complete",
+      "seed": 73,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 6074,
+      "nearBackgroundRatioInEdit": 0.1249,
+      "opaqueNearBackgroundPixels": 6074
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "thigh_L_complete",
+      "seed": 17,
+      "editPixelsNative": 5704,
+      "nearBackgroundPixelsInEdit": 1153,
+      "nearBackgroundRatioInEdit": 0.2021,
+      "opaqueNearBackgroundPixels": 1153
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "thigh_L_complete",
+      "seed": 41,
+      "editPixelsNative": 5704,
+      "nearBackgroundPixelsInEdit": 1582,
+      "nearBackgroundRatioInEdit": 0.2773,
+      "opaqueNearBackgroundPixels": 1582
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "thigh_L_complete",
+      "seed": 73,
+      "editPixelsNative": 5704,
+      "nearBackgroundPixelsInEdit": 607,
+      "nearBackgroundRatioInEdit": 0.1064,
+      "opaqueNearBackgroundPixels": 607
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "forearm_L_complete",
+      "seed": 17,
+      "editPixelsNative": 2700,
+      "nearBackgroundPixelsInEdit": 174,
+      "nearBackgroundRatioInEdit": 0.0644,
+      "opaqueNearBackgroundPixels": 174
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "forearm_L_complete",
+      "seed": 41,
+      "editPixelsNative": 2700,
+      "nearBackgroundPixelsInEdit": 980,
+      "nearBackgroundRatioInEdit": 0.363,
+      "opaqueNearBackgroundPixels": 980
+    },
+    {
+      "run": "inpaint-matrix",
+      "task": "forearm_L_complete",
+      "seed": 73,
+      "editPixelsNative": 2700,
+      "nearBackgroundPixelsInEdit": 795,
+      "nearBackgroundRatioInEdit": 0.2944,
+      "opaqueNearBackgroundPixels": 795
+    },
+    {
+      "run": "inpaint-cape-d085",
+      "task": "cape_complete",
+      "seed": 17,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 1405,
+      "nearBackgroundRatioInEdit": 0.0289,
+      "opaqueNearBackgroundPixels": 1405
+    },
+    {
+      "run": "inpaint-cape-d085",
+      "task": "cape_complete",
+      "seed": 41,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 1350,
+      "nearBackgroundRatioInEdit": 0.0277,
+      "opaqueNearBackgroundPixels": 1350
+    },
+    {
+      "run": "inpaint-cape-d085",
+      "task": "cape_complete",
+      "seed": 73,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 3425,
+      "nearBackgroundRatioInEdit": 0.0704,
+      "opaqueNearBackgroundPixels": 3425
+    },
+    {
+      "run": "inpaint-cape-steps60",
+      "task": "cape_complete",
+      "seed": 17,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 9222,
+      "nearBackgroundRatioInEdit": 0.1896,
+      "opaqueNearBackgroundPixels": 9222,
+      "editedRGB_MAE_vs28steps": 6.862
+    },
+    {
+      "run": "inpaint-cape-steps60",
+      "task": "cape_complete",
+      "seed": 41,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 8244,
+      "nearBackgroundRatioInEdit": 0.1695,
+      "opaqueNearBackgroundPixels": 8244,
+      "editedRGB_MAE_vs28steps": 2.022
+    },
+    {
+      "run": "inpaint-cape-steps60",
+      "task": "cape_complete",
+      "seed": 73,
+      "editPixelsNative": 48650,
+      "nearBackgroundPixelsInEdit": 6032,
+      "nearBackgroundRatioInEdit": 0.124,
+      "opaqueNearBackgroundPixels": 6032,
+      "editedRGB_MAE_vs28steps": 2.915
+    },
+    {
+      "run": "inpaint-limbs-steps60",
+      "task": "thigh_L_complete",
+      "seed": 17,
+      "editPixelsNative": 5704,
+      "nearBackgroundPixelsInEdit": 1153,
+      "nearBackgroundRatioInEdit": 0.2021,
+      "opaqueNearBackgroundPixels": 1153,
+      "editedRGB_MAE_vs28steps": 3.157
+    },
+    {
+      "run": "inpaint-limbs-steps60",
+      "task": "thigh_L_complete",
+      "seed": 41,
+      "editPixelsNative": 5704,
+      "nearBackgroundPixelsInEdit": 1370,
+      "nearBackgroundRatioInEdit": 0.2402,
+      "opaqueNearBackgroundPixels": 1370,
+      "editedRGB_MAE_vs28steps": 3.463
+    },
+    {
+      "run": "inpaint-limbs-steps60",
+      "task": "thigh_L_complete",
+      "seed": 73,
+      "editPixelsNative": 5704,
+      "nearBackgroundPixelsInEdit": 712,
+      "nearBackgroundRatioInEdit": 0.1248,
+      "opaqueNearBackgroundPixels": 712,
+      "editedRGB_MAE_vs28steps": 2.633
+    },
+    {
+      "run": "inpaint-limbs-steps60",
+      "task": "forearm_L_complete",
+      "seed": 17,
+      "editPixelsNative": 2700,
+      "nearBackgroundPixelsInEdit": 207,
+      "nearBackgroundRatioInEdit": 0.0767,
+      "opaqueNearBackgroundPixels": 207,
+      "editedRGB_MAE_vs28steps": 3.407
+    },
+    {
+      "run": "inpaint-limbs-steps60",
+      "task": "forearm_L_complete",
+      "seed": 41,
+      "editPixelsNative": 2700,
+      "nearBackgroundPixelsInEdit": 1045,
+      "nearBackgroundRatioInEdit": 0.387,
+      "opaqueNearBackgroundPixels": 1045,
+      "editedRGB_MAE_vs28steps": 1.48
+    },
+    {
+      "run": "inpaint-limbs-steps60",
+      "task": "forearm_L_complete",
+      "seed": 73,
+      "editPixelsNative": 2700,
+      "nearBackgroundPixelsInEdit": 799,
+      "nearBackgroundRatioInEdit": 0.2959,
+      "opaqueNearBackgroundPixels": 799,
+      "editedRGB_MAE_vs28steps": 4.202
+    }
+  ]
+}

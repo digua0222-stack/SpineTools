@@ -1,0 +1,20 @@
+{
+  "reviewedCommit": "c6643ac",
+  "date": "2026-09-03",
+  "newInferenceRun": false,
+  "archives": {
+    "assembly-check.tar.gz": "3a50f8f185292cd34d793e3e714dbf0ce019e71b478c1d6f2ec7143c316b2a43",
+    "inpaint-matrix.tar.gz": "1a2831c5bb9f182b16fdfd097544013a7e63b0e6f05ec12dff6dc3dd277e3610",
+    "inpaint-parameter-rounds.tar.gz": "bab4c1ddefbb58062f050e05bb2958a23522c7a4fbff2f30911524e5dc29a96d",
+    "inpaint-preflight-offline-probe.tar.gz": "76056e5fd7094d2fbbc20b88fbc6642f7ab6649b47ad98f070acf9bf8d824423"
+  },
+  "evidence": {
+    "independent-metrics.json": "f0447ee78fc85d475bd27ad143cedcd5740c9751f4ef206e61fdb189ba65ce54",
+    "background-diagnostics.json": "d055dcd972d2d61c6d6059ac94a7d3640d63f1772dd041356ded71a7ed32579c",
+    "assembly-audit.json": "5fbe19c612a08114c49de0562c97e0d2b2097b5d5bd9029d9f1a4a26a66bf20f",
+    "cape-candidates.jpg": "9da80dfca0d8acdb879d27578df1a66962f182e16156f435b207ae50df76da34",
+    "limb-candidates.jpg": "cc00d99e69ca3546a82a0da2c5813d695493c76e1c50a29150c8ec2b90433a5c",
+    "control-comparison.jpg": "4d2b87c0508c161ecd52431d28415435312eb37f089b42844c14f9e4b19dc480",
+    "assembly-outside-foreground.png": "fc608bb632894a9c3ad50a8c428dc64303d2ca765645bfb65b32a53518a04e8b"
+  }
+}

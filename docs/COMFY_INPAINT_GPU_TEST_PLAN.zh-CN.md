@@ -2,7 +2,7 @@
 
 目标是验证：把 Photopea MCP 切出的不完整部件交给本地 ComfyUI，能否补出与原画一致的纹理、被遮挡形状及关节重叠区，再回到 Photopea 组装 PSD，供 Spine 绑定。
 
-本次已提交新原图、四组输入/蒙版、提示词、四份 API 工作流及跨平台运行脚本。原图处理和测试素材导出实际使用了 Photopea MCP；ComfyUI 的上传、执行、下载和合成链路已在 CPU 模式验证。**生成模型尚未运行，补绘画质、GPU 性能和新图的 Spine 动作均待 GPU 环境测试。**
+本次已提交新原图、四组输入/蒙版、提示词、四份 API 工作流及跨平台运行脚本。原图处理和测试素材导出实际使用了 Photopea MCP。后续 H20 跑测已完成，25 个推理结果（含参数轮次和探针）的像素/Alpha 技术检查通过；完整补全部件仍存在材质、轮廓与验收问题。**最新结论与下一步以 [GPU 复核方案](COMFY_INPAINT_GPU_REVIEW_NEXT.zh-CN.md) 为准；本文保留 v2 基线的复跑方法。**
 
 ## 1. 新图与测试范围
 
@@ -154,7 +154,7 @@ python scripts/comfy_inpaint/run.py --dry-run --seeds 17 --comfy-input /opt/Comf
 
 ## 7. 本次验证记录与维护
 
-[verification.json](../examples/comfy-inpaint/zhaoyun-v2/verification.json) 记录实际完成的检查及未验证项。2026-09-03 GPU 跑测（TencentOS Server 3.2 + H20 + torch 2.7.1+cu126 + ComfyUI 0.34.0）：12/12 任务技术门通过（完整性、Alpha、GPU 推理均已验证），单次 512×512 推理约 2 秒、采样峰值显存 3.19 GB；画质门观察与推荐 seed 见验证记录，cape_complete seed 41 因长出人物被拒。当前关键限制：画质门待人工签字、无新 PSD、无新图 Spine 导入/动画验收；comfy-mcp 路线仍未安装/验证。
+[verification.json](../examples/comfy-inpaint/zhaoyun-v2/verification.json) 分别记录初次 CPU 检查、后续 GPU 跑测与最新产物复核。GPU 推理和 Photopea 坐标回贴已通过，当前材质/轮廓质量、完整新 PSD、Spine 导入/动画尚未通过；comfy-mcp 路径仍未验证。完整参考图遮挡的零差异不作为补全质量证据，见最新复核。
 
 GPU 用户无需重新准备图片。维护者需要改此新图的分区时，编辑 `scripts/comfy_inpaint/prepare_photopea.py` 中的几何配方，使用 [Photopea MCP 工作流](PHOTOPEA_MCP_WORKFLOW.zh-CN.md) 的 Python 环境和 MCP 配置执行：
 

@@ -39,9 +39,11 @@
 | 文件 | 内容 | 结果摘要 |
 | --- | --- | --- |
 | [comfy-inpaint/zhaoyun-v2-20260903/inpaint-matrix.tar.gz](comfy-inpaint/zhaoyun-v2-20260903/inpaint-matrix.tar.gz) | 4 任务 × seed 17/41/73 完整矩阵（run-report.json、part-native.png、metrics.json、工作流 JSON） | **12/12 技术门通过**；GPU 推理已验证；单次约 2.0s、峰值显存 3.19GB；画质观察与推荐 seed 见验证记录 |
-| [comfy-inpaint/zhaoyun-v2-20260903/inpaint-parameter-rounds.tar.gz](comfy-inpaint/zhaoyun-v2-20260903/inpaint-parameter-rounds.tar.gz) | 单变量阶梯：denoise 0.85 / steps 60 | denoise<1 全数长出人物（拒收）；steps 60 seed 17 为最佳披风候选 |
+| [comfy-inpaint/zhaoyun-v2-20260903/inpaint-parameter-rounds.tar.gz](comfy-inpaint/zhaoyun-v2-20260903/inpaint-parameter-rounds.tar.gz) | 单变量阶梯：denoise 0.85 / steps 60 | 本轮 denoise 0.85 的三个 seed 均出现人物；steps 60 seed 17 曾被推荐，后续复核发现其目标内部仍有背景色块 |
 | [comfy-inpaint/zhaoyun-v2-20260903/inpaint-preflight-offline-probe.tar.gz](comfy-inpaint/zhaoyun-v2-20260903/inpaint-preflight-offline-probe.tar.gz) | preflight、dry-run（12 份 API JSON）、cape_control 探针 | 链路检查通过 |
-| [comfy-inpaint/zhaoyun-v2-20260903/assembly-check.tar.gz](comfy-inpaint/zhaoyun-v2-20260903/assembly-check.tar.gz) | Photopea MCP 回贴装配验证（assembled.png / parts_only.png） | 放置 0 差异、组装图与原图一致、0 像素侵入原图背景 |
+| [comfy-inpaint/zhaoyun-v2-20260903/assembly-check.tar.gz](comfy-inpaint/zhaoyun-v2-20260903/assembly-check.tar.gz) | Photopea MCP 回贴装配验证（assembled.png / parts_only.png） | 坐标回贴已验证；全不透明参考图遮住候选，组装零差异不能证明补绘合格，见下方复核 |
 
 复跑方式见 [ComfyUI 局部补绘 GPU 测试方案](../docs/COMFY_INPAINT_GPU_TEST_PLAN.zh-CN.md)；验证记录见
-[verification.json](../examples/comfy-inpaint/zhaoyun-v2/verification.json)。画质门与 Spine 动作门待人工验收。
+[verification.json](../examples/comfy-inpaint/zhaoyun-v2/verification.json)。最新复核发现不透明背景色块、披风轮廓越界和装配检查盲区，完整部件尚不能用于最终绑定。
+
+[复核图与指标](comfy-inpaint/zhaoyun-v2-review-c6643ac/README.md)；[问题判断与下一轮方案](../docs/COMFY_INPAINT_GPU_REVIEW_NEXT.zh-CN.md)。

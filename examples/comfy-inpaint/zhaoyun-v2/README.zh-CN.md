@@ -1,6 +1,6 @@
 # 赵云新图：GPU 补绘测试素材
 
-本目录包含本次上传的站立图及通过 Photopea MCP 准备的测试输入。尚无 GPU 生成结果，也不是完整 Spine PSD。
+本目录包含站立图及通过 Photopea MCP 准备的测试输入。GPU 结果已归档；完整部件质量尚未通过，也不是完整 Spine PSD。最新问题和计划见 [GPU 复核方案](../../../docs/COMFY_INPAINT_GPU_REVIEW_NEXT.zh-CN.md)。
 
 - [原图](source.png)：1024 × 1024，含实际棋盘格像素，未修改上传文件。
 - [素材总览](test-inputs-overview.jpg)：四行分别为披风纹理对照、披风补全、大腿补全、前臂补全；列为输入、编辑蒙版、保留纹理。

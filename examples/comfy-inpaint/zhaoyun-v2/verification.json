@@ -127,5 +127,26 @@
       "Spine import and motion acceptance of the new figure",
       "desktop editor import"
     ]
+  },
+  "latestArtifactReview": {
+    "reviewedCommit": "c6643ac",
+    "date": "2026-09-03",
+    "method": "Local recomputation on archived PNGs, unoccluded visual inspection, independent coordinate/background audit; no new inference",
+    "technicalPassedJobs": 25,
+    "placementRGBAExact": true,
+    "opaqueSourceMakesAssemblyZeroDiffNonDiagnostic": true,
+    "approxForegroundOutsidePixels": 3707,
+    "foregroundCountLimitation": "Approximate matte, not exact ground truth; visible cape extension bands confirmed against source RGB",
+    "recommendedPartsReadyForProduction": false,
+    "issues": [
+      "Opaque background RGB inside target alpha",
+      "Cape target extends into visible source background",
+      "Character hallucination in cape",
+      "Full reference layer hides candidate defects"
+    ],
+    "denoiseConclusion": "Only denoise 0.85 with the tested three seeds failed; this does not establish denoise 1.0 as universally required",
+    "nextPlan": "docs/COMFY_INPAINT_GPU_REVIEW_NEXT.zh-CN.md",
+    "evidence": "_artifacts/comfy-inpaint/zhaoyun-v2-review-c6643ac",
+    "scope": "Earlier gpuRun observations remain historical; technical PASS does not imply material, assembly or motion acceptance"
   }
 }
