@@ -441,7 +441,9 @@ python -m spinetools.pipeline \
   --offline
 ```
 
-这些命令是设计契约，尚未在当前提交中实现。
+这些命令是设计契约。实现状态：`spinetools.sam.segment`（V2）、`spinetools.rig.build`
+（V3，参数为 `--components/--profile/--output`）已实现并有回归基线；
+`install`/`motion.retarget`/`validate`/`pipeline` 尚未实现。
 
 ## 13. 质量门与评分修正
 

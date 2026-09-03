@@ -1,7 +1,8 @@
 # SAM 无头管线运行手册（已验证流程沉淀）
 
 对应设计：`docs/SAM_SPINE_ANIMATION_PIPELINE_DESIGN.zh-CN.md`。本手册覆盖已验证的
-Phase 1（V0 环境探针 + V1 五部件小样），用于新 Docker 容器快速复跑。
+Phase 1（V0 环境探针 + V1 五部件小样）、V2 全拆分与 V3 Setup Pose/旋转验证，
+用于新 Docker 容器快速复跑。
 
 ## 环境前提
 
@@ -20,9 +21,10 @@ git clone <repo> /opt/SpineTools && cd /opt/SpineTools
 scripts/sam/run-zhaoyun-regression.sh          # 工作根默认 /opt/spinetools
 ```
 
-依次执行：环境安装（幂等）→ V0 探针 → V1 五部件分割 → 无头重放 →
-哈希比对（`tests/sam/expected-zhaoyun-hashes.json`）。全部一致输出 `[regression] PASS`，
-并生成 `regression-<时间戳>.tar.gz` 归档。
+依次执行：环境安装（幂等）→ V0 探针 → V2 全拆分 → 无头重放 →
+哈希比对（`tests/sam/expected-zhaoyun-hashes.json`）→ 两次拆分的 V3 rig 构建 →
+rig 哈希比对（`tests/rig/expected-zhaoyun-rig-hashes.json`）。全部一致输出
+`[regression] PASS`，并生成 `regression-<时间戳>.tar.gz` 归档。
 
 ## 分步执行
 
@@ -48,16 +50,29 @@ scripts/sam/install-sam.sh /opt/spinetools/venv /opt/spinetools/models
 /opt/spinetools/venv/bin/python -m spinetools.sam.verify \
   --run output/zhaoyun-split \
   --expected tests/sam/expected-zhaoyun-hashes.json
+
+# 5. V3 rig 构建（骨架/atlas/Spine 4.2/Setup Pose QA + 关节旋转验证）
+/opt/spinetools/venv/bin/python -m spinetools.rig.build \
+  --components output/zhaoyun-split/rig/component-manifest.json \
+  --profile profiles/zhaoyun/prompts.json \
+  --output output/zhaoyun-split
+
+# 6. rig 产物哈希校验（纯 CPU 确定性阶段，跨 run 目录哈希一致）
+/opt/spinetools/venv/bin/python -m spinetools.rig.verify \
+  --run output/zhaoyun-split \
+  --expected tests/rig/expected-zhaoyun-rig-hashes.json
 ```
 
-## 已验证基线（2026-09-02，H20）
+## 已验证基线（2026-09-03，H20）
 
 | 阶段 | 结果 |
 |---|---|
 | V0 探针 | 主体覆盖 81.4%，推理 8.78s |
 | V1 五部件 | helmet/face/forearm_l/hand_l/spear 互不吞并，仅关节区 8px 重叠 |
-| V2 全拆分 | 23 部件；当时报告 Alpha 召回 100%，该值为导出去噪前统计，见下方复核 |
+| V2 全拆分 | 23 部件，导出后 Alpha 召回 100%（修复后实测，见下方复核与修复说明），重叠仅关节区 3 对 ≤38px |
 | 无头重放 | 两次运行部件 PNG 哈希 100% 一致（46 项） |
+| V3 rig 构建 | 27 骨骼（含 head/shoulder_r 辅助骨），重组 recall 1.0 / changed 0 / PSNR inf，质量门 PASS |
+| V3 重放 | rig 产物哈希 100% 一致（9 项，纯 CPU 确定性） |
 
 V2 说明：`shoulder_r` 在原图中被头盔护颈完全遮挡，无可见像素可分割，已在
 `profiles/zhaoyun/prompts.json` 的 `occludedParts` 中显式标记（设计文档 3.2 允许）。
@@ -67,9 +82,26 @@ V2 说明：`shoulder_r` 在原图中被头盔护颈完全遮挡，无可见像�
 2026-09-03 复核：batch10 最终导出的 23 个 mask 覆盖原图 60,661 个非零 Alpha 像素中的
 60,038 个，覆盖率为 98.9729809927%，另有 623 个未覆盖；46 项产物哈希仍全部匹配。
 可重复性不等于像素完整性，且可见部件拆分不代表隐藏纹理已补全。
-去噪误删与导出后统计列为 AC-01 前置任务；零人工补全的 12 项实施任务见
+去噪误删与导出后统计列为 AC-01 前置任务，已于同日修复（见下方"导出去噪修复"）；
+零人工补全的 12 项实施任务见
 [SAM 零人工补全任务](SAM_AUTO_COMPLETION_TASKS.zh-CN.md)。当前运行手册中的命令只完成
 已有分割/回归，不会自动执行尚未实现的补全模块。
+
+V3 说明：12 个四肢关节全部完成 ±15° 三姿态渲染。旋转暴露的隐藏纹理缺失
+（每关节 ≤69px  revealed 像素、≤15px 内部裂缝）已写入
+`reports/rig-report.json` 的 `rotation.missingTextureRegions` / `crackFindings`，
+按设计文档 8.3 显式标记待人工补全，不自动掩盖；`preview/joint-rotation.gif`
+为逐关节三姿态预览。reviewStatus 全为 draft，人工审核通过前
+`qualityGate.checks.reviewCoverage` 保持 false（信息项，`--strict-review` 可转为硬门）。
+
+## 导出去噪修复（2026-09-03 基线重建）
+
+旧流程在导出时对最终 mask 做 <10px 连通域去噪，会把边缘分配/catch-all/残余分配
+阶段的合法像素一并丢弃：报告召回 100% 但导出召回仅 98.97%（623px 静默丢失，
+违反设计文档 13.1）。修复：去噪前移到分配阶段之前（pass 2.1），被丢弃的 SAM 核心
+碎块保持未覆盖状态，由后续最近部件分配重新认领；丢弃量按部件记入
+`segmentation-report.json` 的 `denoiseDroppedPixels`。修复后导出召回真实 100%。
+46 项部件哈希基线已同步重建。
 
 ## 提示调优经验（本次实践沉淀）
 
@@ -78,5 +110,7 @@ V2 说明：`shoulder_r` 在原图中被头盔护颈完全遮挡，无可见像�
 2. 像素画短边 <512 时用 2x 最近邻推理副本；mask 映射回原图后从原图裁 RGBA。
 3. 相邻同色铠甲（如小臂与拳头）单点/负点难分：先各自取 mask，再用
    `prompts.json` 中的 `subtract`（子部件优先）解决重叠，而不是无限加负点。
-4. 导出前做连通域去噪（<10px 碎块清除）；被遮挡的长枪天然是多段，保留大组件。
+4. 去噪（<10px 碎块清除）必须在分配阶段之前做：碎块先回到未覆盖池，再由最近
+   部件分配认领，噪声离开错误部件且不破坏总覆盖率；被遮挡的长枪天然是多段，
+   ≥10px 的大组件全部保留。
 5. 每轮修改后跑一次重放（同样输入跑两遍比哈希），确认无随机漂移再提交。

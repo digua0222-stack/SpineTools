@@ -115,9 +115,14 @@ def remove_small_components(mask: np.ndarray, min_pixels: int = 10) -> np.ndarra
 def export_part(
     src: np.ndarray, mask: np.ndarray, name: str, out_masks: str, out_parts: str
 ) -> Dict[str, Any]:
-    """Constrain to source alpha, denoise, crop to sourceBBox, export."""
+    """Constrain to source alpha, crop to sourceBBox, export.
+
+    Denoise happens earlier (pass 2.1), before the assignment passes, so
+    dropped fragments are re-adopted by their nearest part instead of
+    punching holes in the coverage (design doc 13.1: leftovers are reported,
+    never silently dropped).
+    """
     mask = mask & (src[..., 3] > 0)
-    mask = remove_small_components(mask)
     ys, xs = np.where(mask)
     if len(ys) == 0:
         raise ValueError(f"{name}: empty mask after alpha constraint")
@@ -207,6 +212,17 @@ def main() -> int:
             if other in raw_masks:
                 mask = mask & ~raw_masks[other]
         masks_by_name[name] = mask & src_alpha
+
+    # Pass 2.1: denoise the SAM-core masks (<10px connected components).
+    # Runs BEFORE the assignment passes on purpose: dropped fragments remain
+    # uncovered source alpha and are re-adopted by their nearest part in
+    # passes 2.5-2.7, so noise leaves the wrong part without punching holes
+    # in the total coverage. Dropped counts are reported per part.
+    denoise_dropped: Dict[str, int] = {}
+    for name, mask in list(masks_by_name.items()):
+        kept = remove_small_components(mask)
+        denoise_dropped[name] = int(mask.sum() - kept.sum())
+        masks_by_name[name] = kept
 
     # Pass 2.5: edge assignment - grow each mask into adjacent uncovered
     # alpha pixels (anti-aliased edges SAM leaves behind). Deterministic:
@@ -339,6 +355,7 @@ def main() -> int:
         "failures": failures,
         "pairwiseOverlapPixels": overlap,
         "sourceAlphaRecall": round(recall, 4),
+        "denoiseDroppedPixels": denoise_dropped,
         "elapsedSeconds": round(time.time() - t0, 2),
     }
     write_json(os.path.join(out_reports, "segmentation-report.json"), report)
