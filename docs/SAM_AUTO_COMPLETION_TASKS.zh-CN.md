@@ -4,8 +4,8 @@
 
 - 制定日期：2026-09-03。
 - 分析基线：`5bc8f24`，SAM V2 的 23 部件拆分产物。
-- 本次交付：任务制定和接口设计，不包含补图实现、模型安装或补图跑测。
-- AC-01 至 AC-12 全部为 **TODO**；不得把本文件中的计划命令视为已经可运行。
+- 首次交付：任务制定和接口设计；同日续作完成 AC-01、AC-02（见任务状态与详细任务
+  中的证据链接）。AC-03 至 AC-12 仍为 **TODO**，不得把本文件中的计划命令视为已经可运行。
 - 目标：已有 SAM 部件包进入补全阶段后，无需人工画 Mask、写 Prompt、挑 Seed、
   修像素或审核，自动输出合格部件包，或明确失败及诊断产物。
 - 首个验证环境：Linux/NVIDIA H20；CPU 用于几何处理、合成、契约和调度测试。
@@ -91,8 +91,8 @@ python -c 'import numpy as np; from spinetools.sam.segment import remove_small_c
 
 | ID | 优先级 | 任务 | 依赖 | 验证环境 | 当前状态 |
 |---|---|---|---|---|---|
-| AC-01 | P0 | 修复导出误删、统一最终像素质量统计 | 无 | CPU | TODO |
-| AC-02 | P0 | 补全部件包契约、输入校验和像素保护 | AC-01 | CPU | TODO |
+| AC-01 | P0 | 修复导出误删、统一最终像素质量统计 | 无 | CPU | DONE |
+| AC-02 | P0 | 补全部件包契约、输入校验和像素保护 | AC-01 | CPU | DONE |
 | AC-03 | P0 | 隔离模型环境、版本/许可清单和离线探针 | 无 | CPU/H20 | TODO |
 | AC-04 | P0 | 合成遮挡基准与自动质量门 | AC-02 | CPU；模型对照用 H20 | TODO |
 | AC-05 | P0 | 自动遮挡分析、完整轮廓和补图区规划 | AC-02、AC-04；模型分支另需 AC-03 | CPU/H20 | TODO |
@@ -110,33 +110,51 @@ python -c 'import numpy as np; from spinetools.sam.segment import remove_small_c
 
 ## 5. 详细任务
 
-### AC-01 — 最终导出像素正确性
+### AC-01 — 最终导出像素正确性（DONE）
 
-- [ ] 检查连通域遍历中同一行预先列出的起点被重复处理的问题；修复误标与误删。
-- [ ] 导出 PNG 后回读计算 coverage、overlap 和哈希；与最终部件 Alpha 使用同一口径。
-- [ ] 将误删、允许去噪、未分配原图像素分别报告。邻域归属不明时拒收，不能为追求
-  100% 覆盖率随意扩张某个部件或把残余全塞进 `inner_robe`。
-- [ ] 强化哈希校验：多余部件、路径缺失、原图/模型/配置不匹配都不能直接 PASS。
-- [ ] 保留旧基线；正确性测试通过后另建版本和迁移报告，不通过覆盖 expected hashes 修饰失败。
+- [x] 检查连通域遍历中同一行预先列出的起点被重复处理的问题；修复误标与误删。
+  修复：`remove_small_components` 扫描时跳过已被早期洪泛认领的预列出起点；
+  文档复现用例 `40 21` 现为 `40 40`（`tests/test_sam_export.py`）。
+- [x] 导出 PNG 后回读计算 coverage、overlap 和哈希；与最终部件 Alpha 使用同一口径。
+  `segmentation-report.json` 新增 `exportedReadback`（coverageRecall /
+  pairwiseOverlapPixels / unassignedPixels / recoveredPixels / ambiguousAdoptions），
+  并附 `modelSha256`、`inputPixelSha256`；源图改为字节级复制，哈希链可校验。
+- [x] 将误删、允许去噪、未分配原图像素分别报告（`denoiseDroppedPixels` /
+  `exportedReadback`）。邻域归属不明（多属主冲突认领）计数并采样上报，超预算即
+  rejections 拒收；未分配像素 >0 拒收。623px 差异归因见
+  `tests/sam/baseline-migration.md`。
+- [x] 强化哈希校验：多余部件、路径缺失、原图/模型/提示哈希不匹配都不能 PASS
+  （`spinetools/sam/verify.py`，含 source/model/prompts 交叉校验）。
+- [x] 保留旧基线；正确性测试通过后另建版本和迁移报告：v1/v2 保留为
+  `expected-zhaoyun-hashes.v1/v2.json`，激活 v3 为
+  `expected-zhaoyun-hashes.json`，迁移报告 `tests/sam/baseline-migration.md`。
 
-建议改动：`spinetools/sam/segment.py`、`spinetools/sam/verify.py`，新增
-`tests/test_sam_export.py`。验收：40 像素矩形保持 40；单像素、细线、多连通块、半透明边缘
-有明确测试；batch10 的 623 像素差异可解释；所有报告能由回读最终产物重算得到。
+实际改动：`spinetools/sam/segment.py`、`spinetools/sam/verify.py`，新增
+`tests/test_sam_export.py`（14 项）。验收达成：40 像素矩形保持 40；单像素、细线、
+多连通块、半透明边缘均有测试；batch10 的 623 像素差异在迁移报告中逐类归因；
+报告均可由回读最终产物重算得到。
 
-### AC-02 — 输入、坐标和像素来源契约
+### AC-02 — 输入、坐标和像素来源契约（DONE）
 
-- [ ] 读取 SAM run、原图及已有 prompts；自动携带 `jointTargetSource`、`drawGroup`、
-  `occludedParts`，校验源图和提示哈希。输入不完整时返回错误，不询问操作者。
-- [ ] 区分骨骼节点与图像部件：完全不可见的右肩仍可需要骨骼和目标部件记录。
-- [ ] 定义 `visibleMask/fullMask/repairMask/protectedMask/provenance` 的显式职责。
-- [ ] 区分输入可见裁剪框和输出完整裁剪框，保存完整坐标变换，不以新框覆盖原始证据。
-- [ ] 构建按 Alpha 正确合成的 RGB 模型输入，不泄漏透明像素中的原图遮挡物。
-- [ ] 锁定可见像素；模型重采样只能影响补全区，不把推理放大图替换为原始纹理。
+- [x] 读取 SAM run、原图及已有 prompts；自动携带 `jointTargetSource`、`drawGroup`、
+  `occludedParts`，校验源图和提示哈希。输入不完整时抛出 `PreflightError`，不询问操作者
+  （`spinetools/completion/preflight.py`）。
+- [x] 区分骨骼节点与图像部件：`shoulder_r` 等完全不可见部件生成
+  `needs-completion-plan` 目标记录，骨骼需求保留。
+- [x] 定义 `visibleMask/fullMask/repairMask/protectedMask/provenance` 的显式职责，
+  含 repair∩protected=∅、visible⊆full、repair⊆full 等硬校验
+  （`spinetools/completion/contracts.py`）。
+- [x] 区分输入可见裁剪框（`sourceBBox`，证据不改）和输出完整裁剪框（`completedBBox`，
+  允许负坐标/超出原图，偏移随契约保存）；`pivotLocal = pivotSource - completedBBox[:2]`。
+- [x] 构建按 Alpha 正确合成的 RGB 模型输入：`build_model_input_rgb` 对不可见像素
+  一律填声明底色，透明 RGB 污染可检测（`detect_transparent_rgb_pollution`）。
+- [x] 锁定可见像素：`check_protected_pixels` 硬门（预算 0）；"推理放大图不替换原始
+  纹理"的执行归属 AC-08 后端，契约已提供检查函数。
 
-建议新增：`spinetools/completion/contracts.py`、`preflight.py`、
-`tests/test_completion_contracts.py`。验收：裁剪扩大、负坐标、局部/全图 mask、透明 RGB 污染、
-重复部件名、无效父骨骼和 stale 输入有测试；上游 `reviewStatus=draft` 不触发人工等待，
-由自动输入检查决定是否可用，并保留原始状态与独立自动结论。
+实际新增：`spinetools/completion/contracts.py`、`preflight.py`、
+`tests/test_completion_contracts.py`（18 项）。验收达成：裁剪扩大、负坐标、局部/全图
+mask、透明 RGB 污染、重复部件名、无效父骨骼和 stale 输入均有测试；`reviewStatus=draft`
+由自动输入检查判定为 `auto-usable`，原始状态保留，无人工等待状态。
 
 ### AC-03 — 运行时、模型许可与离线能力
 

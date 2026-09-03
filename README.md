@@ -160,10 +160,12 @@ SAM 2 人工提示分割、独立骨架/Atlas/Spine JSON 导出及视频动作�
 第三方许可证边界见 [SAM + Spine 骨骼动画工具链设计](docs/SAM_SPINE_ANIMATION_PIPELINE_DESIGN.zh-CN.md)。
 
 SAM V2 已有完整站立图可见部件拆分及无头回归入口，见
-[SAM 运行手册](docs/SAM_HEADLESS_RUNBOOK.zh-CN.md)。后续补全阶段要求零人工：自动规划补图区、
+[SAM 运行手册](docs/SAM_HEADLESS_RUNBOOK.zh-CN.md)；V3 骨架/Atlas/Spine 4.2 导出与
+关节旋转验证已并入同一回归。后续补全阶段要求零人工：自动规划补图区、
 补绘、选优、动态验收和有限重试；不合格时明确失败，不等待人工修图。实施顺序、12 项任务、
 输入输出和验收门见 [SAM 零人工补全任务](docs/SAM_AUTO_COMPLETION_TASKS.zh-CN.md)。
-该补全模块目前处于任务制定阶段，尚未实现或跑测。
+补全模块进度：AC-01（导出像素正确性+哈希校验强化）与 AC-02（补全契约与预检）已完成并有
+CPU 测试；AC-03～AC-12 尚未实现。
 
 新用户可以直接使用仓库内置的[赵云测试图片](examples/seethrough/zhaoyun.png)，一条命令完成
 ComfyUI、See-through、模型下载、环境诊断、切片和重组验证：
