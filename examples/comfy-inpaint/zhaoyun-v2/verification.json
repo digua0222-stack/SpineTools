@@ -112,9 +112,18 @@
       "thigh_L_complete": {"seed": 17, "steps": 28, "denoise": 1.0},
       "forearm_L_complete": {"seed": 17, "steps": 28, "denoise": 1.0}
     },
+    "assemblyCheck": {
+      "testedAt": "2026-09-03",
+      "method": "Photopea MCP place_image at placement.json.crop origin, parts below the source reference layer",
+      "candidates": ["cape_complete steps60/seed17", "thigh_L_complete steps28/seed17", "forearm_L_complete steps28/seed17"],
+      "placementPixelDiff": 0,
+      "assembledVsSourcePixelDiff": 0,
+      "partPixelsOverSourceBackground": 0,
+      "verdict": "PASS: placement.json crop coordinates work as-is with Photopea MCP; completed regions are genuinely occluded areas (no source background is overpainted)"
+    },
     "remainingUnverified": [
       "comfy-mcp route (section 5)",
-      "Photopea assembly of the passed parts into a new layered PSD",
+      "full-character layered PSD of the new figure (head/torso/other limbs still need their own split; the four test groups are not the final PSD)",
       "Spine import and motion acceptance of the new figure",
       "desktop editor import"
     ]
