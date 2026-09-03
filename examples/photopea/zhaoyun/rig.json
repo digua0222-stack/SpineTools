@@ -1,0 +1,949 @@
+{
+  "skeleton": {
+    "spine": "4.2.43",
+    "x": -194,
+    "y": -1,
+    "width": 494,
+    "height": 341,
+    "images": "./images/",
+    "audio": "",
+    "fps": 30
+  },
+  "bones": [
+    {
+      "name": "root",
+      "x": 0.0,
+      "y": 0.0,
+      "rotation": 0,
+      "length": 25,
+      "color": "f4c460ff"
+    },
+    {
+      "name": "pelvis",
+      "x": 0.0,
+      "y": 105.0,
+      "parent": "root",
+      "rotation": 0,
+      "length": 30,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "torso",
+      "x": 2.0,
+      "y": 13.0,
+      "parent": "pelvis",
+      "rotation": 79.315088,
+      "length": 53.935146,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "head",
+      "x": 60.943563,
+      "y": -4.783523,
+      "parent": "torso",
+      "rotation": -11.695223,
+      "length": 55.154329,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "helmet_plume",
+      "x": 113.082692,
+      "y": 56.296578,
+      "parent": "head",
+      "rotation": -212.082187,
+      "length": 68.818602,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "cape",
+      "x": 22.41581,
+      "y": 59.182189,
+      "parent": "torso",
+      "rotation": -201.78628,
+      "length": 104.307238,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "thigh_L",
+      "x": -28.0,
+      "y": -20.0,
+      "parent": "pelvis",
+      "rotation": -119.291362,
+      "length": 47.010637,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "shin_L",
+      "x": 47.010637,
+      "y": 0.0,
+      "parent": "thigh_L",
+      "rotation": 6.092772,
+      "length": 30.463092,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "foot_L",
+      "x": 30.463092,
+      "y": -0.0,
+      "parent": "shin_L",
+      "rotation": 113.198591,
+      "length": 20,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "knee_L",
+      "x": -0.0,
+      "y": -0.0,
+      "parent": "shin_L",
+      "rotation": 113.198591,
+      "length": 12,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "thigh_R",
+      "x": 26.0,
+      "y": -20.0,
+      "parent": "pelvis",
+      "rotation": -52.883139,
+      "length": 46.400431,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "shin_R",
+      "x": 46.400431,
+      "y": 0.0,
+      "parent": "thigh_R",
+      "rotation": -38.852565,
+      "length": 33.015148,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "foot_R",
+      "x": 33.015148,
+      "y": -0.0,
+      "parent": "shin_R",
+      "rotation": 91.735705,
+      "length": 20,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "knee_R",
+      "x": -0.0,
+      "y": -0.0,
+      "parent": "shin_R",
+      "rotation": 91.735705,
+      "length": 12,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "tasset_L",
+      "x": -26.0,
+      "y": -4.0,
+      "parent": "pelvis",
+      "rotation": -144.782407,
+      "length": 41.617304,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "skirt_L",
+      "x": 40.319767,
+      "y": 3.363985,
+      "parent": "tasset_L",
+      "rotation": 6.660277,
+      "length": 38.948684,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "tasset_R",
+      "x": 30.0,
+      "y": -2.0,
+      "parent": "pelvis",
+      "rotation": -39.610688,
+      "length": 37.64306,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "skirt_R",
+      "x": 39.927678,
+      "y": -5.897501,
+      "parent": "tasset_R",
+      "rotation": -4.057092,
+      "length": 30.413813,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "tabard",
+      "x": 2.0,
+      "y": -9.0,
+      "parent": "pelvis",
+      "rotation": -90.0,
+      "length": 45.0,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "shoulder_L",
+      "x": 35.005004,
+      "y": 62.575152,
+      "parent": "torso",
+      "rotation": -79.315088,
+      "length": 16,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "shoulder_R",
+      "x": 50.171367,
+      "y": -39.380629,
+      "parent": "torso",
+      "rotation": -79.315088,
+      "length": 16,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "upperarm_L",
+      "x": 26.142508,
+      "y": 77.185292,
+      "parent": "torso",
+      "rotation": -179.180895,
+      "length": 23.345235,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "forearm_L",
+      "x": 23.345235,
+      "y": 0.0,
+      "parent": "upperarm_L",
+      "rotation": 23.258305,
+      "length": 21.587033,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "upperarm_R",
+      "x": 46.055312,
+      "y": -39.139599,
+      "parent": "torso",
+      "rotation": -171.290022,
+      "length": 29.017236,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "forearm_R",
+      "x": 29.017236,
+      "y": 0.0,
+      "parent": "upperarm_R",
+      "rotation": 91.974934,
+      "length": 30.0,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "weapon",
+      "x": 21.952291,
+      "y": -73.199023,
+      "parent": "torso",
+      "rotation": -72.865088,
+      "length": 150,
+      "color": "e9b553ff"
+    },
+    {
+      "name": "spear_head",
+      "x": 59.525235,
+      "y": 1.321531,
+      "parent": "weapon",
+      "rotation": 0.0,
+      "length": 145,
+      "color": "e9b553ff"
+    },
+    {
+      "name": "spear_tassel",
+      "x": 58.626546,
+      "y": -6.627831,
+      "parent": "weapon",
+      "rotation": -130.140068,
+      "length": 64.899923,
+      "color": "9fa8bdff"
+    },
+    {
+      "name": "hand_L",
+      "x": -146.423892,
+      "y": 4.47703,
+      "parent": "weapon",
+      "rotation": -6.45,
+      "length": 12,
+      "color": "74d6afff"
+    },
+    {
+      "name": "hand_R",
+      "x": 0.112336,
+      "y": 0.99367,
+      "parent": "weapon",
+      "rotation": -6.45,
+      "length": 12,
+      "color": "74d6afff"
+    }
+  ],
+  "slots": [
+    {
+      "name": "cape",
+      "bone": "cape",
+      "attachment": "cape"
+    },
+    {
+      "name": "thigh_L",
+      "bone": "thigh_L",
+      "attachment": "thigh_L"
+    },
+    {
+      "name": "thigh_R",
+      "bone": "thigh_R",
+      "attachment": "thigh_R"
+    },
+    {
+      "name": "shin_L",
+      "bone": "shin_L",
+      "attachment": "shin_L"
+    },
+    {
+      "name": "shin_R",
+      "bone": "shin_R",
+      "attachment": "shin_R"
+    },
+    {
+      "name": "foot_L",
+      "bone": "foot_L",
+      "attachment": "foot_L"
+    },
+    {
+      "name": "foot_R",
+      "bone": "foot_R",
+      "attachment": "foot_R"
+    },
+    {
+      "name": "knee_L",
+      "bone": "knee_L",
+      "attachment": "knee_L"
+    },
+    {
+      "name": "knee_R",
+      "bone": "knee_R",
+      "attachment": "knee_R"
+    },
+    {
+      "name": "helmet_plume",
+      "bone": "helmet_plume",
+      "attachment": "helmet_plume"
+    },
+    {
+      "name": "head",
+      "bone": "head",
+      "attachment": "head"
+    },
+    {
+      "name": "torso",
+      "bone": "torso",
+      "attachment": "torso"
+    },
+    {
+      "name": "pelvis",
+      "bone": "pelvis",
+      "attachment": "pelvis"
+    },
+    {
+      "name": "skirt_L",
+      "bone": "skirt_L",
+      "attachment": "skirt_L"
+    },
+    {
+      "name": "skirt_R",
+      "bone": "skirt_R",
+      "attachment": "skirt_R"
+    },
+    {
+      "name": "tasset_L",
+      "bone": "tasset_L",
+      "attachment": "tasset_L"
+    },
+    {
+      "name": "tasset_R",
+      "bone": "tasset_R",
+      "attachment": "tasset_R"
+    },
+    {
+      "name": "tabard",
+      "bone": "tabard",
+      "attachment": "tabard"
+    },
+    {
+      "name": "upperarm_L",
+      "bone": "upperarm_L",
+      "attachment": "upperarm_L"
+    },
+    {
+      "name": "upperarm_R",
+      "bone": "upperarm_R",
+      "attachment": "upperarm_R"
+    },
+    {
+      "name": "shoulder_L",
+      "bone": "shoulder_L",
+      "attachment": "shoulder_L"
+    },
+    {
+      "name": "shoulder_R",
+      "bone": "shoulder_R",
+      "attachment": "shoulder_R"
+    },
+    {
+      "name": "forearm_L",
+      "bone": "forearm_L",
+      "attachment": "forearm_L"
+    },
+    {
+      "name": "forearm_R",
+      "bone": "forearm_R",
+      "attachment": "forearm_R"
+    },
+    {
+      "name": "spear_tassel",
+      "bone": "spear_tassel",
+      "attachment": "spear_tassel"
+    },
+    {
+      "name": "spear_shaft",
+      "bone": "weapon",
+      "attachment": "spear_shaft"
+    },
+    {
+      "name": "spear_head",
+      "bone": "spear_head",
+      "attachment": "spear_head"
+    },
+    {
+      "name": "hand_L",
+      "bone": "hand_L",
+      "attachment": "hand_L"
+    },
+    {
+      "name": "hand_R",
+      "bone": "hand_R",
+      "attachment": "hand_R"
+    }
+  ],
+  "ik": [
+    {
+      "name": "grip_L",
+      "order": 0,
+      "bones": [
+        "upperarm_L",
+        "forearm_L"
+      ],
+      "target": "hand_L",
+      "mix": 1,
+      "bendPositive": true,
+      "stretch": true
+    },
+    {
+      "name": "grip_R",
+      "order": 1,
+      "bones": [
+        "upperarm_R",
+        "forearm_R"
+      ],
+      "target": "hand_R",
+      "mix": 1,
+      "bendPositive": true,
+      "stretch": true
+    }
+  ],
+  "animations": {
+    "idle": {
+      "bones": {
+        "head": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.5,
+              "value": -1.4
+            },
+            {
+              "time": 1.0,
+              "value": 0
+            },
+            {
+              "time": 1.5,
+              "value": 1.1
+            },
+            {
+              "time": 2.0,
+              "value": 0
+            }
+          ]
+        },
+        "helmet_plume": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.5,
+              "value": 2.5
+            },
+            {
+              "time": 1.0,
+              "value": 0
+            },
+            {
+              "time": 1.5,
+              "value": -2.5
+            },
+            {
+              "time": 2.0,
+              "value": 0
+            }
+          ]
+        },
+        "cape": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.5,
+              "value": 1.5
+            },
+            {
+              "time": 1.0,
+              "value": 0
+            },
+            {
+              "time": 1.5,
+              "value": -1.5
+            },
+            {
+              "time": 2.0,
+              "value": 0
+            }
+          ]
+        },
+        "spear_tassel": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.5,
+              "value": 4
+            },
+            {
+              "time": 1.0,
+              "value": 0
+            },
+            {
+              "time": 1.5,
+              "value": -4
+            },
+            {
+              "time": 2.0,
+              "value": 0
+            }
+          ]
+        },
+        "weapon": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.5,
+              "value": 0.7
+            },
+            {
+              "time": 1.0,
+              "value": 0
+            },
+            {
+              "time": 1.5,
+              "value": -0.6
+            },
+            {
+              "time": 2.0,
+              "value": 0
+            }
+          ]
+        },
+        "tasset_L": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.5,
+              "value": 0.8
+            },
+            {
+              "time": 1.0,
+              "value": 0
+            },
+            {
+              "time": 1.5,
+              "value": -0.8
+            },
+            {
+              "time": 2.0,
+              "value": 0
+            }
+          ]
+        },
+        "tasset_R": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.5,
+              "value": -0.8
+            },
+            {
+              "time": 1.0,
+              "value": 0
+            },
+            {
+              "time": 1.5,
+              "value": 0.8
+            },
+            {
+              "time": 2.0,
+              "value": 0
+            }
+          ]
+        }
+      }
+    },
+    "rig_check": {
+      "bones": {
+        "head": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 5
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -5
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "helmet_plume": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 6
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -6
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "cape": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 3
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -3
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "spear_tassel": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 8
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -8
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "weapon": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 2
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -1.5
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ],
+          "translate": [
+            {
+              "time": 0.0,
+              "x": 0,
+              "y": 0
+            },
+            {
+              "time": 0.75,
+              "x": -1,
+              "y": 1
+            },
+            {
+              "time": 1.5,
+              "x": 0,
+              "y": 0
+            },
+            {
+              "time": 2.25,
+              "x": 1,
+              "y": -1
+            },
+            {
+              "time": 3.0,
+              "x": 0,
+              "y": 0
+            }
+          ]
+        },
+        "thigh_L": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 3
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -2
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "shin_L": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": -5
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": 3
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "thigh_R": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": -3
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": 2
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "shin_R": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 4
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -3
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "tasset_L": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": 3
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": -3
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "tasset_R": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": -3
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": 3
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        },
+        "tabard": {
+          "rotate": [
+            {
+              "time": 0.0,
+              "value": 0
+            },
+            {
+              "time": 0.75,
+              "value": -2
+            },
+            {
+              "time": 1.5,
+              "value": 0
+            },
+            {
+              "time": 2.25,
+              "value": 2
+            },
+            {
+              "time": 3.0,
+              "value": 0
+            }
+          ]
+        }
+      }
+    }
+  }
+}

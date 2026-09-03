@@ -23,7 +23,7 @@
 
 这种方式可以逐像素贴近视频，但不能独立编辑手臂、武器等身体部件。需要 TPos 时，应把生成的 `frame` 插槽和动画时间轴合并进已有骨架。
 
-默认输出行为与 `spine.dawnwindstudio.top` v2.3 的公开导出格式兼容。本仓库是根据公开行为和输出格式编写的独立实现，不包含该网站代码、Spine 编辑器或专有 Spine Runtime。
+默认输出行为与 `spine.dawnwindstudio.top` v2.3 的公开导出格式兼容。序列帧转换器是根据公开行为和输出格式编写的独立实现，不包含该网站代码或 Spine 编辑器。Photopea 验证使用可选的官方 Spine Runtime，样例预览保留其许可。
 
 ## 环境
 
@@ -203,6 +203,17 @@ macOS：
 ./scripts/seethrough/recommend-hardware.sh
 ```
 
+## Photopea MCP 分层 PSD 与初始骨架
+
+已有本地 Photopea MCP 时，可使用已审阅的赵云配方，重放“切分 → 边缘归属修正 →
+枪杆和关节补绘 → PSD → Spine JSON/PNG → 官方运行库验证”。此路线不使用本地 AI 模型，
+原图视角下的初始叠合保持一致，输出 29 个部件、30 根骨骼和双臂 IK。任意新图仍需审阅切分与补绘参数。
+
+完整安装、复跑命令、配方说明和实测问题见
+[Photopea MCP 工作流](docs/PHOTOPEA_MCP_WORKFLOW.zh-CN.md)。后续智能体可使用仓库的
+[photopea-spine 技能](.agents/skills/photopea-spine/SKILL.md)。成品与实际动作预览见
+[赵云验证包](_artifacts/photopea/zhaoyun-20260903.zip)。
+
 ## 授权边界
 
-本工具只实现序列帧打包和公开 Spine JSON/atlas 数据结构，不包含或替代 Spine Editor、Spine CLI、Spine Runtime。使用 Spine 商标、编辑器或运行库时，仍需遵守 Esoteric Software 的相关许可条款。输入图片和视频的版权也由使用者自行确认。
+序列帧转换器实现公开 Spine JSON/atlas 数据结构，不包含或替代 Spine Editor、Spine CLI。Photopea 的离线验证预览包含官方 Spine Runtime 及其许可文本。使用 Spine 商标、编辑器或运行库时，仍需遵守 Esoteric Software 的相关许可条款。输入图片和视频的版权也由使用者自行确认。

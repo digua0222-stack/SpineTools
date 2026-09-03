@@ -1,0 +1,4 @@
+interface:
+  display_name: "Photopea PSD / Spine"
+  short_description: "使用本地 Photopea MCP 拆分角色 PSD、补齐关节与武器，并验证 Spine 初始骨架"
+  default_prompt: "使用 $photopea-spine 处理这张角色图，拆出独立武器和关节部件，保存 PSD 并验证 Spine 绑定。"

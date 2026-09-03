@@ -1,0 +1,26 @@
+{
+  "export": {
+    "psdLayers": 30,
+    "visibleParts": 29,
+    "hiddenReference": true,
+    "spineBones": 30,
+    "slots": 29,
+    "ikConstraints": 2,
+    "setupAlphaChangedPixels": 0,
+    "setupPremultipliedRGB_MAE": 0.0,
+    "sourceSHA256": "edbe1d7ce6483988a10737cd70fc3dbb03a18ecefc087207a6979a0e86c89d48"
+  },
+  "runtime": {
+    "runtime": "@esotericsoftware/spine-canvas 4.2.120",
+    "bones": 30,
+    "slots": 29,
+    "animations": [
+      "idle",
+      "rig_check"
+    ],
+    "testedPoses": 183,
+    "maxGripError": 4.025322735475352e-06,
+    "maxSetupPivotError": 1.5892549587531097e-05,
+    "browserErrors": []
+  }
+}

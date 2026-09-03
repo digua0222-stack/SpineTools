@@ -1,6 +1,6 @@
 # _artifacts（临时产物目录）
 
-本目录用于存放 See-through 分层管线的**临时生成产物**，与工程源码无关，可随时删除。
+本目录用于存放分层管线的生成产物和已归档验证样例；源码与可复跑参数位于 scripts、profiles 和 examples。
 
 ## 批次记录
 
@@ -25,3 +25,11 @@
 | batch10 | `zhaoyun-20260902/batch10-sam-v2-full-split.tar.gz` | SAM V2 完整站立图拆分（23 部件）+ 回归基线 | **Alpha 召回 100%**，重叠仅关节区 ≤43px，重组均值差 ~1.9/255，重放哈希一致 |
 
 产物包内包含每个 run 的分层结果、重组对比图、quality_report.json、quality-ranking.json 及 install-audit。
+
+## Photopea MCP 样例
+
+| 文件 | 内容 | 验证范围 |
+| --- | --- | --- |
+| [photopea/zhaoyun-20260903.zip](photopea/zhaoyun-20260903.zip) | 29 部件 PSD、30 骨骼 JSON、独立 PNG、双臂 IK、GIF 与离线预览 | 初始可见像素一致；官方 Spine 4.2 运行库 183 次姿势采样通过；未做桌面编辑器导入验收 |
+
+复跑方式见 [Photopea MCP 工作流](../docs/PHOTOPEA_MCP_WORKFLOW.zh-CN.md)。该归档不包含本地环境、MCP 配置、服务日志或 node_modules；离线预览保留运行库许可文本。

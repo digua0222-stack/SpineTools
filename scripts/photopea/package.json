@@ -1,0 +1,6 @@
+{
+  "name": "spinetools-photopea-verification",
+  "private": true,
+  "description": "Optional official Spine runtime for local verification; not vendored in Git",
+  "dependencies": {"@esotericsoftware/spine-canvas": "4.2.120"}
+}

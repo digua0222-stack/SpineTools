@@ -1,0 +1,60 @@
+{
+  "export": {
+    "sourceSHA256": "edbe1d7ce6483988a10737cd70fc3dbb03a18ecefc087207a6979a0e86c89d48",
+    "psdLayers": 30,
+    "visibleParts": 29,
+    "bones": 30,
+    "slots": 29,
+    "ikConstraints": 2,
+    "setup": {
+      "alphaChangedPixels": 0,
+      "premultipliedRGB_MAE": 0.0
+    },
+    "connectedParts": {
+      "spear_shaft": 1,
+      "cape": 1,
+      "upperarm_L": 1,
+      "upperarm_R": 1,
+      "forearm_L": 1,
+      "shin_L": 1,
+      "shin_R": 1
+    }
+  },
+  "runtime": {
+    "runtime": "@esotericsoftware/spine-canvas 4.2.120",
+    "bones": 30,
+    "slots": 29,
+    "animations": [
+      "idle",
+      "rig_check"
+    ],
+    "testedPoses": 183,
+    "maxGripError": 4.025322735475352e-06,
+    "maxSetupPivotError": 1.5785444479441058e-05,
+    "browserErrors": [],
+    "desktopEditorImportVerified": false,
+    "setupRender": {
+      "alphaChangedPixels": 0,
+      "premultipliedRGB_MAE": 0.0
+    }
+  },
+  "launcher": {
+    "launcher": "scripts/photopea/run_server.py",
+    "tools": 42,
+    "exportedSize": [
+      8,
+      8
+    ],
+    "pixel": [
+      18,
+      52,
+      86,
+      255
+    ],
+    "pass": true
+  },
+  "offlineUnitTests": {
+    "passed": 6
+  },
+  "source": "scripts/photopea/replay.py"
+}

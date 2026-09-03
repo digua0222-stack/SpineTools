@@ -1,0 +1,7 @@
+# Tested in an isolated Python 3.12.12 environment on Windows.
+mcp==1.29.1
+numpy==2.5.2
+Pillow==12.3.0
+playwright==1.62.0
+psd-tools==1.19.0
+scipy==1.18.1

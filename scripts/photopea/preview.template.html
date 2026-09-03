@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__CASE_NAME__ · Spine 绑定验证</title>
+<style>
+body{margin:0;background:#151c27;color:#edf2f9;font:15px/1.5 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1040px;margin:24px auto;padding:0 24px}h1{font-size:25px;margin:0 0 6px}p{color:#aebacf;margin:0 0 18px}.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}button,select{background:#293448;color:#edf2f9;border:1px solid #495871;padding:9px 14px;border-radius:8px;font:inherit;cursor:pointer}label{margin-left:10px}canvas{width:100%;height:auto;border-radius:12px;background-color:#303947;background-image:linear-gradient(45deg,#35404f 25%,transparent 25%),linear-gradient(-45deg,#35404f 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#35404f 75%),linear-gradient(-45deg,transparent 75%,#35404f 75%);background-size:24px 24px;background-position:0 0,0 12px,12px -12px,-12px 0}small{color:#95a6bf}a{color:#94c8ff}#status{margin-top:12px}
+</style>
+<main><h1>__CASE_NAME__ · 分层与骨骼验证</h1><p>__PART_COUNT__ 个部件 · 骨骼绑定验证 · Spine 4.2</p>
+<div class="bar"><select id="animation"><option value="idle">待机</option><option value="rig_check">关节检查</option><option value="setup">初始姿势</option></select><button id="pause">暂停</button><label><input type="checkbox" id="bones">骨骼</label><label><input type="checkbox" id="weaponOnly">仅武器</label><label><input type="checkbox" id="explode">展开部件</label></div>
+<canvas id="stage" width="996" height="690"></canvas><div id="status">正在加载…</div>
+<p><small>左右命名按画面左右。补绘连接区用于此视角的小幅动作；大幅攻击、转身还需完善遮挡区与权重。</small></p>
+<a href="__CASE_NAME__-spine.psd">分层 PSD</a> · <a href="__CASE_NAME__-spine.json">Spine JSON</a> · <a href="__CASE_NAME__-parts-preview.png">部件总览</a>
+</main>
+<script src="work/runtime/node_modules/@esotericsoftware/spine-canvas/dist/iife/spine-canvas.js"></script>
+<script>
+(async()=>{
+const json=await (await fetch('__CASE_NAME__-spine.json')).json();
+const manifest=await (await fetch('parts-manifest.json')).json();
+const images={};await Promise.all(manifest.parts.map(async p=>{const image=new Image();image.src='images/'+p.name+'.png';await image.decode();images[p.name]=image;}));
+const regions={};for(const [name,image] of Object.entries(images)){const r=new spine.TextureRegion();r.texture={getImage:()=>image};r.u=0;r.v=0;r.u2=1;r.v2=1;r.width=r.originalWidth=image.width;r.height=r.originalHeight=image.height;regions[name]=r;}
+const loader=new spine.AtlasAttachmentLoader({findRegion:name=>regions[name]});
+const data=new spine.SkeletonJson(loader).readSkeletonData(json);const skeleton=new spine.Skeleton(data);
+const canvas=document.querySelector('#stage'),ctx=canvas.getContext('2d'),renderer=new spine.SkeletonRenderer(ctx);
+canvas.width=manifest.sourceSize[0]*2;canvas.height=manifest.sourceSize[1]*2;const origin=manifest.originImage;
+const menu=document.querySelector("#animation");menu.replaceChildren();for(const name of [...data.animations.map(a=>a.name),"setup"]){const o=document.createElement("option");o.value=name;o.textContent=name;menu.append(o);}
+let paused=false,time=0,last=performance.now();
+function pose(name,t){skeleton.setToSetupPose();if(name!=='setup')data.findAnimation(name).apply(skeleton,0,t,true,[],1,spine.MixBlend.setup,spine.MixDirection.mixIn);skeleton.updateWorldTransform(spine.Physics.none);}
+function draw(name,t,opts={}){
+ pose(name,t);ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.setTransform(2,0,0,-2,origin[0]*2,origin[1]*2);ctx.imageSmoothingEnabled=false;
+ const originals=new Map();
+ if(opts.explode){for(let i=0;i<skeleton.slots.length;i++){const s=skeleton.slots[i];if(originals.has(s.bone))continue;originals.set(s.bone,[s.bone.worldX,s.bone.worldY]);const p=manifest.parts[i];s.bone.worldX+=(p.pivotImage[0]-190)*0.24;s.bone.worldY+=(205-p.pivotImage[1])*0.18;}}
+ if(opts.weaponOnly){for(const s of skeleton.slots)if(!s.data.name.startsWith('spear_'))s.color.a=0;}
+ renderer.draw(skeleton);
+ if(opts.bones){ctx.lineWidth=.9;ctx.strokeStyle='#61dcbd';ctx.fillStyle='#d8fff1';for(const b of skeleton.bones){if(!b.data.length)continue;ctx.beginPath();ctx.moveTo(b.worldX,b.worldY);ctx.lineTo(b.worldX+b.a*b.data.length,b.worldY+b.c*b.data.length);ctx.stroke();ctx.beginPath();ctx.arc(b.worldX,b.worldY,1.8,0,Math.PI*2);ctx.fill();}}
+ for(const [b,[x,y]] of originals){b.worldX=x;b.worldY=y;}
+ return skeleton;
+}
+function metrics(){let maxGripError=0,maxSetupPivotError=0,frames=0;for(const [name,duration] of [['setup',0],...data.animations.map(a=>[a.name,a.duration])]){for(let k=0;k<=60;k++){pose(name,k*duration/60);frames++;for(const b of skeleton.bones){if(![b.worldX,b.worldY,b.a,b.b,b.c,b.d].every(Number.isFinite))throw Error('Nonfinite bone '+b.data.name);}for(const grip of manifest.grips){const b=skeleton.findBone(grip.tip),h=skeleton.findBone(grip.target);maxGripError=Math.max(maxGripError,Math.hypot(b.worldX+b.a*b.data.length-h.worldX,b.worldY+b.c*b.data.length-h.worldY));}if(name==='setup'){for(const p of manifest.parts){const b=skeleton.findBone(p.bone);maxSetupPivotError=Math.max(maxSetupPivotError,Math.hypot(b.worldX+origin[0]-p.pivotImage[0],origin[1]-b.worldY-p.pivotImage[1]));}}}}return {runtime:'@esotericsoftware/spine-canvas 4.2.120',bones:data.bones.length,slots:data.slots.length,animations:data.animations.map(a=>a.name),testedPoses:frames,maxGripError,maxSetupPivotError};}
+window.preview={draw,pose,metrics,skeleton,data,canvas,pause:()=>paused=true};window.validation=metrics();window.ready=true;
+document.querySelector('#status').textContent='已加载 · '+data.bones.length+' 根骨骼 · '+data.slots.length+' 个插槽 · 约束计算完成';
+document.querySelector('#pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'播放':'暂停';};
+document.querySelector('#animation').onchange=()=>time=0;
+function loop(now){if(!paused)time+=(now-last)/1000;last=now;draw(document.querySelector('#animation').value,time,{bones:document.querySelector('#bones').checked,weaponOnly:document.querySelector('#weaponOnly').checked,explode:document.querySelector('#explode').checked});requestAnimationFrame(loop);}requestAnimationFrame(loop);
+})().catch(e=>{document.querySelector('#status').textContent='加载失败：'+e.message;window.failure=e.stack;console.error(e);});
+</script></html>

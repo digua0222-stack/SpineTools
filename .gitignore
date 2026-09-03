@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-photopea/
 venv/
 dist/
 build/
@@ -9,3 +10,6 @@ output/
 *.report.json
 .DS_Store
 Thumbs.db
+node_modules/
+# Photopea replay output, local MCP logs and browser dependencies.
+_artifacts/photopea/replay-*/
