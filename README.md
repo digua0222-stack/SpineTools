@@ -214,6 +214,14 @@ macOS：
 [photopea-spine 技能](.agents/skills/photopea-spine/SKILL.md)。成品与实际动作预览见
 [赵云验证包](_artifacts/photopea/zhaoyun-20260903.zip)。
 
+## ComfyUI 局部补绘 GPU 测试
+
+针对新提供的 1024 × 1024 站立赵云图，已提交原图、四组补绘输入与蒙版、固定提示词/seed、
+ComfyUI API 工作流和运行脚本。先验证披风纹理恢复，再测试披风、大腿与前臂的遮挡补全。
+素材准备实际使用 Photopea MCP；CPU 上传/执行/下载及像素保护已验证，GPU 生成画质和新图的
+Spine 动作尚未验证。部署与跑测见 [GPU 测试方案](docs/COMFY_INPAINT_GPU_TEST_PLAN.zh-CN.md)，
+图片见 [新图测试包](examples/comfy-inpaint/zhaoyun-v2/README.zh-CN.md)。
+
 ## 授权边界
 
 序列帧转换器实现公开 Spine JSON/atlas 数据结构，不包含或替代 Spine Editor、Spine CLI。Photopea 的离线验证预览包含官方 Spine Runtime 及其许可文本。使用 Spine 商标、编辑器或运行库时，仍需遵守 Esoteric Software 的相关许可条款。输入图片和视频的版权也由使用者自行确认。

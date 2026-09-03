@@ -1,0 +1,61 @@
+{
+  "testedAt": "2026-09-03",
+  "sourceSHA256": "5b952c09b0240b017c7d0107da02e7f7e5247c10f5d0c60f01ec83e2b7d7b988",
+  "sourceByteCopyPreserved": true,
+  "fixturePreparation": "Actual Photopea MCP STDIO calls; geometry and pixel checks in Python",
+  "comfyTransport": "Actual ComfyUI HTTP API with --cpu and all custom/API nodes disabled",
+  "comfyUIVersion": "0.24.0",
+  "comfyUICommit": "f350acdf213a1b3cbeab2059888265b21590ce9f",
+  "platform": "Windows / Python 3.12.12",
+  "fixtureHashesAndMaskPartitionPassed": true,
+  "diffusionApiGraphsSchemaValidated": 4,
+  "schemaValidationLimitation": "Checkpoint enum was substituted only for offline schema checking; no weights loaded",
+  "offlineCompiledJobs": 12,
+  "cpuTransportJobs": [
+    {
+      "task": "cape_control",
+      "seed": 17,
+      "integrityPassed": true,
+      "protectedWorkingPixelsChanged": 0,
+      "protectedNativePixelsChanged": 0,
+      "workingAlphaMatchesTarget": true,
+      "nativeAlphaMatchesTarget": true
+    },
+    {
+      "task": "cape_complete",
+      "seed": 17,
+      "integrityPassed": true,
+      "protectedWorkingPixelsChanged": 0,
+      "protectedNativePixelsChanged": 0,
+      "workingAlphaMatchesTarget": true,
+      "nativeAlphaMatchesTarget": true
+    },
+    {
+      "task": "thigh_L_complete",
+      "seed": 17,
+      "integrityPassed": true,
+      "protectedWorkingPixelsChanged": 0,
+      "protectedNativePixelsChanged": 0,
+      "workingAlphaMatchesTarget": true,
+      "nativeAlphaMatchesTarget": true
+    },
+    {
+      "task": "forearm_L_complete",
+      "seed": 17,
+      "integrityPassed": true,
+      "protectedWorkingPixelsChanged": 0,
+      "protectedNativePixelsChanged": 0,
+      "workingAlphaMatchesTarget": true,
+      "nativeAlphaMatchesTarget": true
+    }
+  ],
+  "gpuInferenceVerified": false,
+  "modelWeightsDownloaded": false,
+  "comfyMcpCallVerified": false,
+  "visualQualityAccepted": null,
+  "newLayeredPsdCreated": false,
+  "spineImportVerified": false,
+  "spineMotionAccepted": null,
+  "note": "CPU transport replaces diffusion with a solid orange image. It proves transport, compositing and mask polarity only.",
+  "regressionTestsPassed": 3
+}

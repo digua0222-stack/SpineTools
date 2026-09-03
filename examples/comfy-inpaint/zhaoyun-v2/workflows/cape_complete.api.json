@@ -1,0 +1,271 @@
+{
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "SpineTools_inpaint/5b952c09b024/cape_complete/input.png"
+    }
+  },
+  "3": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "SpineTools_inpaint/5b952c09b024/cape_complete/mask.png",
+      "channel": "red"
+    }
+  },
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "512-inpainting-ema.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "One isolated complete flowing silver white cloth cape, chibi Chinese fantasy RPG sprite asset, cloth extends from the shoulder attachment at upper right and flows to lower left, continuous lavender gray fabric folds across the whole cape, white highlights and purple gray shadows, crisp dark outer contour, keep the existing visible fabric unchanged, finish the missing right half with matching fabric. No person, no armor.",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "photorealistic, blurry, muddy texture, gray placeholder, extra limbs, hands, face, text, watermark, checkerboard, scenery, duplicated armor, inconsistent lighting",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "6": {
+    "class_type": "InpaintModelConditioning",
+    "inputs": {
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ],
+      "pixels": [
+        "2",
+        0
+      ],
+      "mask": [
+        "3",
+        0
+      ],
+      "noise_mask": true
+    }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "6",
+        1
+      ],
+      "latent_image": [
+        "6",
+        2
+      ],
+      "seed": 17,
+      "steps": 28,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  },
+  "9": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "2",
+        0
+      ],
+      "source": [
+        "8",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "3",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "SpineTools/inpaint/manual/cape_complete-seed-17/raw"
+    }
+  },
+  "11": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "9",
+        0
+      ],
+      "filename_prefix": "SpineTools/inpaint/manual/cape_complete-seed-17/composited"
+    }
+  },
+  "12": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "SpineTools_inpaint/5b952c09b024/cape_complete/target-alpha.png",
+      "channel": "red"
+    }
+  },
+  "13": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "12",
+        0
+      ]
+    }
+  },
+  "14": {
+    "class_type": "JoinImageWithAlpha",
+    "inputs": {
+      "image": [
+        "9",
+        0
+      ],
+      "alpha": [
+        "13",
+        0
+      ]
+    }
+  },
+  "15": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "14",
+        0
+      ],
+      "filename_prefix": "SpineTools/inpaint/manual/cape_complete-seed-17/part-working"
+    }
+  },
+  "16": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "9",
+        0
+      ],
+      "upscale_method": "nearest-exact",
+      "width": 512,
+      "height": 512,
+      "crop": "disabled"
+    }
+  },
+  "17": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "SpineTools_inpaint/5b952c09b024/cape_complete/reference-native.png"
+    }
+  },
+  "18": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "SpineTools_inpaint/5b952c09b024/cape_complete/keep-mask-native.png",
+      "channel": "red"
+    }
+  },
+  "19": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "16",
+        0
+      ],
+      "source": [
+        "17",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "18",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "SpineTools_inpaint/5b952c09b024/cape_complete/target-alpha-native.png",
+      "channel": "red"
+    }
+  },
+  "21": {
+    "class_type": "InvertMask",
+    "inputs": {
+      "mask": [
+        "20",
+        0
+      ]
+    }
+  },
+  "22": {
+    "class_type": "JoinImageWithAlpha",
+    "inputs": {
+      "image": [
+        "19",
+        0
+      ],
+      "alpha": [
+        "21",
+        0
+      ]
+    }
+  },
+  "23": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "22",
+        0
+      ],
+      "filename_prefix": "SpineTools/inpaint/manual/cape_complete-seed-17/part-native"
+    }
+  }
+}

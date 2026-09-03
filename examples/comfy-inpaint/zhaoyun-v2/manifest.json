@@ -1,0 +1,619 @@
+{
+  "schemaVersion": 1,
+  "source": "source.png",
+  "sourceSize": [
+    1024,
+    1024
+  ],
+  "sourceSHA256": "5b952c09b0240b017c7d0107da02e7f7e5247c10f5d0c60f01ec83e2b7d7b988",
+  "sourceHasBakedCheckerboard": true,
+  "sourceDescription": "User-provided new standing Zhao Yun image; not a video frame",
+  "preparedBy": "Photopea MCP on CPU; no model-generated images included",
+  "gpuInferenceVerified": false,
+  "defaultCheckpoint": "512-inpainting-ema.safetensors",
+  "seeds": [
+    17,
+    41,
+    73
+  ],
+  "steps": 28,
+  "cfg": 7.0,
+  "denoise": 1.0,
+  "sampler": "euler",
+  "scheduler": "normal",
+  "negative": "photorealistic, blurry, muddy texture, gray placeholder, extra limbs, hands, face, text, watermark, checkerboard, scenery, duplicated armor, inconsistent lighting",
+  "tasks": [
+    {
+      "id": "cape_control",
+      "purpose": "known_texture_control",
+      "crop": [
+        96,
+        400,
+        608,
+        912
+      ],
+      "pivotImage": null,
+      "hole": [
+        [
+          219,
+          591
+        ],
+        [
+          269,
+          581
+        ],
+        [
+          293,
+          631
+        ],
+        [
+          242,
+          661
+        ]
+      ],
+      "prompt": "A silver white cloth cape in a chibi fantasy game sprite, continuous flowing lavender gray fabric folds, directional white highlights, subtle blue purple shadows, crisp dark outline, match the existing pixel art shading and fabric, restore the missing cloth texture.",
+      "modelSize": [
+        512,
+        512
+      ],
+      "maskConvention": "white=edit, black=preserve; read RED channel, not alpha",
+      "knownPixels": 258565,
+      "editPixels": 3579,
+      "targetPixels": 262144,
+      "background": "#303947",
+      "placeholder": "#9094a8",
+      "resample": "Photopea working resize; restore original native pixels after generation",
+      "sourceScale": 1.0,
+      "files": {
+        "ground-truth.png": "34defaa68bcf08e3f28894ec95fdeab5630c8e707629ab5f89f8c91f9202e18a",
+        "input.png": "fb5b575de0b45c3a8c791e4d70d3062accac43364d6d8e9f5fae3bbfeb93d1d2",
+        "keep-mask-native.png": "a2e03cb88f87f76fd8790548ffd471c3c243340c5632fa5364a7343cbc54fbe8",
+        "keep-mask.png": "a2e03cb88f87f76fd8790548ffd471c3c243340c5632fa5364a7343cbc54fbe8",
+        "known.png": "f76165f2bd178670e5605dc31ae15845dfc403f0035b6968a7ecdabaf5124779",
+        "mask.png": "3c2110d6f59d7b24f37d7711ec05be969715ec581570571a923ecfcfb1d88c51",
+        "reference-model.png": "34defaa68bcf08e3f28894ec95fdeab5630c8e707629ab5f89f8c91f9202e18a",
+        "reference-native.png": "34defaa68bcf08e3f28894ec95fdeab5630c8e707629ab5f89f8c91f9202e18a",
+        "target-alpha-native.png": "f223c5df626f00e076fac4aca56850b91d246a1fd7c27692cb79d154edf85306",
+        "target-alpha.png": "f223c5df626f00e076fac4aca56850b91d246a1fd7c27692cb79d154edf85306"
+      }
+    },
+    {
+      "id": "cape_complete",
+      "purpose": "hidden_part_completion",
+      "crop": [
+        96,
+        400,
+        608,
+        912
+      ],
+      "pivotImage": [
+        393,
+        497
+      ],
+      "target": [
+        [
+          397,
+          490
+        ],
+        [
+          437,
+          508
+        ],
+        [
+          459,
+          560
+        ],
+        [
+          479,
+          610
+        ],
+        [
+          500,
+          660
+        ],
+        [
+          539,
+          712
+        ],
+        [
+          552,
+          747
+        ],
+        [
+          525,
+          772
+        ],
+        [
+          478,
+          787
+        ],
+        [
+          410,
+          786
+        ],
+        [
+          372,
+          798
+        ],
+        [
+          334,
+          793
+        ],
+        [
+          313,
+          767
+        ],
+        [
+          295,
+          745
+        ],
+        [
+          280,
+          751
+        ],
+        [
+          263,
+          770
+        ],
+        [
+          240,
+          765
+        ],
+        [
+          214,
+          746
+        ],
+        [
+          199,
+          715
+        ],
+        [
+          195,
+          686
+        ],
+        [
+          191,
+          665
+        ],
+        [
+          183,
+          651
+        ],
+        [
+          163,
+          643
+        ],
+        [
+          144,
+          649
+        ],
+        [
+          123,
+          659
+        ],
+        [
+          125,
+          628
+        ],
+        [
+          139,
+          600
+        ],
+        [
+          160,
+          575
+        ],
+        [
+          196,
+          557
+        ],
+        [
+          248,
+          548
+        ],
+        [
+          293,
+          543
+        ],
+        [
+          323,
+          532
+        ],
+        [
+          356,
+          510
+        ]
+      ],
+      "known": [
+        [
+          349,
+          504
+        ],
+        [
+          338,
+          544
+        ],
+        [
+          335,
+          568
+        ],
+        [
+          345,
+          610
+        ],
+        [
+          358,
+          629
+        ],
+        [
+          343,
+          658
+        ],
+        [
+          328,
+          692
+        ],
+        [
+          315,
+          730
+        ],
+        [
+          315,
+          754
+        ],
+        [
+          324,
+          776
+        ],
+        [
+          337,
+          790
+        ],
+        [
+          319,
+          776
+        ],
+        [
+          312,
+          755
+        ],
+        [
+          296,
+          742
+        ],
+        [
+          283,
+          750
+        ],
+        [
+          266,
+          767
+        ],
+        [
+          241,
+          764
+        ],
+        [
+          218,
+          749
+        ],
+        [
+          204,
+          724
+        ],
+        [
+          195,
+          690
+        ],
+        [
+          191,
+          665
+        ],
+        [
+          181,
+          650
+        ],
+        [
+          161,
+          644
+        ],
+        [
+          139,
+          651
+        ],
+        [
+          123,
+          660
+        ],
+        [
+          123,
+          628
+        ],
+        [
+          137,
+          600
+        ],
+        [
+          159,
+          576
+        ],
+        [
+          194,
+          558
+        ],
+        [
+          245,
+          548
+        ],
+        [
+          295,
+          542
+        ],
+        [
+          328,
+          525
+        ]
+      ],
+      "prompt": "One isolated complete flowing silver white cloth cape, chibi Chinese fantasy RPG sprite asset, cloth extends from the shoulder attachment at upper right and flows to lower left, continuous lavender gray fabric folds across the whole cape, white highlights and purple gray shadows, crisp dark outer contour, keep the existing visible fabric unchanged, finish the missing right half with matching fabric. No person, no armor.",
+      "modelSize": [
+        512,
+        512
+      ],
+      "maskConvention": "white=edit, black=preserve; read RED channel, not alpha",
+      "knownPixels": 32389,
+      "editPixels": 48650,
+      "targetPixels": 81039,
+      "background": "#303947",
+      "placeholder": "#9094a8",
+      "resample": "Photopea working resize; restore original native pixels after generation",
+      "sourceScale": 1.0,
+      "files": {
+        "input.png": "8ace7739f5b50f41c387875d138ecb0dc84c4fb43dda7faa2ecbfbd7d6a0f25d",
+        "keep-mask-native.png": "05aee4ba5849492b714a3911c131ec165b48383e90dc3f52347afe6050400530",
+        "keep-mask.png": "05aee4ba5849492b714a3911c131ec165b48383e90dc3f52347afe6050400530",
+        "known.png": "8539afb6d2f30937da8a9299d952d7b469c92241bca68eee3ad5392e22501115",
+        "mask.png": "4d11354612bf88dcc0a46b929dfd51e53114e03cf26d0276255fcca34000da6c",
+        "reference-model.png": "34defaa68bcf08e3f28894ec95fdeab5630c8e707629ab5f89f8c91f9202e18a",
+        "reference-native.png": "34defaa68bcf08e3f28894ec95fdeab5630c8e707629ab5f89f8c91f9202e18a",
+        "target-alpha-native.png": "d730a1548fdb5ca25c91fe91246930c5c6aad334d8ddc9359a5d293bbd3c5033",
+        "target-alpha.png": "d730a1548fdb5ca25c91fe91246930c5c6aad334d8ddc9359a5d293bbd3c5033"
+      }
+    },
+    {
+      "id": "thigh_L_complete",
+      "purpose": "hidden_part_completion",
+      "crop": [
+        352,
+        560,
+        608,
+        816
+      ],
+      "pivotImage": [
+        477,
+        642
+      ],
+      "target": [
+        [
+          456,
+          619
+        ],
+        [
+          478,
+          615
+        ],
+        [
+          501,
+          632
+        ],
+        [
+          507,
+          665
+        ],
+        [
+          497,
+          698
+        ],
+        [
+          478,
+          734
+        ],
+        [
+          450,
+          738
+        ],
+        [
+          430,
+          726
+        ],
+        [
+          425,
+          702
+        ],
+        [
+          435,
+          661
+        ]
+      ],
+      "known": [
+        [
+          447,
+          674
+        ],
+        [
+          478,
+          665
+        ],
+        [
+          493,
+          669
+        ],
+        [
+          491,
+          687
+        ],
+        [
+          476,
+          695
+        ],
+        [
+          463,
+          694
+        ],
+        [
+          451,
+          699
+        ],
+        [
+          437,
+          704
+        ],
+        [
+          427,
+          700
+        ],
+        [
+          427,
+          690
+        ]
+      ],
+      "prompt": "One isolated complete upper leg part of a chibi silver armored Chinese warrior game sprite, dark gray under armor fabric with silver highlights, rounded hip attachment at the top and rounded knee overlap at the bottom, short stout thigh, coherent curved volume, match the existing painted texture and pixel density. Only one thigh, no kneecap, no boot, no skirt, no torso.",
+      "modelSize": [
+        512,
+        512
+      ],
+      "maskConvention": "white=edit, black=preserve; read RED channel, not alpha",
+      "knownPixels": 6344,
+      "editPixels": 22816,
+      "targetPixels": 29160,
+      "background": "#303947",
+      "placeholder": "#9094a8",
+      "resample": "Photopea working resize; restore original native pixels after generation",
+      "sourceScale": 0.5,
+      "files": {
+        "input.png": "a1a39e2c46616817a440253427ff1c3273818b583fbf3a1cc73a35a03e56d917",
+        "keep-mask-native.png": "4d682e09556d8d25504a0c0707b63376344d5df12b44c8425b5f4fa8d022f5cb",
+        "keep-mask.png": "89e1a56b7d405fad380043ed9fb3eb3a822094ab58f7770a52a2e23dacc35764",
+        "known.png": "25996b70867935cb3063b330ff95c5cbc0b79b9d3d175a9895f82ddcfaf25c9e",
+        "mask.png": "298177776122c4d270040d1e1c8011b96d03bec49b0d8fa733df9a2de042571a",
+        "reference-model.png": "2d99761d98824c846ea1e3025941baf324f9e0913bc2642197bf2228f7a71bc0",
+        "reference-native.png": "0fffa0e17732631bb4760f1b8997b5cc1cc356ccdf8f22cad369a4b44c696bb0",
+        "target-alpha-native.png": "b74ee02cfb6cfed69f6292fed49eb9098ab554caa624c9faaa04bb6ce1f3b485",
+        "target-alpha.png": "e8b3e2b4082ca7b157f0519c6cd26033073db3260990aabf310428f33b266fc3"
+      }
+    },
+    {
+      "id": "forearm_L_complete",
+      "purpose": "hidden_part_completion",
+      "crop": [
+        256,
+        400,
+        512,
+        656
+      ],
+      "pivotImage": [
+        384,
+        494
+      ],
+      "target": [
+        [
+          363,
+          481
+        ],
+        [
+          387,
+          471
+        ],
+        [
+          408,
+          483
+        ],
+        [
+          418,
+          510
+        ],
+        [
+          419,
+          541
+        ],
+        [
+          410,
+          568
+        ],
+        [
+          379,
+          576
+        ],
+        [
+          359,
+          561
+        ],
+        [
+          352,
+          531
+        ],
+        [
+          353,
+          504
+        ]
+      ],
+      "known": [
+        [
+          356,
+          510
+        ],
+        [
+          377,
+          502
+        ],
+        [
+          397,
+          506
+        ],
+        [
+          414,
+          517
+        ],
+        [
+          415,
+          540
+        ],
+        [
+          407,
+          555
+        ],
+        [
+          370,
+          563
+        ],
+        [
+          357,
+          548
+        ]
+      ],
+      "prompt": "One isolated complete silver armored forearm for a chibi Chinese fantasy game sprite, rounded elbow overlap at top and wrist overlap at bottom, short cylindrical silver plate bracer, crisp dark contour, white metal highlights and lavender gray shadows, match the existing center armor texture. Only one forearm, no hand, no shoulder pauldron, no torso.",
+      "modelSize": [
+        512,
+        512
+      ],
+      "maskConvention": "white=edit, black=preserve; read RED channel, not alpha",
+      "knownPixels": 11776,
+      "editPixels": 10800,
+      "targetPixels": 22576,
+      "background": "#303947",
+      "placeholder": "#9094a8",
+      "resample": "Photopea working resize; restore original native pixels after generation",
+      "sourceScale": 0.5,
+      "files": {
+        "input.png": "b82ddbaa9c0d69f1962c21ef84295f456e373ab5cf087a212d7f524ba93ef490",
+        "keep-mask-native.png": "9cecc206b908c799d6e9561d2c9ad8abf2853996310f5de926a2ce5293995943",
+        "keep-mask.png": "6154f52985236cf2187e99625bf4a3a45d594b20f6ded4e610b1734c771bf4c2",
+        "known.png": "a8fdd06ed19f49265e2e257c37ca5c11c6ecf182dc82df7bbcce4c37e183340e",
+        "mask.png": "bc9acc80081ee530fd4ca43ad3498fc47183a9930de702edbdd5e649c4f98ca2",
+        "reference-model.png": "d4908f9bead6a7196146b308a48d01f430c933ea07f4ba0f6077ba269479335d",
+        "reference-native.png": "45a110244ac5c2a398d5c736f5e9b085297d18c782ef5461da5891c4107b0928",
+        "target-alpha-native.png": "da7a8c795c9da3c87425c7e00b5788e010658329cf6e20b5e3bf98012860aeb0",
+        "target-alpha.png": "c13acb1d21fe4653b2efef11668f94dcfca166f61d794f9426ac1d3fa896f6b9"
+      }
+    }
+  ]
+}
