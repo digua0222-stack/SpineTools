@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import time
 from typing import Any, Dict, List
 
@@ -89,12 +90,19 @@ def remove_small_components(mask: np.ndarray, min_pixels: int = 10) -> np.ndarra
 
     Keeps legitimately disconnected pieces (e.g. an occluded spear shaft)
     as long as each piece is large enough.
+
+    AC-01: row start candidates are pre-listed before the scan; a start
+    already claimed by an earlier flood fill must be skipped, otherwise the
+    component is split into 1px fragments and legitimate visible pixels get
+    mis-deleted (2x20 block: 40 -> 21 instead of 40 -> 40).
     """
     lbl = np.zeros(mask.shape, np.int32)
     cur = 0
     sizes: Dict[int, int] = {}
     for y0 in range(mask.shape[0]):
         for x0 in np.where(mask[y0] & (lbl[y0] == 0))[0]:
+            if lbl[y0, x0] != 0:
+                continue
             cur += 1
             stack = [(int(y0), int(x0))]
             lbl[y0, x0] = cur
@@ -224,14 +232,19 @@ def main() -> int:
         denoise_dropped[name] = int(mask.sum() - kept.sum())
         masks_by_name[name] = kept
 
+    # Snapshot post-denoise coverage so the report can separate recovered
+    # pixels (re-adopted after a denoise drop) from never-covered ones.
+    union_after_denoise = np.zeros_like(src_alpha)
+    covered = np.zeros_like(src_alpha)
+    for m in masks_by_name.values():
+        union_after_denoise |= m
+        covered |= m
+
     # Pass 2.5: edge assignment - grow each mask into adjacent uncovered
     # alpha pixels (anti-aliased edges SAM leaves behind). Deterministic:
     # prompt order priority, one pixel ring per round.
     edge_rounds = args.edge_assign_rounds
     if edge_rounds > 0:
-        covered = np.zeros_like(src_alpha)
-        for m in masks_by_name.values():
-            covered |= m
         for _ in range(edge_rounds):
             frontier = src_alpha & ~covered
             if not frontier.any():
@@ -268,6 +281,7 @@ def main() -> int:
     # anti-aliased leftovers join their closest part. Anything still uncovered
     # after max rounds is reported, never silently dropped (doc 13.1).
     residual_rounds = args.residual_rounds
+    ambiguous = np.zeros_like(src_alpha)
     if residual_rounds > 0:
         order = [p["name"] for p in prompts["parts"] if p["name"] in masks_by_name]
         lbl = np.zeros(src.shape[:2], np.int32)
@@ -285,6 +299,14 @@ def main() -> int:
             adopt = unc & (neigh > 0)
             if not adopt.any():
                 break
+            # AC-01: adoptions touching two or more distinct owners are
+            # attribution-ambiguous; they are accepted (deterministic max
+            # label) but must be reported, never silently claimed.
+            pairs = ((up, dn), (up, lf), (up, rt), (dn, lf), (dn, rt), (lf, rt))
+            conflict = np.zeros_like(adopt)
+            for a, b in pairs:
+                conflict |= (a > 0) & (b > 0) & (a != b)
+            ambiguous |= adopt & conflict
             lbl[adopt] = neigh[adopt]
         for i, name in enumerate(order):
             masks_by_name[name] |= (lbl == i + 1)
@@ -343,32 +365,83 @@ def main() -> int:
     }
     write_json(os.path.join(out_rig, "component-manifest.json"), manifest)
 
+    # AC-01: read the final PNGs back from disk and recompute coverage and
+    # overlap with the exact same alpha semantics a consumer sees. In-memory
+    # masks are not evidence; only exported artifacts are.
+    readback: Dict[str, np.ndarray] = {}
+    for name in masks_by_name:
+        with Image.open(os.path.join(out_masks, f"{name}.png")) as f:
+            readback[name] = np.array(f) > 0
+    exported_union = np.zeros_like(src_alpha)
+    for m in readback.values():
+        exported_union |= m
+    parts_union = np.zeros_like(src_alpha)
+    for comp in components:
+        l, t, r, b = comp["sourceBBox"]
+        with Image.open(os.path.join(out_parts, f"{comp['name']}.png")) as f:
+            arr = np.array(f.convert("RGBA"))
+        parts_union[t:b, l:r] |= arr[..., 3] > 0
+    exported_overlap = {}
+    rnames = sorted(readback)
+    for i in range(len(rnames)):
+        for j in range(i + 1, len(rnames)):
+            inter = int((readback[rnames[i]] & readback[rnames[j]]).sum())
+            if inter:
+                exported_overlap[f"{rnames[i]}|{rnames[j]}"] = inter
+    unassigned = src_alpha & ~exported_union
+    unassigned_xy = np.argwhere(unassigned)[:20]
+    ambiguous_xy = np.argwhere(ambiguous)[:20]
+    exported_recall = float((exported_union & src_alpha).sum() / max(src_alpha.sum(), 1))
+    rejections = []
+    if unassigned.any():
+        rejections.append(f"{int(unassigned.sum())} source alpha pixels unassigned (must be attributed or rejected)")
+    if not np.array_equal(parts_union, exported_union):
+        rejections.append("parts alpha does not match exported masks")
+    if int(ambiguous.sum()) > max(64, int(0.01 * src_alpha.sum())):
+        rejections.append(f"{int(ambiguous.sum())} attribution-ambiguous adoptions exceed budget")
+
     report = {
         "schemaVersion": 1,
         "stage": "v1-segment",
         "input": os.path.abspath(args.input),
         "inputSha256": sha256_file(args.input),
+        "inputPixelSha256": sha256_array(src),
+        "modelSha256": sha256_file(args.checkpoint),
         "promptsSha256": sha256_file(args.prompts),
         "promptsStale": prompts["_stale"],
         "source": src_report,
         "partCount": len(components),
         "failures": failures,
+        "rejections": rejections,
         "pairwiseOverlapPixels": overlap,
         "sourceAlphaRecall": round(recall, 4),
         "denoiseDroppedPixels": denoise_dropped,
+        "exportedReadback": {
+            "coverageRecall": round(exported_recall, 6),
+            "pairwiseOverlapPixels": exported_overlap,
+            "unassignedPixels": int(unassigned.sum()),
+            "unassignedSample": [[int(x), int(y)] for y, x in unassigned_xy],
+            "recoveredPixels": int((exported_union & ~union_after_denoise & src_alpha).sum()),
+            "ambiguousAdoptions": int(ambiguous.sum()),
+            "ambiguousSample": [[int(x), int(y)] for y, x in ambiguous_xy],
+        },
         "elapsedSeconds": round(time.time() - t0, 2),
     }
     write_json(os.path.join(out_reports, "segmentation-report.json"), report)
 
-    Image.fromarray(src).save(os.path.join(out_source, "standing.png"))
+    # Byte-identical source copy: downstream stages (AC-02 preflight, verify)
+    # cross-check the run's source against prompts.sourceSha256, which a
+    # re-encoded PNG would break.
+    shutil.copyfile(args.input, os.path.join(out_source, "standing.png"))
     write_json(os.path.join(out_source, "source-report.json"), src_report)
     with open(args.prompts, encoding="utf-8") as f:
         prompts_raw = json.load(f)
     write_json(os.path.join(out_prompts, "prompts.json"), prompts_raw)
 
-    print(f"[v1] done: {len(components)} parts, alpha recall {recall:.4f}, "
-          f"overlaps {len(overlap)}, failures {len(failures)}")
-    return 1 if failures else 0
+    print(f"[v1] done: {len(components)} parts, alpha recall {recall:.4f} "
+          f"(exported {exported_recall:.4f}), overlaps {len(overlap)}, "
+          f"failures {len(failures)}, rejections {len(rejections)}")
+    return 1 if (failures or rejections) else 0
 
 
 if __name__ == "__main__":

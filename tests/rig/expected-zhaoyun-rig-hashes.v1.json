@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "name": "zhaoyun",
+  "description": "Zhaoyun V3 rig-stage regression baseline (skeleton/atlas/Spine 4.2/Setup Pose QA). Deterministic CPU stage: identical component-manifest + profile must produce identical outputs.",
+  "sourceSha256": "edbe1d7ce6483988a10737cd70fc3dbb03a18ecefc087207a6979a0e86c89d48",
+  "hashes": {
+    "rig/skeleton-layout.json": "0d6c7a4336a83eb42a3cd2800fdf92773329f756be3c0e48c59f4a70bdc57116",
+    "rig/draw-order.json": "e8afb7ceddf3d8c64e4e95c24e7e45727bb953490a7d2ea93b61a92cb1eb3daa",
+    "spine/zhaoyun.json": "c91ce8563a336ac792039a5a682fe2c7c47d584f3fac5e7034af945e97a94947",
+    "spine/zhaoyun.atlas": "6061c79c6b7a89f9a7336d9dcb0859433aa6b3cc35bbd59ef1516f92d1308e81",
+    "spine/zhaoyun.png": "b0669b79730a2ac3c6c2f087a67cd86c29c08843291f120122502e24a2f58dc8",
+    "preview/setup-pose.png": "e28a777272a43298daab280f01b40b39148e7d1f6cd3d26dc17b2ea808694ec0",
+    "preview/comparison.png": "ecdf9a0c9b4f037eadf035babf04164224a46218e491f3c6bc1db0b801164fbd",
+    "preview/joint-rotation.gif": "fe835c1cfa52448c4c9a309784d4ada4a5a07d271dc4f47503f37212981ef030",
+    "reports/rig-report.json": "dd5954ef96effcd227a7f425b2ac2fef75f55bf69fdc22a4424e2520553987ca"
+  }
+}
