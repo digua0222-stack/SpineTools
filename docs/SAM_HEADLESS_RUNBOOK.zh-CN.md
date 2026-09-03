@@ -56,13 +56,20 @@ scripts/sam/install-sam.sh /opt/spinetools/venv /opt/spinetools/models
 |---|---|
 | V0 探针 | 主体覆盖 81.4%，推理 8.78s |
 | V1 五部件 | helmet/face/forearm_l/hand_l/spear 互不吞并，仅关节区 8px 重叠 |
-| V2 全拆分 | 23 部件，Alpha 召回 100%，重叠仅关节区 ≤43px |
+| V2 全拆分 | 23 部件；当时报告 Alpha 召回 100%，该值为导出去噪前统计，见下方复核 |
 | 无头重放 | 两次运行部件 PNG 哈希 100% 一致（46 项） |
 
 V2 说明：`shoulder_r` 在原图中被头盔护颈完全遮挡，无可见像素可分割，已在
 `profiles/zhaoyun/prompts.json` 的 `occludedParts` 中显式标记（设计文档 3.2 允许）。
 `inner_robe` 为 catch-all 区域部件：SAM 无法将其作为连通对象分割，按设计文档 8.3
 以显式区域声明承接残余像素，不静默丢弃。
+
+2026-09-03 复核：batch10 最终导出的 23 个 mask 覆盖原图 60,661 个非零 Alpha 像素中的
+60,038 个，覆盖率为 98.9729809927%，另有 623 个未覆盖；46 项产物哈希仍全部匹配。
+可重复性不等于像素完整性，且可见部件拆分不代表隐藏纹理已补全。
+去噪误删与导出后统计列为 AC-01 前置任务；零人工补全的 12 项实施任务见
+[SAM 零人工补全任务](SAM_AUTO_COMPLETION_TASKS.zh-CN.md)。当前运行手册中的命令只完成
+已有分割/回归，不会自动执行尚未实现的补全模块。
 
 ## 提示调优经验（本次实践沉淀）
 
