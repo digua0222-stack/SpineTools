@@ -86,6 +86,32 @@
       ],
       "recommendedSeeds": {"cape_control": 41, "cape_complete": 17, "thigh_L_complete": 17, "forearm_L_complete": 17}
     },
+    "parameterRounds": [
+      {
+        "output": "output/inpaint-cape-d085",
+        "change": "cape_complete, denoise 0.85 (single variable, plan section 4 example)",
+        "integrityPassedJobs": 3,
+        "verdict": "rejected: all 3 seeds regenerated character heads/faces in the edit region; denoise < 1.0 lets the gray placeholder + figure context regrow a person. denoise 1.0 confirmed required for large unknown areas with this checkpoint"
+      },
+      {
+        "output": "output/inpaint-cape-steps60",
+        "change": "cape_complete, steps 60 (single variable)",
+        "integrityPassedJobs": 3,
+        "verdict": "seed 17 is the best cape candidate so far (finer folds, cleaner highlights than steps 28, no extra objects); seed 41 grew a head again (rejected); seed 73 shows an odd vertical stripe (needs review)"
+      },
+      {
+        "output": "output/inpaint-limbs-steps60",
+        "change": "forearm_L_complete + thigh_L_complete, steps 60 (single variable)",
+        "integrityPassedJobs": 6,
+        "verdict": "both tasks gain detail at steps 60 and the forearm highlight banding is reduced; slightly busier than the Q-style source. steps 28 remain the style-consistent default; steps 60 kept as an acceptable alternative"
+      }
+    ],
+    "recommendedCandidates": {
+      "cape_control": {"seed": 41, "steps": 28, "denoise": 1.0},
+      "cape_complete": {"seed": 17, "steps": 60, "denoise": 1.0},
+      "thigh_L_complete": {"seed": 17, "steps": 28, "denoise": 1.0},
+      "forearm_L_complete": {"seed": 17, "steps": 28, "denoise": 1.0}
+    },
     "remainingUnverified": [
       "comfy-mcp route (section 5)",
       "Photopea assembly of the passed parts into a new layered PSD",
