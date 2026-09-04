@@ -226,6 +226,11 @@ ComfyUI API 工作流和运行脚本。先验证披风纹理恢复，再测试�
 [GPU 测试方案](docs/COMFY_INPAINT_GPU_TEST_PLAN.zh-CN.md)，图片见
 [新图测试包](examples/comfy-inpaint/zhaoyun-v2/README.zh-CN.md)。
 
+下一轮采用 [Krita AI Diffusion 实施方案](docs/KRITA_AI_GPU_TEST_PLAN.zh-CN.md)：修正输入后，
+比较 SDXL + Fooocus 的基础补绘与加入轮廓/材质参考的流程，共 18 张候选。
+[交接包](examples/krita-inpaint/zhaoyun-v3-pilot/README.zh-CN.md) 含固定版本、模型哈希、任务矩阵和结果模板；
+目前是待执行方案，尚无 Krita GPU 结果，也不由现有 v2 运行器直接执行。
+
 ## 授权边界
 
 序列帧转换器实现公开 Spine JSON/atlas 数据结构，不包含或替代 Spine Editor、Spine CLI。Photopea 的离线验证预览包含官方 Spine Runtime 及其许可文本。使用 Spine 商标、编辑器或运行库时，仍需遵守 Esoteric Software 的相关许可条款。输入图片和视频的版权也由使用者自行确认。

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "kind": "run_report_template_not_results",
+  "experimentId": "zhaoyun-krita-v3-pilot-01",
+  "runId": null,
+  "status": "not_run",
+  "repositoryCommit": null,
+  "environmentLockSHA256": null,
+  "actualEnvironment": null,
+  "stageStatus": {
+    "K0": "not_run",
+    "K1": "not_run",
+    "K2": "not_run",
+    "K3": "not_run",
+    "K4": "not_run"
+  },
+  "expectedUniqueCandidates": 18,
+  "completedUniqueCandidates": 0,
+  "probeRecords": [],
+  "jobs": [],
+  "jobRecordTemplate": {
+    "jobId": null,
+    "caseId": null,
+    "groupId": null,
+    "seed": null,
+    "status": "not_run",
+    "promptId": null,
+    "inputManifestSHA256": null,
+    "workflowPath": null,
+    "workflowSHA256": null,
+    "actualParameters": null,
+    "rawPath": null,
+    "nativePartPath": null,
+    "outputSHA256": null,
+    "integrity": {
+      "passed": null,
+      "nativeKeepMaxAbsRGBADiff": null,
+      "alphaExactMatch": null,
+      "placementExactMatch": null
+    },
+    "appearance": {
+      "passed": null,
+      "evaluator": null,
+      "extraAnatomy": null,
+      "materialCoverageAcceptable": null,
+      "jointComplete": null,
+      "styleAcceptable": null,
+      "seamAcceptable": null,
+      "rejectReasons": []
+    },
+    "controlMetrics": {
+      "nativeHoleMAE": null,
+      "nearBackgroundRatioDiagnosticOnly": null
+    },
+    "assembly": {
+      "status": "not_run",
+      "passed": null,
+      "referenceHidden": null,
+      "oldVisiblePartRemoved": null,
+      "previewPaths": []
+    },
+    "motion": {
+      "status": "not_run",
+      "passed": null,
+      "testedActions": []
+    },
+    "timing": {
+      "wallSeconds": null,
+      "modelSeconds": null
+    },
+    "memory": {
+      "valueGB": null,
+      "measurementMethod": null
+    },
+    "error": null
+  },
+  "parityReplays": [],
+  "decision": {
+    "partPilotPassed": null,
+    "selectedGroup": null,
+    "spineReady": null,
+    "psdVerified": null,
+    "weaponVerified": null,
+    "reasons": []
+  },
+  "artifactArchive": null,
+  "artifactArchiveSHA256": null
+}

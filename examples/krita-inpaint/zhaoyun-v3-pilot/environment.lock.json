@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "kind": "planned_environment_lock",
+  "experimentId": "zhaoyun-krita-v3-pilot-01",
+  "createdAt": "2026-09-04",
+  "runtimeVerified": false,
+  "modelWeightsDownloaded": false,
+  "krita": {
+    "minimumVersion": "5.2.0",
+    "actualVersion": null
+  },
+  "plugin": {
+    "repository": "https://github.com/Acly/krita-ai-diffusion",
+    "release": "v1.53.0",
+    "commit": "0217cd2197fcadbd70d7e63af25e29cc21cb7c8b",
+    "installFromReleaseAsset": true
+  },
+  "comfyui": {
+    "repository": "https://github.com/comfyanonymous/ComfyUI",
+    "commit": "4da9e2dbead52fc1e68beae33fe3d7ad63b63241"
+  },
+  "customNodes": [
+    {
+      "name": "ControlNet Preprocessors",
+      "folder": "comfyui_controlnet_aux",
+      "repository": "https://github.com/Fannovel16/comfyui_controlnet_aux",
+      "commit": "e8b689a513c3e6b63edc44066560ca5919c0576e",
+      "requiredNodeTypes": [
+        "InpaintPreprocessor",
+        "DepthAnythingV2Preprocessor"
+      ]
+    },
+    {
+      "name": "IP-Adapter",
+      "folder": "ComfyUI_IPAdapter_plus",
+      "repository": "https://github.com/cubiq/ComfyUI_IPAdapter_plus",
+      "commit": "b188a6cb39b512a9c6da7235b880af42c78ccd0d",
+      "requiredNodeTypes": [
+        "IPAdapterModelLoader",
+        "IPAdapter"
+      ]
+    },
+    {
+      "name": "External Tooling Nodes",
+      "folder": "comfyui-tooling-nodes",
+      "repository": "https://github.com/Acly/comfyui-tooling-nodes",
+      "commit": "ca01116495cad1f2d8440641f26ced8fbdbbe8de",
+      "requiredNodeTypes": [
+        "ETN_LoadImageCache",
+        "ETN_SaveImageCache",
+        "ETN_Translate"
+      ]
+    },
+    {
+      "name": "Inpaint Nodes",
+      "folder": "comfyui-inpaint-nodes",
+      "repository": "https://github.com/Acly/comfyui-inpaint-nodes",
+      "commit": "12937559e1aea4bb073e9e82f915d1dab92f248b",
+      "requiredNodeTypes": [
+        "INPAINT_LoadFooocusInpaint",
+        "INPAINT_ShrinkMask",
+        "INPAINT_StabilizeMask",
+        "INPAINT_ColorMatch"
+      ]
+    }
+  ],
+  "models": [
+    {
+      "name": "SDXL Base 1.0",
+      "resourceIds": [
+        "checkpoint-sdxl-base-1.0"
+      ],
+      "installPath": "models/checkpoints/sd_xl_base_1.0.safetensors",
+      "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
+      "sha256": "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b",
+      "usage": "groups_A_and_B",
+      "hashSource": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/sd_xl_base_1.0.safetensors",
+      "locallyVerified": false
+    },
+    {
+      "name": "CLIP Vision",
+      "resourceIds": [
+        "clip_vision-ip_adapter-sd15",
+        "clip_vision-ip_adapter-sdxl"
+      ],
+      "installPath": "models/clip_vision/clip-vision_vit-h.safetensors",
+      "url": "https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors",
+      "sha256": "6ca9667da1ca9e0b0f75e46bb030f7e011f44f86cbfb8d5a36590fcd7507b030",
+      "usage": "group_B_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "NMKD Superscale",
+      "resourceIds": [
+        "upscaler-default-all"
+      ],
+      "installPath": "models/upscale_models/4x_NMKD-Superscale-SP_178000_G.pth",
+      "url": "https://huggingface.co/gemasai/4x_NMKD-Superscale-SP_178000_G/resolve/main/4x_NMKD-Superscale-SP_178000_G.pth",
+      "sha256": "1d1b0078fe71446e0469d8d4df59e96baa80d83cda600d68237d655830821bcc",
+      "usage": "installation_dependency_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "OmniSR Superscale",
+      "resourceIds": [
+        "upscaler-fast_4x-all"
+      ],
+      "installPath": "models/upscale_models/OmniSR_X2_DIV2K.safetensors",
+      "url": "https://huggingface.co/Acly/Omni-SR/resolve/main/OmniSR_X2_DIV2K.safetensors",
+      "sha256": "79408fc23203bf161faa957c4a602cc40521ed2235a72d976bd9d375e6644611",
+      "usage": "installation_dependency_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "OmniSR Superscale",
+      "resourceIds": [
+        "upscaler-fast_4x-all"
+      ],
+      "installPath": "models/upscale_models/OmniSR_X3_DIV2K.safetensors",
+      "url": "https://huggingface.co/Acly/Omni-SR/resolve/main/OmniSR_X3_DIV2K.safetensors",
+      "sha256": "4fb0b68fc314f798d2ddcf1f3d2253045ba3d959d8b9ae270c5a99b9f862ee12",
+      "usage": "installation_dependency_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "OmniSR Superscale",
+      "resourceIds": [
+        "upscaler-fast_4x-all"
+      ],
+      "installPath": "models/upscale_models/OmniSR_X4_DIV2K.safetensors",
+      "url": "https://huggingface.co/Acly/Omni-SR/resolve/main/OmniSR_X4_DIV2K.safetensors",
+      "sha256": "dff25e4ed392cb5cbe534d920e292063a0555df9281c54c5ec321490a2a59832",
+      "usage": "installation_dependency_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "IP-Adapter (SDXL)",
+      "resourceIds": [
+        "ip_adapter-reference-sdxl"
+      ],
+      "installPath": "models/ipadapter/ip-adapter_sdxl_vit-h.safetensors",
+      "url": "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter_sdxl_vit-h.safetensors",
+      "sha256": "ebf05d918348aec7abb02a5e9ecef77e0aaea6914a5c4ea13f50d45eb1681831",
+      "usage": "group_B_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "Hyper-SD LoRA (SDXL)",
+      "resourceIds": [
+        "lora-hyper-sdxl"
+      ],
+      "installPath": "models/loras/Hyper-SDXL-8steps-CFG-lora.safetensors",
+      "url": "https://huggingface.co/ByteDance/Hyper-SD/resolve/main/Hyper-SDXL-8steps-CFG-lora.safetensors",
+      "sha256": "55b51334c85061afff5eff7c550b61963c8b8607a5868bbe4f26db49374719b1",
+      "usage": "installation_dependency_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "Fooocus Inpaint",
+      "resourceIds": [
+        "inpaint-fooocus-sdxl"
+      ],
+      "installPath": "models/inpaint/fooocus_inpaint_head.pth",
+      "url": "https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/fooocus_inpaint_head.pth",
+      "sha256": "32f7f838e0c6d8f13437ba8411e77a4688d77a2e34df8857e4ef4d51f6b97692",
+      "usage": "groups_A_and_B",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "Fooocus Inpaint",
+      "resourceIds": [
+        "inpaint-fooocus-sdxl"
+      ],
+      "installPath": "models/inpaint/inpaint_v26.fooocus.patch",
+      "url": "https://huggingface.co/lllyasviel/fooocus_inpaint/resolve/main/inpaint_v26.fooocus.patch",
+      "sha256": "f8657a025104e22d70f9c060635d8e8c2196f433871a2f68dc40abd2171f0d59",
+      "usage": "groups_A_and_B",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "MAT Inpaint",
+      "resourceIds": [
+        "inpaint-default-all"
+      ],
+      "installPath": "models/inpaint/MAT_Places512_G_fp16.safetensors",
+      "url": "https://huggingface.co/Acly/MAT/resolve/main/MAT_Places512_G_fp16.safetensors",
+      "sha256": "309dd6ce6e04034dc4b6b15c7bd2a4844d158e03eb2a139e0eca6b366e40c0de",
+      "usage": "installation_dependency_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    },
+    {
+      "name": "ControlNet Universal (XL)",
+      "resourceIds": [
+        "controlnet-universal-sdxl"
+      ],
+      "installPath": "models/controlnet/xinsir-controlnet-union-sdxl-1.0-promax.safetensors",
+      "url": "https://huggingface.co/xinsir/controlnet-union-sdxl-1.0/resolve/main/diffusion_pytorch_model_promax.safetensors",
+      "sha256": "9fae2e50cb431bfcbe05822b59ec2228df545ef27f711dea8949e9f4ed9f7cdc",
+      "usage": "group_B_only",
+      "hashSource": "Krita v1.53.0 ai_diffusion/presets/models.json",
+      "locallyVerified": false
+    }
+  ],
+  "runtimeRecordRequired": [
+    "Krita version",
+    "OS",
+    "Python",
+    "Torch",
+    "CUDA runtime",
+    "GPU driver",
+    "GPU model and memory",
+    "ComfyUI commit",
+    "custom node commits",
+    "all loaded model SHA256",
+    "launch arguments",
+    "actual workflow hashes"
+  ],
+  "notes": [
+    "Expected hashes are upstream metadata; model weights were not downloaded in this task.",
+    "Installation-only resources must not be enabled in the experiment graph.",
+    "Match hashes even if a URL contains main; never silently accept a replacement.",
+    "Use an isolated H20 environment. Existing SD2 scripts do not execute this plan."
+  ]
+}

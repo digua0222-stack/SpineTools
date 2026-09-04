@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "kind": "experiment_specification_not_comfy_api_graph",
+  "id": "zhaoyun-krita-v3-pilot-01",
+  "status": "planned",
+  "readyToExecute": false,
+  "createdAt": "2026-09-04",
+  "planDocument": "docs/KRITA_AI_GPU_TEST_PLAN.zh-CN.md",
+  "environmentLock": "examples/krita-inpaint/zhaoyun-v3-pilot/environment.lock.json",
+  "source": {
+    "path": "examples/comfy-inpaint/zhaoyun-v2/source.png",
+    "sha256": "5b952c09b0240b017c7d0107da02e7f7e5247c10f5d0c60f01ec83e2b7d7b988",
+    "size": [
+      1024,
+      1024
+    ],
+    "bakedCheckerboard": true,
+    "includesWeapon": false
+  },
+  "sharedSettings": {
+    "checkpoint": "sd_xl_base_1.0.safetensors",
+    "fooocusInpaint": true,
+    "mode": "custom",
+    "seamless": true,
+    "fill": "none",
+    "prefill": "frozen_repair_guide",
+    "modelSize": [
+      1024,
+      1024
+    ],
+    "steps": 30,
+    "cfg": 6.0,
+    "sampler": "euler",
+    "scheduler": "normal",
+    "denoise": 1.0,
+    "batchSize": 1,
+    "selectionFeather": 0,
+    "selectionBlend": 0,
+    "refiner": false,
+    "diffusionUpscale": false,
+    "accelerationLoRA": false,
+    "extraStyleLoRA": false,
+    "automaticReferenceConditioning": false,
+    "automaticSeed": false,
+    "promptTranslation": false,
+    "appendedStylePrompt": "",
+    "nativeRGBResample": "Lanczos_then_restore_source_keep",
+    "maskResample": "nearest",
+    "actualWorkflowOverrides": null
+  },
+  "negativePrompt": "person, face, head, eyes, hair, hands, fingers, extra limbs, full character, scenery, checkerboard, background patch inside the part, gray placeholder, text, watermark, photorealistic, blurry, muddy texture, inconsistent lighting, duplicated armor",
+  "groups": [
+    {
+      "id": "A",
+      "description": "SDXL + Fooocus with frozen local input and no image control",
+      "controls": []
+    },
+    {
+      "id": "B",
+      "description": "Same as A plus structural and local material controls",
+      "controls": [
+        {
+          "mode": "line_art",
+          "model": "xinsir-controlnet-union-sdxl-1.0-promax.safetensors",
+          "uiStrength": 0.8,
+          "start": 0.0,
+          "end": 1.0,
+          "input": "lineart-model.png",
+          "inputPolarity": "black_lines_on_white_for_Krita",
+          "backendResolvedSettings": null
+        },
+        {
+          "mode": "reference",
+          "model": "ip-adapter_sdxl_vit-h.safetensors",
+          "uiStrength": 0.6,
+          "start": 0.0,
+          "end": 1.0,
+          "input": "material-reference.png",
+          "backendResolvedSettings": null
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "cape_control",
+      "purpose": "known_texture_control",
+      "layerSideConvention": "L means screen-left",
+      "historicalFixtureRoot": "examples/comfy-inpaint/zhaoyun-v2/tasks/cape_control",
+      "preparedRoot": "examples/krita-inpaint/zhaoyun-v3-pilot/prepared/cape_control",
+      "inputsReady": false,
+      "preparedManifestSHA256": null,
+      "prompt": "One continuous silver-white cloth panel, flowing lavender-gray folds, coherent fabric shading, white highlights and cool purple shadows, crisp dark outer outline, detailed pixel-art texture matching the visible cloth, continuous cloth across the selected area.",
+      "targetKind": "evaluation_only",
+      "controlGroundTruthPath": "examples/comfy-inpaint/zhaoyun-v2/tasks/cape_control/ground-truth.png",
+      "nativeCrop": null,
+      "pivotImage": null
+    },
+    {
+      "id": "cape_complete",
+      "purpose": "hidden_part_completion",
+      "layerSideConvention": "L means screen-left",
+      "historicalFixtureRoot": "examples/comfy-inpaint/zhaoyun-v2/tasks/cape_complete",
+      "preparedRoot": "examples/krita-inpaint/zhaoyun-v3-pilot/prepared/cape_complete",
+      "inputsReady": false,
+      "preparedManifestSHA256": null,
+      "prompt": "One continuous silver-white cloth panel, flowing lavender-gray folds, coherent fabric shading, white highlights and cool purple shadows, crisp dark outer outline, detailed pixel-art texture matching the visible cloth, continuous cloth across the selected area.",
+      "targetKind": "transparent_part",
+      "controlGroundTruthPath": null,
+      "nativeCrop": null,
+      "pivotImage": null
+    },
+    {
+      "id": "forearm_L_complete",
+      "purpose": "hidden_part_completion",
+      "layerSideConvention": "L means screen-left",
+      "historicalFixtureRoot": "examples/comfy-inpaint/zhaoyun-v2/tasks/forearm_L_complete",
+      "preparedRoot": "examples/krita-inpaint/zhaoyun-v3-pilot/prepared/forearm_L_complete",
+      "inputsReady": false,
+      "preparedManifestSHA256": null,
+      "prompt": "One complete short silver armored forearm sleeve, continuous cylindrical volume between elbow and wrist, complete rounded connection surfaces at both ends, coherent silver highlights and cool gray-purple shadows, crisp dark outline, detailed pixel-art texture matching the visible armor.",
+      "targetKind": "transparent_part",
+      "controlGroundTruthPath": null,
+      "nativeCrop": null,
+      "pivotImage": null
+    }
+  ],
+  "requiredPreparedFiles": [
+    "source-crop-native.png",
+    "source-keep-native.png",
+    "target-alpha-native.png",
+    "edit-mask-native.png",
+    "repair-guide-native.png",
+    "input-model.png",
+    "edit-mask-model.png",
+    "lineart-model.png",
+    "material-reference.png",
+    "placement.json",
+    "provenance.json"
+  ],
+  "jobs": [
+    {
+      "id": "cape_control__A__seed-17",
+      "caseId": "cape_control",
+      "groupId": "A",
+      "seed": 17,
+      "status": "planned"
+    },
+    {
+      "id": "cape_control__A__seed-41",
+      "caseId": "cape_control",
+      "groupId": "A",
+      "seed": 41,
+      "status": "planned"
+    },
+    {
+      "id": "cape_control__A__seed-73",
+      "caseId": "cape_control",
+      "groupId": "A",
+      "seed": 73,
+      "status": "planned"
+    },
+    {
+      "id": "cape_control__B__seed-17",
+      "caseId": "cape_control",
+      "groupId": "B",
+      "seed": 17,
+      "status": "planned"
+    },
+    {
+      "id": "cape_control__B__seed-41",
+      "caseId": "cape_control",
+      "groupId": "B",
+      "seed": 41,
+      "status": "planned"
+    },
+    {
+      "id": "cape_control__B__seed-73",
+      "caseId": "cape_control",
+      "groupId": "B",
+      "seed": 73,
+      "status": "planned"
+    },
+    {
+      "id": "cape_complete__A__seed-17",
+      "caseId": "cape_complete",
+      "groupId": "A",
+      "seed": 17,
+      "status": "planned"
+    },
+    {
+      "id": "cape_complete__A__seed-41",
+      "caseId": "cape_complete",
+      "groupId": "A",
+      "seed": 41,
+      "status": "planned"
+    },
+    {
+      "id": "cape_complete__A__seed-73",
+      "caseId": "cape_complete",
+      "groupId": "A",
+      "seed": 73,
+      "status": "planned"
+    },
+    {
+      "id": "cape_complete__B__seed-17",
+      "caseId": "cape_complete",
+      "groupId": "B",
+      "seed": 17,
+      "status": "planned"
+    },
+    {
+      "id": "cape_complete__B__seed-41",
+      "caseId": "cape_complete",
+      "groupId": "B",
+      "seed": 41,
+      "status": "planned"
+    },
+    {
+      "id": "cape_complete__B__seed-73",
+      "caseId": "cape_complete",
+      "groupId": "B",
+      "seed": 73,
+      "status": "planned"
+    },
+    {
+      "id": "forearm_L_complete__A__seed-17",
+      "caseId": "forearm_L_complete",
+      "groupId": "A",
+      "seed": 17,
+      "status": "planned"
+    },
+    {
+      "id": "forearm_L_complete__A__seed-41",
+      "caseId": "forearm_L_complete",
+      "groupId": "A",
+      "seed": 41,
+      "status": "planned"
+    },
+    {
+      "id": "forearm_L_complete__A__seed-73",
+      "caseId": "forearm_L_complete",
+      "groupId": "A",
+      "seed": 73,
+      "status": "planned"
+    },
+    {
+      "id": "forearm_L_complete__B__seed-17",
+      "caseId": "forearm_L_complete",
+      "groupId": "B",
+      "seed": 17,
+      "status": "planned"
+    },
+    {
+      "id": "forearm_L_complete__B__seed-41",
+      "caseId": "forearm_L_complete",
+      "groupId": "B",
+      "seed": 41,
+      "status": "planned"
+    },
+    {
+      "id": "forearm_L_complete__B__seed-73",
+      "caseId": "forearm_L_complete",
+      "groupId": "B",
+      "seed": 73,
+      "status": "planned"
+    }
+  ],
+  "budget": {
+    "uniqueCandidates": 18,
+    "probeJobIds": [
+      "cape_control__A__seed-17",
+      "cape_control__B__seed-17"
+    ],
+    "probesCountInsideMatrixIfInputsUnchanged": true,
+    "maxAdditionalParityReplays": 2,
+    "maxImageProducingExecutionsPerFrozenExperiment": 20,
+    "maxInfrastructureRetriesWithoutImage": 2,
+    "additionalSeedsAllowed": false
+  },
+  "gates": {
+    "beforeGPU": [
+      "K0 prepared inputs and provenance frozen",
+      "No control-hole ground truth in generation inputs or reference images",
+      "Correct foreground and target geometry",
+      "Upstream model hashes verified",
+      "K1 actual UI-to-backend settings frozen"
+    ],
+    "integrity": {
+      "nativeKeepMaxAbsRGBADiff": 0,
+      "targetAlphaExactMatch": true,
+      "placementExactMatch": true
+    },
+    "appearance": {
+      "initialEvaluator": "human_calibration_for_all_candidates",
+      "rejectReasons": [
+        "extra_person_or_anatomy",
+        "background_inside_target",
+        "incorrect_target_shape",
+        "incomplete_joint_surface",
+        "style_drift",
+        "visible_seam"
+      ]
+    },
+    "promotion": {
+      "requiredCases": [
+        "cape_complete",
+        "forearm_L_complete"
+      ],
+      "minimumAppearancePassPerCaseWithinSameGroup": 2,
+      "denominator": 3,
+      "allCandidatesMustPassIntegrity": true,
+      "whenBothGroupsPass": "Prefer A unless B demonstrates a documented benefit",
+      "whenOnlyAPasses": "Use A and record control regression",
+      "whenOnlyBPasses": "Use B for K3",
+      "whenNeitherPasses": "Stop and revise geometry/material evidence before a new experiment",
+      "pilotDoesNotImplySpineReady": true
+    }
+  },
+  "notes": [
+    "This JSON is a plan, not accepted by scripts/comfy_inpaint/run.py.",
+    "K0 assets, KRA files and resolved ComfyUI workflows do not exist yet.",
+    "Pre-masking of the known control hole must happen before resizing or guide/reference extraction.",
+    "UI strengths require verification against the exported backend graph before freezing K1."
+  ]
+}
